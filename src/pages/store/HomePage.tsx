@@ -419,7 +419,7 @@ export const HomePage: React.FC = () => {
 
       {/* 7. Configurable Ordering, Delivery, Support & Payment Transparency Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8 shadow-card space-y-8">
+        <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#27463A] p-6 sm:p-8 shadow-card space-y-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
             <div>
               <Badge variant="green" size="sm">

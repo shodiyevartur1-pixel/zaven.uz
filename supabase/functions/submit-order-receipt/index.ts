@@ -57,6 +57,9 @@ Deno.serve(async (req: Request) => {
     const telegramChatId = Deno.env.get('TELEGRAM_ADMIN_CHAT_ID') || '';
 
     let storedReceiptPath: string | null = null;
+    let receiptBytes: Uint8Array | null = null;
+    let receiptMimeType: string | null = null;
+    let receiptFileName: string | null = null;
 
     // 1. Validate & upload receipt to private Supabase Storage if provided
     if (order.paymentReceipt && receiptBase64) {
@@ -88,21 +91,23 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const cleanBase64 = receiptBase64.replace(/^data:[^;]+;base64,/, '');
+      const binaryStr = atob(cleanBase64);
+      receiptBytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        receiptBytes[i] = binaryStr.charCodeAt(i);
+      }
+      receiptMimeType = mimeType;
+      receiptFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+
       if (supabaseUrl && serviceRoleKey) {
         const adminClient = createClient(supabaseUrl, serviceRoleKey);
-        const cleanBase64 = receiptBase64.replace(/^data:[^;]+;base64,/, '');
-        const binaryStr = atob(cleanBase64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-
-        const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeName = receiptFileName || 'payment-receipt';
         const objectPath = `${order.orderNumber}/${Date.now()}_${safeName}`;
 
         const { error: uploadErr } = await adminClient.storage
           .from('payment-receipts')
-          .upload(objectPath, bytes, {
+          .upload(objectPath, receiptBytes, {
             contentType: mimeType,
             upsert: false,
           });
@@ -164,7 +169,31 @@ Deno.serve(async (req: Request) => {
           }
         );
 
-        if (tgRes.ok) {
+        if (tgRes.ok && receiptBytes && receiptMimeType && receiptFileName) {
+          const formData = new FormData();
+          formData.append('chat_id', telegramChatId);
+          formData.append('caption', `Toʻlov cheki — ${order.orderNumber}`);
+          formData.append(
+            'document',
+            new Blob([receiptBytes], { type: receiptMimeType }),
+            receiptFileName
+          );
+
+          const documentResponse = await fetch(
+            `https://api.telegram.org/bot${telegramBotToken}/sendDocument`,
+            { method: 'POST', body: formData }
+          );
+
+          if (documentResponse.ok) {
+            telegramStatus = 'sent';
+          } else {
+            const errJson = await documentResponse.json().catch(() => ({}));
+            telegramStatus = 'failed';
+            telegramError =
+              errJson.description ||
+              `Telegram receipt upload HTTP ${documentResponse.status}`;
+          }
+        } else if (tgRes.ok) {
           telegramStatus = 'sent';
         } else {
           const errJson = await tgRes.json().catch(() => ({}));
