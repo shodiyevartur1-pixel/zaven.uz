@@ -1224,7 +1224,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           type: 'warning',
           title: 'Telegram server funksiyasi ulanmagan',
           description:
-            'Haqiqiy Telegram xabarnoma uchun Supabase Edge Function va TELEGRAM_BOT_TOKEN server kalitlarini sozlang. Buyurtma Admin panelda xavfsiz saqlangan.',
+            'Haqiqiy Telegram xabarnomasi uchun Supabase Edge Function serveridagi bot kalitini sozlang. Buyurtma Admin panelda xavfsiz saqlangan.',
         });
         return;
       }
@@ -1244,7 +1244,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           const errMsg =
             error?.message ||
             data?.telegramNotificationError ||
-            'TELEGRAM_BOT_TOKEN yoki TELEGRAM_ADMIN_CHAT_ID sozlanmagan';
+            'Telegram bot kaliti yoki admin chat raqami sozlanmagan';
           setOrders((prev) =>
             prev.map((o) =>
               o.id === orderId

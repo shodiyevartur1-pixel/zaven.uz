@@ -723,8 +723,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
               </span>
             </div>
             <p className="text-gray-600 leading-relaxed">
-              Xavfsizlik qoidasiga koʻra <code>TELEGRAM_BOT_TOKEN</code> va{' '}
-              <code>TELEGRAM_ADMIN_CHAT_ID</code> hech qachon brauzer kodida saqlanmaydi. Ularni Supabase Edge Function Secrets muhitiga kiriting. Agar Telegram ulanmagan boʻlsa ham, barcha buyurtmalar va cheklar avtomatik ravishda veb-saytning Admin → Buyurtmalar boʻlimiga tushadi.
+              Xavfsizlik uchun Telegram bot kaliti va admin chat raqami brauzer kodida saqlanmaydi. Ularni Supabase Edge Function Secrets muhitiga kiriting. Agar Telegram ulanmagan boʻlsa ham, barcha buyurtmalar va cheklar avtomatik ravishda veb-saytning Admin → Buyurtmalar boʻlimiga tushadi.
             </p>
           </div>
 
