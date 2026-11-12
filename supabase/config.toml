@@ -1,0 +1,2 @@
+# Supabase CLI project config for ZAVEN. Link the hosted project via GitHub secrets.
+project_id = "zaven-store"

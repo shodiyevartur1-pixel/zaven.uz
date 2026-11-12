@@ -1,0 +1,119 @@
+name: ZAVEN Production CI/CD (Frontend + Supabase)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ============================================================================
+  # JOB 1: TypeScript Typecheck, Production Vite Build & Bundle Security Audit
+  # ============================================================================
+  build-and-verify-frontend:
+    name: Build & Verify ZAVEN Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production SPA bundle (Dev Demo Auth strictly disabled)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_OWNER_EMAIL: ${{ secrets.VITE_OWNER_EMAIL }}
+          VITE_ENABLE_DEV_DEMO_AUTH: 'false'
+        run: npm run build
+
+      - name: Verify zero server secrets leaked into client bundle
+        run: |
+          echo "Auditing dist/ assets for accidental secret exposure..."
+          if grep -rnE "SUPABASE_SERVICE_ROLE_KEY|TELEGRAM_BOT_TOKEN" dist/; then
+            echo "❌ FATAL: Server-only secret key reference found in client bundle!"
+            exit 1
+          fi
+          echo "✅ Client bundle security check passed."
+
+      - name: Upload production dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zaven-frontend-dist
+          path: dist/
+          retention-days: 7
+
+  # ============================================================================
+  # JOB 2: Deploy Supabase Migrations & Edge Functions (Runs on push to main)
+  # ============================================================================
+  deploy-supabase-backend:
+    name: Deploy Supabase Migrations & Edge Functions
+    runs-on: ubuntu-latest
+    needs: build-and-verify-frontend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link to Supabase Production Project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Push PostgreSQL Migrations (RLS & Schema)
+        run: supabase db push --remote
+
+      - name: Sync Server-Only Edge Function Secrets
+        env:
+          VITE_OWNER_EMAIL: ${{ secrets.VITE_OWNER_EMAIL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+        run: |
+          if [[ -z "$VITE_OWNER_EMAIL" ]]; then
+            echo "::error::Set the VITE_OWNER_EMAIL repository secret before deploying."
+            exit 1
+          fi
+
+          supabase secrets set "OWNER_ALLOWED_EMAIL=$VITE_OWNER_EMAIL"
+
+          if [[ -n "$TELEGRAM_BOT_TOKEN" || -n "$TELEGRAM_ADMIN_CHAT_ID" ]]; then
+            if [[ -z "$TELEGRAM_BOT_TOKEN" || -z "$TELEGRAM_ADMIN_CHAT_ID" ]]; then
+              echo "::error::Set both Telegram secrets, or leave both unset."
+              exit 1
+            fi
+            supabase secrets set \
+              "TELEGRAM_BOT_TOKEN=$TELEGRAM_BOT_TOKEN" \
+              "TELEGRAM_ADMIN_CHAT_ID=$TELEGRAM_ADMIN_CHAT_ID"
+          fi
+      - name: Deploy admin-owner-guard Edge Function
+        run: supabase functions deploy admin-owner-guard --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Deploy submit-order-receipt Edge Function
+        run: supabase functions deploy submit-order-receipt --project-ref "$SUPABASE_PROJECT_ID"
