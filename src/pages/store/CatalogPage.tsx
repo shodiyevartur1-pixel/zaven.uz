@@ -24,7 +24,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { Badge } from '../../components/ui/Badge';
 import { calculateDiscountPercent } from '../../utils/format';
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 8;
 
 const PRICE_PRESETS = [
   { label: '≤ 100 000 soʻm', min: '', max: '100000' },
@@ -132,7 +132,6 @@ export const CatalogPage: React.FC = () => {
     ? getCategoryText(selectedCategoryObj)
     : null;
 
-  // Filter & Sort logic supporting Uzbek, Russian, and English product names/descriptions
   const filteredProducts = useMemo(() => {
     const min = minPrice.trim() ? Number(minPrice) : null;
     const max = maxPrice.trim() ? Number(maxPrice) : null;
@@ -294,7 +293,6 @@ export const CatalogPage: React.FC = () => {
 
   const renderFilterSidebarContent = () => (
     <div className="space-y-6">
-      {/* 1. Search by Product Name / SKU */}
       <div>
         <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 mb-2.5">
           {t('catalog.searchByName')}
@@ -325,7 +323,6 @@ export const CatalogPage: React.FC = () => {
         />
       </div>
 
-      {/* 2. Product Categories List */}
       <div className="pt-5 border-t border-gray-200">
         <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 mb-2.5">
           {t('nav.categoriesTitle')}
@@ -337,7 +334,7 @@ export const CatalogPage: React.FC = () => {
               onClick={() => handleSelectCategory('')}
               className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm text-left transition-colors ${
                 !selectedCategorySlug
-                  ? 'bg-brand-green text-white font-bold shadow-sm'
+                  ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                   : 'text-gray-700 hover:bg-gray-100 font-medium'
               }`}
             >
@@ -345,7 +342,7 @@ export const CatalogPage: React.FC = () => {
               <span
                 className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
                   !selectedCategorySlug
-                    ? 'bg-brand-green-dark text-brand-gold font-bold'
+                    ? 'bg-[#C89D54] text-[#09261C] font-bold'
                     : 'bg-gray-100 text-gray-600'
                 }`}
               >
@@ -370,7 +367,7 @@ export const CatalogPage: React.FC = () => {
                   onClick={() => handleSelectCategory(cat.slug)}
                   className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm text-left transition-colors ${
                     isSelected
-                      ? 'bg-brand-green text-white font-bold shadow-sm'
+                      ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                       : 'text-gray-700 hover:bg-gray-100 font-medium'
                   }`}
                 >
@@ -378,7 +375,7 @@ export const CatalogPage: React.FC = () => {
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
                       isSelected
-                        ? 'bg-brand-green-dark text-brand-gold font-bold'
+                        ? 'bg-[#C89D54] text-[#09261C] font-bold'
                         : 'bg-gray-100 text-gray-600'
                     }`}
                   >
@@ -391,7 +388,6 @@ export const CatalogPage: React.FC = () => {
         </ul>
       </div>
 
-      {/* 3. Price Range Filter (UZS) */}
       <div className="pt-5 border-t border-gray-200">
         <div className="flex items-center justify-between mb-2.5">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
@@ -473,7 +469,6 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Discounts & Availability Checkboxes */}
       <div className="pt-5 border-t border-gray-200 space-y-2.5">
         <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
           {t('catalog.discountAndStock')}
@@ -541,100 +536,55 @@ export const CatalogPage: React.FC = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-      {/* Breadcrumb & Unclipped Category Pills Header */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-5">
-        <div>
-          <nav
-            aria-label="Breadcrumb"
-            className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 mb-2.5"
-          >
-            <Link to="/" className="hover:text-brand-green font-medium">
-              {t('nav.home')}
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <Link
-              to="/catalog"
-              onClick={() => handleSelectCategory('')}
-              className={`hover:text-brand-green ${
-                !selectedCategoryObj ? 'font-bold text-gray-900' : 'font-medium'
-              }`}
-            >
-              {t('nav.catalog')}
-            </Link>
-            {localizedSelectedCategory && (
-              <>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="font-bold text-brand-green">
-                  {localizedSelectedCategory.name}
-                </span>
-              </>
-            )}
-          </nav>
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
-                  {localizedSelectedCategory
-                    ? localizedSelectedCategory.name
-                    : searchQuery.trim()
-                    ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
-                    : t('catalog.titleAll')}
-                </h1>
-                <Badge variant="gold" size="md">
-                  {filteredProducts.length} {t('home.productsCount')}
-                </Badge>
-              </div>
-              <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-                {localizedSelectedCategory
-                  ? localizedSelectedCategory.description
-                  : t('catalog.subtitleDefault')}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Wrapping Category Pills Bar */}
-        <div className="pt-4 border-t border-gray-100 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      {/* Compact Catalog Header */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card space-y-3">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
+        >
+          <Link to="/" className="hover:text-brand-green font-medium">
+            {t('nav.home')}
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <Link
+            to="/catalog"
             onClick={() => handleSelectCategory('')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors ${
-              !selectedCategoryObj
-                ? 'bg-brand-green text-white shadow-sm'
-                : 'bg-surface-subtle text-gray-700 hover:bg-brand-green-light hover:text-brand-green'
+            className={`hover:text-brand-green ${
+              !selectedCategoryObj ? 'font-bold text-gray-900' : 'font-medium'
             }`}
           >
-            {t('nav.allCategories')} ({catalogProducts.length})
-          </button>
-          {activeCategories.map((cat) => {
-            const locCat = getCategoryText(cat);
-            const count = catalogProducts.filter(
-              (p) => p.categoryId === cat.id
-            ).length;
-            const isSelected = selectedCategoryObj?.id === cat.id;
-            return (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => handleSelectCategory(cat.slug)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                  isSelected
-                    ? 'bg-brand-green text-white font-bold shadow-sm'
-                    : 'bg-surface-subtle text-gray-700 hover:bg-brand-green-light hover:text-brand-green'
-                }`}
-              >
-                {locCat.name} ({count})
-              </button>
-            );
-          })}
+            {t('nav.catalog')}
+          </Link>
+          {localizedSelectedCategory && (
+            <>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className="font-bold text-brand-green">
+                {localizedSelectedCategory.name}
+              </span>
+            </>
+          )}
+        </nav>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">
+              {localizedSelectedCategory
+                ? localizedSelectedCategory.name
+                : searchQuery.trim()
+                ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
+                : t('catalog.titleAll')}
+            </h1>
+            <Badge variant="gold" size="sm">
+              {filteredProducts.length} {t('home.productsCount')}
+            </Badge>
+          </div>
         </div>
       </div>
 
       {/* Main Catalog Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        <aside className="hidden xl:block xl:col-span-3 bg-white rounded-2xl border border-gray-200 p-5 shadow-card sticky top-32">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+        <aside className="hidden xl:block xl:col-span-3 bg-white rounded-2xl border border-gray-200 p-5 shadow-card sticky top-28">
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
             <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
               <SlidersHorizontal className="w-4 h-4 text-brand-green" />
@@ -649,7 +599,7 @@ export const CatalogPage: React.FC = () => {
           {renderFilterSidebarContent()}
         </aside>
 
-        <div className="xl:col-span-9 space-y-5">
+        <div className="xl:col-span-9 space-y-4">
           <QuickFilterBar
             categories={activeCategories}
             selectedCategorySlug={selectedCategorySlug}
@@ -692,13 +642,14 @@ export const CatalogPage: React.FC = () => {
 
           {displayedProducts.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* 2-Column Mobile Grid, 3-Column Tablet/Desktop Grid */}
+              <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-5">
                 {displayedProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="text-xs text-gray-600">
                   <strong className="text-brand-green">
                     {startIndex + 1}–
@@ -740,9 +691,9 @@ export const CatalogPage: React.FC = () => {
                           key={page}
                           type="button"
                           onClick={() => handlePageSelect(page)}
-                          className={`w-9 h-9 rounded-lg text-xs font-bold transition-colors ${
+                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
                             currentPage === page
-                              ? 'bg-brand-green text-white'
+                              ? 'bg-[#0F3D2E] text-white'
                               : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
                           }`}
                         >
@@ -783,14 +734,14 @@ export const CatalogPage: React.FC = () => {
           aria-modal="true"
         >
           <div
-            className="fixed inset-0 bg-gray-900/60"
+            className="fixed inset-0 bg-gray-900/70"
             onClick={() => setIsMobileFilterOpen(false)}
             aria-hidden="true"
           />
           <div className="relative w-full max-w-sm bg-white h-full flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
-            <div className="px-5 py-4 bg-brand-green text-white flex items-center justify-between">
+            <div className="px-5 py-4 bg-[#0F3D2E] text-white flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold text-base">
-                <SlidersHorizontal className="w-4 h-4 text-brand-gold" />
+                <SlidersHorizontal className="w-4 h-4 text-[#C89D54]" />
                 <span>{t('catalog.filtersAndSort')}</span>
               </div>
               <button

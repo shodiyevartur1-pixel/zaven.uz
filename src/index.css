@@ -6,6 +6,7 @@
   html {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -26,77 +27,186 @@
   }
 }
 
-/* Global Dark Mode Surface & Contrast Adaptation across Customer Store and Admin Panel */
+/* ============================================================================
+   High-Contrast Dark Mode Token Overrides (Scoped safely so solid brand buttons
+   and badges never lose contrast)
+   ============================================================================ */
 html.dark .bg-surface-page {
   background-color: #0B1512 !important;
 }
 
-html.dark .bg-white {
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90 {
   background-color: #12211C !important;
 }
 
 html.dark .bg-gray-50,
 html.dark .bg-surface-subtle {
-  background-color: #172A23 !important;
+  background-color: #162923 !important;
 }
 
 html.dark .bg-gray-100 {
-  background-color: #1E352D !important;
+  background-color: #1D352D !important;
 }
 
-html.dark .bg-brand-green-light {
-  background-color: rgba(22, 83, 63, 0.35) !important;
+html.dark .bg-gray-200 {
+  background-color: #26443A !important;
 }
 
-html.dark .bg-brand-gold-light {
-  background-color: rgba(200, 157, 84, 0.16) !important;
+/* Tinted Brand & Status Surfaces in Dark Mode */
+html.dark .bg-brand-green-light,
+html.dark .bg-brand-green-light\/30,
+html.dark .bg-brand-green-light\/40,
+html.dark .bg-brand-green-light\/50,
+html.dark .bg-brand-green-light\/60,
+html.dark .bg-brand-green-light\/70 {
+  background-color: rgba(22, 83, 63, 0.42) !important;
 }
 
+html.dark .bg-brand-gold-light,
+html.dark .bg-brand-gold-light\/20,
+html.dark .bg-brand-gold-light\/30,
+html.dark .bg-brand-gold-light\/40,
+html.dark .bg-brand-gold-light\/60,
+html.dark .bg-brand-gold-light\/70 {
+  background-color: rgba(200, 157, 84, 0.18) !important;
+}
+
+html.dark .bg-amber-50,
+html.dark .bg-amber-50\/70,
+html.dark .bg-amber-50\/95 {
+  background-color: rgba(217, 119, 6, 0.18) !important;
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+}
+
+html.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.18) !important;
+}
+
+html.dark .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.18) !important;
+}
+
+/* Readable Text Contrast in Dark Mode */
 html.dark .text-gray-900 {
   color: #F9FAFB !important;
 }
 
 html.dark .text-gray-800 {
-  color: #E5E7EB !important;
+  color: #F3F4F6 !important;
 }
 
 html.dark .text-gray-700 {
-  color: #D1D5DB !important;
+  color: #E5E7EB !important;
 }
 
 html.dark .text-gray-600 {
-  color: #9CA3AF !important;
+  color: #CBD5E1 !important;
 }
 
 html.dark .text-gray-500 {
   color: #94A3B8 !important;
 }
 
+html.dark .text-gray-400 {
+  color: #64748B !important;
+}
+
 html.dark .text-brand-green {
-  color: #4ADE80 !important;
+  color: #5EEAD4 !important;
 }
 
 html.dark .text-brand-gold-dark {
-  color: #E5C992 !important;
+  color: #F3D79B !important;
 }
 
+html.dark .text-amber-900,
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #FDE68A !important;
+}
+
+html.dark .text-emerald-900,
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 {
+  color: #6EE7B7 !important;
+}
+
+html.dark .text-red-800,
+html.dark .text-red-700,
+html.dark .text-red-600 {
+  color: #FCA5A5 !important;
+}
+
+html.dark .text-sky-800,
+html.dark .text-sky-700 {
+  color: #7DD3FC !important;
+}
+
+/* Borders & Dividers in Dark Mode */
 html.dark .border-gray-100,
 html.dark .border-gray-200,
+html.dark .border-gray-200\/80,
 html.dark .border-gray-300 {
-  border-color: #243B33 !important;
+  border-color: #28453B !important;
+}
+
+html.dark .border-brand-gold-border,
+html.dark .border-brand-gold-border\/60 {
+  border-color: rgba(200, 157, 84, 0.45) !important;
+}
+
+html.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+html.dark .border-emerald-200,
+html.dark .border-emerald-300 {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+html.dark .border-red-200 {
+  border-color: rgba(239, 68, 68, 0.4) !important;
 }
 
 html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
 html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #243B33 !important;
+  border-color: #28453B !important;
 }
 
+/* Form Controls */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
 html.dark textarea {
-  background-color: #0E1B17 !important;
+  background-color: #0D1915 !important;
   color: #F9FAFB !important;
-  border-color: #2D4A40 !important;
+  border-color: #2F5246 !important;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):focus,
+html.dark select:focus,
+html.dark textarea:focus {
+  border-color: #C89D54 !important;
+}
+
+html.dark input:disabled,
+html.dark select:disabled,
+html.dark textarea:disabled {
+  background-color: #162621 !important;
+  color: #64748B !important;
+  border-color: #203830 !important;
+  opacity: 0.75;
+}
+
+html.dark input[type="checkbox"],
+html.dark input[type="radio"] {
+  accent-color: #C89D54;
+  background-color: #0D1915;
+  border-color: #476B5E;
 }
 
 html.dark input::placeholder,
@@ -104,19 +214,28 @@ html.dark textarea::placeholder {
   color: #64748B !important;
 }
 
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover {
+  background-color: #1D352D !important;
+}
+
 @layer utilities {
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: #CBD5E1;
-    border-radius: 3px;
+    border-radius: 2px;
   }
   html.dark .scrollbar-thin::-webkit-scrollbar-thumb {
     background: #2D4A40;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }

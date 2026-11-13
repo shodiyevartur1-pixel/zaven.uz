@@ -12,23 +12,41 @@ import {
   ChevronLeft,
   Sparkles,
   Tag,
-  Grid,
+  ArrowLeft,
+  Lock,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { formatUZS } from '../../utils/format';
 import { ThemeLanguageControls } from '../ui/ThemeLanguageControls';
+import { Language } from '../../types';
 
 interface StoreHeaderProps {
   onOpenMobileMenu: () => void;
 }
+
+const COMPACT_LANGS: { code: Language; label: string }[] = [
+  { code: 'uz', label: 'OʻZ' },
+  { code: 'ru', label: 'РУ' },
+  { code: 'en', label: 'EN' },
+];
 
 export const StoreHeader: React.FC<StoreHeaderProps> = ({
   onOpenMobileMenu,
 }) => {
   const { products, categories, cart, currentCustomer, storeSettings } =
     useStore();
-  const { t, getProductText, getCategoryText } = useThemeLanguage();
+  const {
+    t,
+    theme,
+    toggleTheme,
+    language,
+    setLanguage,
+    getProductText,
+    getCategoryText,
+  } = useThemeLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -40,6 +58,11 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  const isCompactCheckoutRoute =
+    location.pathname === '/cart' ||
+    location.pathname.startsWith('/cart/') ||
+    location.pathname.startsWith('/checkout');
 
   const activeCategories = categories
     .filter((c) => c.isActive)
@@ -78,16 +101,17 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   };
 
   useEffect(() => {
+    if (isCompactCheckoutRoute) return;
     updateScrollIndicators();
     window.addEventListener('resize', updateScrollIndicators);
     return () => window.removeEventListener('resize', updateScrollIndicators);
-  }, [activeCategories.length]);
+  }, [activeCategories.length, isCompactCheckoutRoute]);
 
   const scrollCategoryBar = (direction: 'left' | 'right') => {
     const el = categoryScrollRef.current;
     if (!el) return;
     el.scrollBy({
-      left: direction === 'left' ? -240 : 240,
+      left: direction === 'left' ? -220 : 220,
       behavior: 'smooth',
     });
   };
@@ -115,83 +139,157 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     }
   };
 
-  return (
-    <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-      {/* Top Utility Bar (No public Admin links) */}
-      <div className="bg-brand-green-dark text-emerald-50 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <ShieldCheck className="w-3.5 h-3.5 text-brand-gold shrink-0" />
-            <span className="font-medium truncate hidden sm:inline">
-              {t('top.tagline')}
-            </span>
-            <a
-              href={`tel:${storeSettings.supportPhone.replace(/\s+/g, '')}`}
-              className="sm:hidden inline-flex items-center gap-1 text-emerald-100 font-semibold"
+  const cycleLanguageMobile = () => {
+    const idx = COMPACT_LANGS.findIndex((l) => l.code === language);
+    const next = COMPACT_LANGS[(idx + 1) % COMPACT_LANGS.length];
+    setLanguage(next.code);
+  };
+
+  // ============================================================================
+  // COMPACT HEADER FOR CART & CHECKOUT ROUTES
+  // ============================================================================
+  if (isCompactCheckoutRoute) {
+    return (
+      <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+            <Link
+              to="/"
+              className="flex items-center gap-2 group focus:outline-none shrink-0"
+              aria-label="ZAVEN"
             >
-              <Phone className="w-3 h-3 text-brand-gold" />
-              <span>{storeSettings.supportPhone}</span>
-            </a>
+              <div className="w-8 h-8 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-base tracking-tight shadow-sm">
+                Z
+              </div>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-base sm:text-lg tracking-wider text-white leading-none">
+                  {storeSettings.storeName}
+                </span>
+                <span className="text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5 flex items-center gap-1">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span className="truncate max-w-[130px] sm:max-w-none">
+                    {t('header.secureCheckoutBadge')}
+                  </span>
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              to="/catalog"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#09261C]/80 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 text-xs font-bold transition-colors truncate"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{t('cart.backToShop')}</span>
+            </Link>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:block">
+              <ThemeLanguageControls variant="header-dark" />
+            </div>
+
+            <button
+              type="button"
+              onClick={cycleLanguageMobile}
+              className="sm:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700 text-[11px] font-extrabold text-[#C89D54]"
+              aria-label="Switch language"
+            >
+              {language.toUpperCase()}
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="sm:hidden w-8 h-8 rounded-lg bg-[#09261C]/80 border border-emerald-700 flex items-center justify-center text-[#C89D54]"
+              aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </button>
+
+            <Link
+              to="/account"
+              className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-[#C89D54]/40 text-white flex items-center justify-center transition-colors"
+              title={t('header.account')}
+              aria-label={t('header.account')}
+            >
+              <User className="w-4 h-4 text-[#C89D54]" />
+            </Link>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  // ============================================================================
+  // MOBILE-FIRST HIGH-DENSITY HEADER FOR STOREFRONT & CATALOG
+  // ============================================================================
+  return (
+    <header className="sticky top-0 z-40 bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] shadow-sm">
+      {/* Desktop-Only Top Utility Bar (Hidden on mobile so products appear sooner; accessible via MobileDrawer) */}
+      <div className="hidden md:block bg-[#09261C] text-emerald-50 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+            <span className="font-medium truncate">{t('top.tagline')}</span>
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0">
             <a
               href={`tel:${storeSettings.supportPhone.replace(/\s+/g, '')}`}
-              className="hidden md:inline-flex items-center gap-1.5 hover:text-brand-gold transition-colors font-medium"
+              className="inline-flex items-center gap-1.5 hover:text-[#C89D54] transition-colors font-medium"
             >
-              <Phone className="w-3.5 h-3.5 text-brand-gold" />
+              <Phone className="w-3.5 h-3.5 text-[#C89D54]" />
               <span>{storeSettings.supportPhone}</span>
             </a>
-
             <span className="hidden lg:inline text-emerald-700">|</span>
             <span className="hidden lg:inline text-emerald-200">
               {storeSettings.workingHours}
             </span>
-
             <ThemeLanguageControls variant="header-dark" />
           </div>
         </div>
       </div>
 
-      {/* Main Header Row */}
-      <div className="bg-brand-green text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center justify-between gap-3 sm:gap-5">
-            {/* Mobile Menu Button & Brand Logo */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+      {/* Main Header Row + Unified Search */}
+      <div ref={searchContainerRef} className="bg-[#0F3D2E] text-white">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            {/* Left: Mobile Menu Button & Compact Brand Logo */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={onOpenMobileMenu}
-                className="lg:hidden p-2 -ml-1 rounded-lg text-white hover:bg-brand-green-hover focus:outline-none"
+                className="lg:hidden w-9 h-9 -ml-1 rounded-lg text-white hover:bg-[#16533F] flex items-center justify-center focus:outline-none"
                 aria-label={t('nav.menu')}
               >
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5" />
               </button>
 
               <Link
                 to="/"
-                className="flex items-center gap-2.5 group focus:outline-none"
+                className="flex items-center gap-2 group focus:outline-none"
                 aria-label="ZAVEN"
               >
-                <div className="w-10 h-10 rounded-lg bg-brand-gold flex items-center justify-center text-brand-green-dark font-extrabold text-xl tracking-tight shadow-sm group-hover:bg-brand-gold-hover transition-colors shrink-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-lg sm:text-xl tracking-tight shadow-sm shrink-0">
                   Z
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-extrabold text-xl sm:text-2xl tracking-wider text-white leading-none">
+                  <span className="font-extrabold text-lg sm:text-xl tracking-wider text-white leading-none">
                     {storeSettings.storeName}
                   </span>
-                  <span className="text-[10px] text-brand-gold font-semibold tracking-widest uppercase mt-0.5">
+                  <span className="hidden sm:block text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5">
                     {t('header.onlineStore')}
                   </span>
                 </div>
               </Link>
             </div>
 
-            {/* Desktop & Tablet Search Bar */}
-            <div
-              ref={searchContainerRef}
-              className="hidden md:block flex-1 max-w-2xl relative"
-            >
+            {/* Desktop & Tablet Inline Search Bar */}
+            <div className="hidden md:block flex-1 max-w-2xl relative">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
                   type="text"
@@ -202,14 +300,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                     setIsSearchFocused(true);
                   }}
                   placeholder={t('header.searchPlaceholder')}
-                  className="w-full h-11 pl-4 pr-28 rounded-lg bg-white text-gray-900 placeholder-gray-400 text-sm border-2 border-transparent focus:border-brand-gold focus:outline-none shadow-sm"
+                  className="w-full h-10 pl-4 pr-24 rounded-lg bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm border border-transparent focus:border-[#C89D54] focus:outline-none shadow-sm"
                   aria-label={t('header.searchBtn')}
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-24 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700"
+                    className="absolute right-20 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                     aria-label={t('catalog.clear')}
                   >
                     <X className="w-4 h-4" />
@@ -217,104 +315,57 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                 )}
                 <button
                   type="submit"
-                  className="absolute right-1.5 top-1.5 bottom-1.5 px-3.5 rounded-md bg-brand-gold hover:bg-brand-gold-hover text-brand-green-dark font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  className="absolute right-1 top-1 bottom-1 px-3 rounded-md bg-[#C89D54] hover:bg-brand-gold-hover text-[#09261C] font-extrabold text-xs flex items-center gap-1.5 transition-colors"
                 >
-                  <Search className="w-4 h-4" />
+                  <Search className="w-3.5 h-3.5" />
                   <span>{t('header.searchBtn')}</span>
                 </button>
               </form>
-
-              {/* Live Search Suggestions Dropdown */}
-              {isSearchFocused && searchQuery.trim().length >= 1 && (
-                <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-50 text-gray-900">
-                  {searchResults.length > 0 ? (
-                    <div>
-                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                        <span>{t('header.foundProducts')}</span>
-                        <span>
-                          {searchResults.length} {t('header.resultsCount')}
-                        </span>
-                      </div>
-                      <ul className="divide-y divide-gray-100">
-                        {searchResults.map((item) => {
-                          const loc = getProductText(item);
-                          return (
-                            <li key={item.id}>
-                              <Link
-                                to={`/product/${item.slug}`}
-                                onClick={() => setIsSearchFocused(false)}
-                                className="flex items-center gap-3.5 px-4 py-2.5 hover:bg-brand-green-light/50 transition-colors"
-                              >
-                                <img
-                                  src={item.images[0]}
-                                  alt={loc.name}
-                                  className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 bg-gray-50"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-gray-900 truncate">
-                                    {loc.name}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    SKU: {item.sku}
-                                  </p>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="text-sm font-bold text-brand-green">
-                                    {formatUZS(item.salePrice ?? item.price)}
-                                  </p>
-                                  {item.salePrice && (
-                                    <p className="text-[11px] text-gray-400 line-through">
-                                      {formatUZS(item.price)}
-                                    </p>
-                                  )}
-                                </div>
-                              </Link>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      <div className="p-2.5 bg-gray-50 border-t border-gray-100">
-                        <button
-                          type="button"
-                          onClick={handleSearchSubmit}
-                          className="w-full py-1.5 text-xs font-bold text-brand-green hover:underline flex items-center justify-center gap-1"
-                        >
-                          <span>{t('header.viewAllResults')}</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-6 text-center">
-                      <p className="text-sm font-semibold text-gray-800">
-                        «{searchQuery}» {t('header.noSearchMatch')}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {t('header.noSearchHint')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
-            {/* Right Actions: Account & Cart */}
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Right Actions: Compact Mobile Lang/Theme + Account + Cart */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {/* Compact Mobile Language & Theme pills (Replaces the tall top support bar) */}
+              <button
+                type="button"
+                onClick={cycleLanguageMobile}
+                className="md:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
+                title="Til / Язык / Language"
+                aria-label="Switch language"
+              >
+                {COMPACT_LANGS.find((l) => l.code === language)?.label || 'OʻZ'}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="md:hidden w-8 h-8 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 flex items-center justify-center text-[#C89D54]"
+                aria-label={
+                  theme === 'dark' ? t('theme.light') : t('theme.dark')
+                }
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-4 h-4" />
+                ) : (
+                  <Moon className="w-4 h-4" />
+                )}
+              </button>
+
               <Link
                 to="/account"
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-brand-green-hover transition-colors text-white"
+                className="flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
                 title={t('header.account')}
               >
-                <div className="w-8 h-8 rounded-full bg-brand-green-dark/80 border border-brand-gold/40 flex items-center justify-center shrink-0">
-                  <User className="w-4 h-4 text-brand-gold" />
+                <div className="w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4 text-[#C89D54]" />
                 </div>
                 <div className="hidden xl:flex flex-col text-left">
-                  <span className="text-[11px] text-emerald-200 leading-none">
+                  <span className="text-[10px] text-emerald-200 leading-none">
                     {currentCustomer
                       ? t('header.welcome')
                       : t('header.account')}
                   </span>
-                  <span className="text-xs font-bold text-white truncate max-w-[110px] mt-0.5">
+                  <span className="text-xs font-bold text-white truncate max-w-[100px] mt-0.5">
                     {currentCustomer
                       ? currentCustomer.fullName.split(' ')[0]
                       : t('header.signIn')}
@@ -324,20 +375,20 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
               <Link
                 to="/cart"
-                className="relative flex items-center gap-2.5 px-3.5 py-2 rounded-lg bg-brand-green-dark hover:bg-brand-gold hover:text-brand-green-dark border border-brand-gold/50 transition-colors group"
+                className="relative flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#09261C] hover:bg-[#C89D54] hover:text-[#09261C] border border-[#C89D54]/60 transition-colors group"
                 aria-label={t('header.cart')}
               >
                 <div className="relative">
-                  <ShoppingBag className="w-5 h-5 text-brand-gold group-hover:text-brand-green-dark transition-colors" />
-                  <span className="absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-brand-gold text-brand-green-dark group-hover:bg-brand-green-dark group-hover:text-white text-[11px] font-extrabold flex items-center justify-center">
+                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] group-hover:text-[#09261C] transition-colors" />
+                  <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C89D54] text-[#09261C] group-hover:bg-[#09261C] group-hover:text-white text-[10px] font-extrabold flex items-center justify-center">
                     {cartItemCount}
                   </span>
                 </div>
                 <div className="hidden sm:flex flex-col text-left pl-1">
-                  <span className="text-[10px] text-emerald-200 group-hover:text-brand-green-dark/80 leading-none">
+                  <span className="text-[10px] text-emerald-200 group-hover:text-[#09261C]/80 leading-none">
                     {t('header.cart')}
                   </span>
-                  <span className="text-xs font-extrabold text-white group-hover:text-brand-green-dark mt-0.5 whitespace-nowrap">
+                  <span className="text-xs font-extrabold text-white group-hover:text-[#09261C] mt-0.5 whitespace-nowrap">
                     {formatUZS(cartSubtotal)}
                   </span>
                 </div>
@@ -345,75 +396,138 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             </div>
           </div>
 
-          {/* Mobile Search Input Row */}
-          <div className="mt-3 md:hidden">
+          {/* Compact Mobile Search Bar (h-9) */}
+          <div className="mt-2 md:hidden relative">
             <form onSubmit={handleSearchSubmit} className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchFocused(true);
+                }}
                 placeholder={t('header.searchMobilePlaceholder')}
-                className="w-full h-10 pl-3.5 pr-24 rounded-lg bg-white text-gray-900 placeholder-gray-400 text-sm focus:outline-none"
+                className="w-full h-9 pl-9 pr-20 rounded-lg bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100 placeholder-gray-400 text-xs sm:text-sm focus:outline-none border border-transparent focus:border-[#C89D54]"
                 aria-label={t('header.searchBtn')}
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-16 top-1/2 -translate-y-1/2 p-1 text-gray-400"
+                  className="absolute right-14 top-1/2 -translate-y-1/2 p-1 text-gray-400"
+                  aria-label={t('catalog.clear')}
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
               <button
                 type="submit"
-                className="absolute right-1 top-1 bottom-1 px-3 rounded-md bg-brand-gold text-brand-green-dark font-bold text-xs flex items-center gap-1"
+                className="absolute right-1 top-1 bottom-1 px-2.5 rounded-md bg-[#C89D54] text-[#09261C] font-extrabold text-[11px] flex items-center"
               >
-                <Search className="w-3.5 h-3.5" />
-                <span>{t('header.searchShortBtn')}</span>
+                {t('header.searchShortBtn')}
               </button>
             </form>
           </div>
+
+          {/* Live Search Suggestions Dropdown (Works on both Desktop and Mobile) */}
+          {isSearchFocused && searchQuery.trim().length >= 1 && (
+            <div className="relative max-w-2xl mx-auto">
+              <div className="absolute left-0 right-0 mt-1.5 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#2F5246] shadow-xl overflow-hidden z-50 text-gray-900 dark:text-gray-100">
+                {searchResults.length > 0 ? (
+                  <div>
+                    <div className="px-3.5 py-2 bg-gray-50 dark:bg-[#162923] border-b border-gray-100 dark:border-[#28453B] flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>{t('header.foundProducts')}</span>
+                      <span>
+                        {searchResults.length} {t('header.resultsCount')}
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-gray-100 dark:divide-[#28453B]">
+                      {searchResults.map((item) => {
+                        const loc = getProductText(item);
+                        return (
+                          <li key={item.id}>
+                            <Link
+                              to={`/product/${item.slug}`}
+                              onClick={() => setIsSearchFocused(false)}
+                              className="flex items-center gap-3 px-3.5 py-2 hover:bg-brand-green-light/50 dark:hover:bg-[#1D352D] transition-colors"
+                            >
+                              <img
+                                src={item.images[0]}
+                                alt={loc.name}
+                                className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-[#28453B] shrink-0 bg-gray-50"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                  {loc.name}
+                                </p>
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                  SKU: {item.sku}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-xs sm:text-sm font-bold text-brand-green">
+                                  {formatUZS(item.salePrice ?? item.price)}
+                                </p>
+                              </div>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <div className="p-2 bg-gray-50 dark:bg-[#162923] border-t border-gray-100 dark:border-[#28453B]">
+                      <button
+                        type="button"
+                        onClick={handleSearchSubmit}
+                        className="w-full py-1 text-xs font-bold text-brand-green hover:underline flex items-center justify-center gap-1"
+                      >
+                        <span>{t('header.viewAllResults')}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 text-center">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200">
+                      «{searchQuery}» {t('header.noSearchMatch')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Category Navigation Bar */}
+      {/* Streamlined Horizontally Scrollable Category Strip (No redundant 'Menu' pill) */}
       <nav
         aria-label={t('nav.categoriesTitle')}
-        className="bg-white border-b border-gray-200 relative"
+        className="bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] relative"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 flex items-center justify-between gap-2">
           {canScrollLeft && (
             <button
               type="button"
               onClick={() => scrollCategoryBar('left')}
-              className="xl:hidden shrink-0 w-8 h-8 rounded-full bg-white border border-gray-300 shadow-sm flex items-center justify-center text-gray-700 hover:text-brand-green"
+              className="xl:hidden shrink-0 w-7 h-7 rounded-full bg-white dark:bg-[#162923] border border-gray-300 dark:border-[#2F5246] shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-200"
               aria-label="Scroll left"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
           )}
 
           <div
             ref={categoryScrollRef}
             onScroll={updateScrollIndicators}
-            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto xl:overflow-visible xl:flex-wrap scrollbar-thin py-0.5 scroll-smooth"
+            className="flex-1 flex items-center gap-1.5 overflow-x-auto xl:overflow-visible xl:flex-wrap scrollbar-thin py-0.5 scroll-smooth"
           >
-            <button
-              type="button"
-              onClick={onOpenMobileMenu}
-              className="lg:hidden shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-surface-subtle text-gray-800 border border-gray-200"
-            >
-              <Grid className="w-3.5 h-3.5 text-brand-green" />
-              <span>{t('nav.menu')}</span>
-            </button>
-
             <Link
               to="/catalog"
-              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
                 location.pathname === '/catalog' && !location.search
-                  ? 'bg-brand-green text-white shadow-sm'
-                  : 'text-gray-800 bg-surface-page hover:bg-brand-green-light hover:text-brand-green'
+                  ? 'bg-[#0F3D2E] text-white font-bold shadow-sm border border-emerald-500/30'
+                  : 'text-gray-800 dark:text-gray-200 bg-surface-page dark:bg-[#162923] hover:bg-brand-green-light dark:hover:bg-[#1D352D] hover:text-brand-green'
               }`}
             >
               {t('nav.allProducts')}
@@ -428,10 +542,10 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                 <Link
                   key={cat.id}
                   to={`/catalog?category=${cat.slug}`}
-                  className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
+                  className={`shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                     isActive
-                      ? 'bg-brand-green text-white font-bold shadow-sm'
-                      : 'text-gray-700 hover:bg-brand-green-light/70 hover:text-brand-green'
+                      ? 'bg-[#0F3D2E] text-white font-bold shadow-sm border border-emerald-500/30'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-brand-green-light/70 dark:hover:bg-[#1D352D] hover:text-brand-green'
                   }`}
                 >
                   {locCat.name}
@@ -444,34 +558,34 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             <button
               type="button"
               onClick={() => scrollCategoryBar('right')}
-              className="xl:hidden shrink-0 w-8 h-8 rounded-full bg-white border border-gray-300 shadow-sm flex items-center justify-center text-gray-700 hover:text-brand-green"
+              className="xl:hidden shrink-0 w-7 h-7 rounded-full bg-white dark:bg-[#162923] border border-gray-300 dark:border-[#2F5246] shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-200"
               aria-label="Scroll right"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           )}
 
-          <div className="hidden lg:flex items-center gap-2.5 shrink-0 pl-2 border-l border-gray-200">
+          <div className="hidden lg:flex items-center gap-2 shrink-0 pl-2 border-l border-gray-200 dark:border-[#28453B]">
             <Link
               to="/catalog?filter=discounted"
-              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors ${
                 location.search.includes('filter=discounted')
-                  ? 'bg-brand-gold text-brand-green-dark border-brand-gold'
-                  : 'text-brand-gold-dark bg-brand-gold-light border-brand-gold-border hover:bg-brand-gold hover:text-brand-green-dark'
+                  ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54]'
+                  : 'text-brand-gold-dark bg-brand-gold-light border-brand-gold-border hover:bg-[#C89D54] hover:text-[#09261C]'
               }`}
             >
-              <Tag className="w-3.5 h-3.5 shrink-0" />
+              <Tag className="w-3 h-3 shrink-0" />
               <span>{t('nav.discounts')}</span>
             </Link>
             <Link
               to="/catalog?filter=new"
-              className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors ${
                 location.search.includes('filter=new')
-                  ? 'bg-brand-green text-white'
+                  ? 'bg-[#0F3D2E] text-white border border-emerald-500/30'
                   : 'text-brand-green bg-brand-green-light/60 hover:bg-brand-green-light'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5 text-brand-gold shrink-0" />
+              <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
               <span>{t('nav.newShort')}</span>
             </Link>
           </div>

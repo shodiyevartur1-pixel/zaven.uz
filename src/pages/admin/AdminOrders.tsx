@@ -7,7 +7,6 @@ import {
   Search,
   Eye,
   Phone,
-  Send,
   Copy,
   Check,
   XCircle,
@@ -18,7 +17,7 @@ import {
   Download,
   RefreshCw,
   Clock,
-  AlertTriangle,
+  MapPin,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
@@ -98,16 +97,16 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [customerSearchQuery, setCustomerSearchQuery] = useState<string>(
     searchParams.get('q') || ''
   );
-  const [customerSortBy, setCustomerSortBy] = useState<
-    'spent_desc' | 'orders_desc' | 'recent'
-  >('spent_desc');
+  const [customerSortBy] = useState<'spent_desc' | 'orders_desc' | 'recent'>(
+    'spent_desc'
+  );
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
 
-  const [inquiryFilter, setInquiryFilter] = useState<
-    'all' | 'unread' | 'read' | 'replied'
-  >('all');
+  const [inquiryFilter] = useState<'all' | 'unread' | 'read' | 'replied'>(
+    'all'
+  );
   const [selectedInquiry, setSelectedInquiry] =
     useState<CustomerInquiry | null>(null);
   const [replyDraft, setReplyDraft] = useState<string>('');
@@ -312,7 +311,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             )}
           </div>
           <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Humo / Uzcard toʻlov cheklarini koʻrish va tasdiqlash, Telegram xabarnomalar holati hamda mijozlar bazasi
+            Humo / Uzcard toʻlov cheklarini koʻrish va tasdiqlash, yetkazib berish manzili va Telegram holati
           </p>
         </div>
 
@@ -322,7 +321,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             onClick={() => setActiveSection('orders')}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
               activeSection === 'orders'
-                ? 'bg-brand-green text-white shadow-sm'
+                ? 'bg-[#0F3D2E] text-white shadow-sm'
                 : 'text-gray-700 hover:text-gray-900'
             }`}
           >
@@ -335,7 +334,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             onClick={() => setActiveSection('customers')}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
               activeSection === 'customers'
-                ? 'bg-brand-green text-white shadow-sm'
+                ? 'bg-[#0F3D2E] text-white shadow-sm'
                 : 'text-gray-700 hover:text-gray-900'
             }`}
           >
@@ -348,7 +347,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             onClick={() => setActiveSection('inquiries')}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
               activeSection === 'inquiries'
-                ? 'bg-brand-green text-white shadow-sm'
+                ? 'bg-[#0F3D2E] text-white shadow-sm'
                 : 'text-gray-700 hover:text-gray-900'
             }`}
           >
@@ -412,7 +411,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   onClick={() => setOrderStatusFilter(pill.id)}
                   className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border shrink-0 transition-colors ${
                     isSelected
-                      ? 'bg-brand-green text-white border-brand-green shadow-sm'
+                      ? 'bg-[#0F3D2E] text-white border-[#0F3D2E] shadow-sm'
                       : 'bg-white text-gray-700 border-gray-200 hover:border-brand-green'
                   }`}
                 >
@@ -420,7 +419,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   <span
                     className={`px-1.5 py-0.5 rounded-full text-[11px] font-extrabold ${
                       isSelected
-                        ? 'bg-brand-gold text-brand-green-dark'
+                        ? 'bg-[#C89D54] text-[#09261C]'
                         : 'bg-gray-100 text-gray-700'
                     }`}
                   >
@@ -490,8 +489,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
                       <th className="py-3.5 px-4">Buyurtma # va Sana</th>
                       <th className="py-3.5 px-4">Xaridor va Aloqa</th>
+                      <th className="py-3.5 px-4">Hudud va Manzil</th>
                       <th className="py-3.5 px-4">Toʻlov va Chek holati</th>
-                      <th className="py-3.5 px-4">Telegram Bot</th>
                       <th className="py-3.5 px-4">Jami summa</th>
                       <th className="py-3.5 px-4">Buyurtma holati</th>
                       <th className="py-3.5 px-4 text-right">Boshqarish</th>
@@ -514,7 +513,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                           <td className="py-4 px-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               {isNewOrder && (
-                                <span className="px-1.5 py-0.5 rounded bg-brand-gold text-brand-green-dark text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.5 rounded bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold">
                                   YANGI
                                 </span>
                               )}
@@ -559,6 +558,20 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                             </div>
                           </td>
 
+                          {/* Saved Region, District & Detailed Address */}
+                          <td className="py-4 px-4 max-w-[230px]">
+                            <p className="text-xs font-bold text-gray-900 truncate">
+                              {order.region}
+                              {order.district ? `, ${order.district}` : ''}
+                            </p>
+                            <p
+                              className="text-xs text-gray-500 line-clamp-1 mt-0.5"
+                              title={order.address}
+                            >
+                              {order.address}
+                            </p>
+                          </td>
+
                           {/* Payment & Receipt Verification Column */}
                           <td className="py-4 px-4">
                             <p className="text-xs font-semibold text-gray-800 truncate max-w-[180px]">
@@ -593,24 +606,6 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                                 </Badge>
                               )}
                             </div>
-                          </td>
-
-                          {/* Telegram Notification Status */}
-                          <td className="py-4 px-4 whitespace-nowrap">
-                            {order.telegramNotificationStatus === 'sent' ? (
-                              <Badge variant="success" size="sm">
-                                Yuborilgan
-                              </Badge>
-                            ) : order.telegramNotificationStatus ===
-                              'failed' ? (
-                              <Badge variant="danger" size="sm">
-                                Xatolik (Qayta urinish)
-                              </Badge>
-                            ) : (
-                              <Badge variant="neutral" size="sm">
-                                Sozlanmagan (Saytda saqlandi)
-                              </Badge>
-                            )}
                           </td>
 
                           <td className="py-4 px-4 whitespace-nowrap font-extrabold text-gray-900">
@@ -787,9 +782,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* MODAL 1: OWNER ORDER & BANK RECEIPT VERIFICATION MODAL                */}
-      {/* ===================================================================== */}
+      {/* MODAL 1: OWNER ORDER & BANK RECEIPT VERIFICATION MODAL */}
       <Modal
         isOpen={Boolean(selectedOrder)}
         onClose={() => setSelectedOrderId(null)}
@@ -885,10 +878,10 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               </div>
             </div>
 
-            {/* PHASE 4: BANK TRANSFER RECEIPT PREVIEW, DOWNLOAD & OWNER CONFIRM/REJECT */}
+            {/* BANK TRANSFER RECEIPT PREVIEW, DOWNLOAD & OWNER CONFIRM/REJECT */}
             {(selectedOrder.paymentReceipt ||
               selectedOrder.paymentVerificationStatus !== 'not_required') && (
-              <div className="p-5 rounded-2xl border-2 border-brand-gold bg-brand-gold-light/30 space-y-4">
+              <div className="p-5 rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/30 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold-border pb-3">
                   <div>
                     <h4 className="text-sm font-extrabold text-gray-900">
@@ -922,7 +915,6 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   </div>
                 </div>
 
-                {/* Receipt Preview & Download */}
                 {selectedOrder.paymentReceipt ? (
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                     <div className="md:col-span-5 rounded-xl overflow-hidden bg-white border border-gray-200 p-2 flex flex-col items-center">
@@ -948,11 +940,12 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                         download={selectedOrder.paymentReceipt.fileName}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-2 w-full py-2 px-3 rounded-lg bg-brand-green text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-brand-green-hover"
+                        className="mt-2 w-full py-2 px-3 rounded-lg bg-[#0F3D2E] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-[#16533F]"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>
-                          Chekni yuklab olish ({selectedOrder.paymentReceipt.fileName})
+                          Chekni yuklab olish (
+                          {selectedOrder.paymentReceipt.fileName})
                         </span>
                       </a>
                     </div>
@@ -1023,7 +1016,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               </div>
             )}
 
-            {/* Customer Contact & Address */}
+            {/* Customer Contact & Complete Saved Delivery Location */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl border border-gray-200 space-y-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-400">
@@ -1040,16 +1033,41 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                     {selectedOrder.customerEmail}
                   </p>
                 )}
+                <p className="text-xs text-gray-600 pt-1">
+                  Toʻlov usuli:{' '}
+                  <strong className="text-gray-900">
+                    {selectedOrder.paymentMethodLabel}
+                  </strong>
+                </p>
               </div>
 
               <div className="p-4 rounded-xl border border-gray-200 space-y-2">
                 <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-400">
-                  Yetkazib berish manzili
+                  Yetkazib berish hududi va manzili
                 </h4>
-                <p className="text-xs font-bold text-gray-900">
-                  {selectedOrder.region}
+                <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-brand-green shrink-0" />
+                  <span>
+                    {selectedOrder.region}
+                    {selectedOrder.district
+                      ? ` — ${selectedOrder.district}`
+                      : ''}
+                  </span>
                 </p>
-                <p className="text-xs text-gray-700">{selectedOrder.address}</p>
+                <p className="text-xs text-gray-700 leading-relaxed">
+                  {selectedOrder.address}
+                </p>
+                {selectedOrder.locationCoordinates && (
+                  <p className="text-[11px] font-mono text-brand-green">
+                    GPS: {selectedOrder.locationCoordinates.lat},{' '}
+                    {selectedOrder.locationCoordinates.lng}
+                  </p>
+                )}
+                {selectedOrder.customerNote && (
+                  <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    Izoh: «{selectedOrder.customerNote}»
+                  </p>
+                )}
               </div>
             </div>
 

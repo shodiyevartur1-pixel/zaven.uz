@@ -22,6 +22,7 @@ import {
   AlertCircle,
   Clock,
   Truck,
+  LocateFixed,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -31,6 +32,11 @@ import {
   formatUzbekPhone,
   isValidUzbekPhone,
 } from '../../utils/format';
+import {
+  UZBEKISTAN_REGIONS,
+  detectUzbekistanRegionFromCoords,
+  resolveRegionTariffRule,
+} from '../../utils/uzbekistanLocations';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input, Select } from '../../components/ui/Input';
@@ -59,18 +65,20 @@ export const CartCheckoutPage: React.FC = () => {
     placeOrder,
     addToast,
   } = useStore();
-  const { t, getProductText } = useThemeLanguage();
+  const { t, language, getProductText } = useThemeLanguage();
 
   const enabledRegions = useMemo(
     () => storeSettings.delivery.regions.filter((r) => r.isEnabled),
     [storeSettings.delivery.regions]
   );
 
+  // Requirement 3: Only active payment methods appear at checkout, and update live when owner changes settings
   const enabledPayments = useMemo(
     () => storeSettings.paymentMethods.filter((pm) => pm.isEnabled),
     [storeSettings.paymentMethods]
   );
 
+  // Customer & Delivery Location State
   const [customerName, setCustomerName] = useState<string>(
     currentCustomer?.fullName || ''
   );
@@ -80,18 +88,43 @@ export const CartCheckoutPage: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState<string>(
     currentCustomer?.email || ''
   );
-  const [selectedRegionName, setSelectedRegionName] = useState<string>(
-    currentCustomer?.addresses.find((a) => a.isDefault)?.region ||
-      enabledRegions[0]?.regionName ||
-      'Toshkent shahri'
+
+  const [selectedUzRegionId, setSelectedUzRegionId] = useState<string>(
+    UZBEKISTAN_REGIONS[0].id
+  );
+  const [selectedDistrict, setSelectedDistrict] = useState<string>(
+    UZBEKISTAN_REGIONS[0].districts[0]
   );
   const [addressLine, setAddressLine] = useState<string>(
     currentCustomer?.addresses.find((a) => a.isDefault)?.addressLine || ''
   );
   const [customerNote, setCustomerNote] = useState<string>('');
+
+  // Opt-In Geolocation State (Never collected silently)
+  const [isLocating, setIsLocating] = useState<boolean>(false);
+  const [geoStatusMessage, setGeoStatusMessage] = useState<{
+    type: 'success' | 'warning';
+    text: string;
+  } | null>(null);
+  const [sharedCoordinates, setSharedCoordinates] = useState<{
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+  } | null>(null);
+
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
     enabledPayments[0]?.id || 'pay-card'
   );
+
+  // Ensure selectedPaymentId stays valid if admin disables a payment method
+  useEffect(() => {
+    if (
+      enabledPayments.length > 0 &&
+      !enabledPayments.some((pm) => pm.id === selectedPaymentId)
+    ) {
+      setSelectedPaymentId(enabledPayments[0].id);
+    }
+  }, [enabledPayments, selectedPaymentId]);
 
   const [receiptAttachment, setReceiptAttachment] =
     useState<PaymentReceiptAttachment | null>(null);
@@ -109,6 +142,7 @@ export const CartCheckoutPage: React.FC = () => {
     name?: string;
     phone?: string;
     region?: string;
+    district?: string;
     address?: string;
     payment?: string;
     receipt?: string;
@@ -119,6 +153,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
 
+  // Sync customer defaults
   useEffect(() => {
     if (currentCustomer) {
       setCustomerName((prev) => prev || currentCustomer.fullName);
@@ -130,11 +165,105 @@ export const CartCheckoutPage: React.FC = () => {
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
       if (defaultAddr) {
-        setSelectedRegionName(defaultAddr.region);
+        const matchedReg = UZBEKISTAN_REGIONS.find(
+          (r) =>
+            r.nameUz.toLowerCase() === defaultAddr.region.toLowerCase() ||
+            defaultAddr.region.toLowerCase().includes(r.nameUz.toLowerCase())
+        );
+        if (matchedReg) {
+          setSelectedUzRegionId(matchedReg.id);
+          setSelectedDistrict(
+            defaultAddr.district || matchedReg.districts[0] || ''
+          );
+        }
         setAddressLine((prev) => prev || defaultAddr.addressLine);
       }
     }
   }, [currentCustomer]);
+
+  const currentUzRegionObj = useMemo(
+    () =>
+      UZBEKISTAN_REGIONS.find((r) => r.id === selectedUzRegionId) ||
+      UZBEKISTAN_REGIONS[0],
+    [selectedUzRegionId]
+  );
+
+  const getRegionDisplayName = (reg: (typeof UZBEKISTAN_REGIONS)[number]) => {
+    if (language === 'ru') return reg.nameRu;
+    if (language === 'en') return reg.nameEn;
+    return reg.nameUz;
+  };
+
+  // Update default district when region changes
+  const handleRegionChange = (newRegionId: string) => {
+    setSelectedUzRegionId(newRegionId);
+    const found = UZBEKISTAN_REGIONS.find((r) => r.id === newRegionId);
+    if (found && found.districts.length > 0) {
+      setSelectedDistrict(found.districts[0]);
+    } else {
+      setSelectedDistrict('');
+    }
+    setErrors((prev) => ({
+      ...prev,
+      region: undefined,
+      district: undefined,
+    }));
+  };
+
+  // Requirement 2: Opt-in "Use my location" via browser Geolocation API with clear fallback
+  const handleUseMyLocation = () => {
+    setGeoStatusMessage(null);
+
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setGeoStatusMessage({
+        type: 'warning',
+        text: t('cart.locationUnsupported'),
+      });
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setIsLocating(false);
+        const { latitude, longitude, accuracy } = position.coords;
+        const roundedLat = Number(latitude.toFixed(5));
+        const roundedLng = Number(longitude.toFixed(5));
+
+        setSharedCoordinates({
+          lat: roundedLat,
+          lng: roundedLng,
+          accuracyMeters: accuracy ? Math.round(accuracy) : undefined,
+        });
+
+        const detectedRegion = detectUzbekistanRegionFromCoords(
+          roundedLat,
+          roundedLng
+        );
+        if (detectedRegion) {
+          setSelectedUzRegionId(detectedRegion.id);
+          setSelectedDistrict(detectedRegion.districts[0] || '');
+        }
+
+        setGeoStatusMessage({
+          type: 'success',
+          text: `${t('cart.locationSuccess')} (GPS: ${roundedLat}, ${roundedLng})`,
+        });
+      },
+      () => {
+        setIsLocating(false);
+        setGeoStatusMessage({
+          type: 'warning',
+          text: t('cart.locationDenied'),
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
 
   const detailedCartItems = useMemo(() => {
     return cart
@@ -190,17 +319,14 @@ export const CartCheckoutPage: React.FC = () => {
     return Math.min(productsSubtotal, appliedCoupon.discountValue);
   }, [appliedCoupon, productsSubtotal]);
 
+  // Match chosen Uzbekistan region to owner's configured regional delivery tariff
   const selectedRegionRule = useMemo(() => {
     if (!storeSettings.delivery.isDeliveryEnabled) return null;
-    return (
-      enabledRegions.find((r) => r.regionName === selectedRegionName) ||
-      enabledRegions[0] ||
-      null
-    );
+    return resolveRegionTariffRule(currentUzRegionObj.nameUz, enabledRegions);
   }, [
     storeSettings.delivery.isDeliveryEnabled,
+    currentUzRegionObj,
     enabledRegions,
-    selectedRegionName,
   ]);
 
   const deliveryFee = useMemo(() => {
@@ -235,9 +361,13 @@ export const CartCheckoutPage: React.FC = () => {
     [enabledPayments, selectedPaymentId]
   );
 
-  const isCardTransferSelected =
-    selectedPaymentMethod?.type === 'card_transfer' ||
-    selectedPaymentId === 'pay-card';
+  // Requirement 3: Receipt upload is required ONLY for payment methods that require a receipt
+  const requiresPaymentReceipt = Boolean(
+    selectedPaymentMethod &&
+      (selectedPaymentMethod.requiresReceipt !== undefined
+        ? selectedPaymentMethod.requiresReceipt
+        : selectedPaymentMethod.type === 'card_transfer')
+  );
 
   const bankTransferConfig = storeSettings.bankTransfer;
   const hasConfiguredTransferCards = Boolean(
@@ -330,13 +460,19 @@ export const CartCheckoutPage: React.FC = () => {
     if (!isValidUzbekPhone(customerPhone)) {
       nextErrors.phone = '+998 XX XXX-XX-XX';
     }
-    if (!selectedRegionName.trim()) {
+    if (!currentUzRegionObj) {
       nextErrors.region = t('cart.region');
+    }
+    if (!selectedDistrict.trim()) {
+      nextErrors.district = t('cart.district');
     }
     if (addressLine.trim().length < 5) {
       nextErrors.address = t('cart.address');
     }
-    if (isCardTransferSelected && !receiptAttachment) {
+    if (!selectedPaymentMethod) {
+      nextErrors.payment = t('cart.step3Title');
+    }
+    if (requiresPaymentReceipt && !receiptAttachment) {
       nextErrors.receipt = t('transfer.errMissingReceipt');
     }
 
@@ -359,6 +495,13 @@ export const CartCheckoutPage: React.FC = () => {
       totalPrice: entry.lineTotal,
     }));
 
+    // Compose complete, readable address with District and optional customer-shared GPS
+    const fullAddressSummary = `${selectedDistrict.trim()}, ${addressLine.trim()}${
+      sharedCoordinates
+        ? ` [GPS: ${sharedCoordinates.lat}, ${sharedCoordinates.lng}]`
+        : ''
+    }`;
+
     setIsSubmittingOrder(true);
     try {
       const createdOrder = await placeOrder({
@@ -366,8 +509,10 @@ export const CartCheckoutPage: React.FC = () => {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerEmail: customerEmail.trim() || undefined,
-        region: selectedRegionName,
-        address: addressLine.trim(),
+        region: currentUzRegionObj.nameUz,
+        district: selectedDistrict.trim(),
+        address: fullAddressSummary,
+        locationCoordinates: sharedCoordinates || undefined,
         customerNote: customerNote.trim() || undefined,
         items: orderItems,
         subtotal: productsSubtotal,
@@ -378,10 +523,10 @@ export const CartCheckoutPage: React.FC = () => {
         paymentMethodId: selectedPaymentId,
         paymentMethodLabel:
           selectedPaymentMethod?.name || 'Qabul qilganda toʻlov',
-        paymentVerificationStatus: isCardTransferSelected
+        paymentVerificationStatus: requiresPaymentReceipt
           ? 'pending_verification'
           : 'not_required',
-        paymentReceipt: isCardTransferSelected
+        paymentReceipt: requiresPaymentReceipt
           ? receiptAttachment || undefined
           : undefined,
       });
@@ -407,8 +552,8 @@ export const CartCheckoutPage: React.FC = () => {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
-          <div className="bg-brand-green text-white p-6 sm:p-8 text-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-brand-gold text-brand-green-dark flex items-center justify-center mx-auto shadow-md">
+          <div className="bg-[#0F3D2E] text-white p-6 sm:p-8 text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-[#C89D54] text-[#09261C] flex items-center justify-center mx-auto shadow-md">
               <PackageCheck className="w-9 h-9" />
             </div>
             <Badge variant="gold" size="md">
@@ -419,12 +564,12 @@ export const CartCheckoutPage: React.FC = () => {
             </h1>
 
             <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-brand-green-dark border border-brand-gold/40">
+              <div className="inline-flex items-center gap-3 px-4 py-2 rounded-xl bg-[#09261C] border border-[#C89D54]/50">
                 <div className="text-left">
                   <span className="text-[11px] uppercase tracking-wider text-emerald-200 block">
                     {t('cart.orderNumberLabel')}
                   </span>
-                  <span className="text-base sm:text-lg font-extrabold text-brand-gold font-mono">
+                  <span className="text-base sm:text-lg font-extrabold text-[#C89D54] font-mono">
                     #{completedOrder.orderNumber}
                   </span>
                 </div>
@@ -433,10 +578,10 @@ export const CartCheckoutPage: React.FC = () => {
                   onClick={() =>
                     handleCopyOrderNumber(completedOrder.orderNumber)
                   }
-                  className="p-2 rounded-lg bg-brand-green hover:bg-brand-green-hover text-white"
+                  className="p-2 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] text-white"
                 >
                   {copiedOrderNumber ? (
-                    <Check className="w-4 h-4 text-brand-gold" />
+                    <Check className="w-4 h-4 text-[#C89D54]" />
                   ) : (
                     <Copy className="w-4 h-4" />
                   )}
@@ -446,13 +591,17 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-6 sm:p-8 space-y-6">
-            {/* Phase 5: Delivery Estimate Callout on Order Confirmation */}
-            <div className="p-4 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs sm:text-sm">
-              <div className="flex items-center gap-2.5">
-                <Truck className="w-5 h-5 text-brand-green shrink-0" />
-                <span className="font-bold text-gray-900">
-                  {t('delivery.estimateLabel')}
-                </span>
+            {/* Delivery Estimate & Location Summary */}
+            <div className="p-4 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs sm:text-sm">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 font-bold text-gray-900">
+                  <Truck className="w-4 h-4 text-brand-green shrink-0" />
+                  <span>{t('delivery.estimateLabel')}</span>
+                </div>
+                <p className="text-xs text-gray-600">
+                  <strong>Manzil:</strong> {completedOrder.region},{' '}
+                  {completedOrder.address}
+                </p>
               </div>
               <Badge variant="gold" size="md">
                 {t('delivery.estimateValue')}
@@ -576,7 +725,7 @@ export const CartCheckoutPage: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-5">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
               {t('cart.title')}
             </h1>
@@ -613,9 +762,9 @@ export const CartCheckoutPage: React.FC = () => {
         <div className="lg:col-span-7 space-y-8">
           {/* Step 1: Cart Items */}
           <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
-            <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full bg-brand-green text-white text-xs font-extrabold flex items-center justify-center">
+                <span className="w-7 h-7 rounded-full bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center justify-center shrink-0">
                   1
                 </span>
                 <h2 className="text-base font-bold text-gray-900">
@@ -679,13 +828,14 @@ export const CartCheckoutPage: React.FC = () => {
                       </div>
 
                       <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                        <div className="flex items-center border border-gray-300 rounded-lg bg-white p-0.5">
+                        <div className="flex items-center border border-gray-300 rounded-xl bg-white p-0.5">
                           <button
                             type="button"
                             onClick={() =>
                               updateCartQuantity(product.id, quantity - 1)
                             }
-                            className="w-8 h-8 rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-700 font-bold"
+                            className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-700 font-bold"
+                            aria-label="Decrease quantity"
                           >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
@@ -698,7 +848,8 @@ export const CartCheckoutPage: React.FC = () => {
                               updateCartQuantity(product.id, quantity + 1)
                             }
                             disabled={isAtMaxStock}
-                            className="w-8 h-8 rounded-md hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center text-gray-700 font-bold"
+                            className="w-9 h-9 rounded-lg hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center text-gray-700 font-bold"
+                            aria-label="Increase quantity"
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -713,7 +864,7 @@ export const CartCheckoutPage: React.FC = () => {
                             onClick={() => removeFromCart(product.id)}
                             className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline mt-1 font-medium"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -731,11 +882,11 @@ export const CartCheckoutPage: React.FC = () => {
             className="space-y-8"
             noValidate
           >
-            {/* Step 2: Customer & Delivery Details + Phase 5 Delivery Estimate Banner */}
+            {/* Step 2: Customer & Uzbekistan Delivery Location Selector */}
             <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
               <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-full bg-brand-green text-white text-xs font-extrabold flex items-center justify-center">
+                  <span className="w-7 h-7 rounded-full bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center justify-center shrink-0">
                     2
                   </span>
                   <h2 className="text-base font-bold text-gray-900">
@@ -749,7 +900,7 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
 
               <div className="p-5 sm:p-6 space-y-5">
-                {/* Phase 5: Clear Delivery Estimate Notice inside Checkout */}
+                {/* Delivery Estimate Notice */}
                 <div className="p-3.5 rounded-xl bg-brand-green-light/60 border border-brand-green/20 text-xs space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-bold text-gray-800">
@@ -764,6 +915,7 @@ export const CartCheckoutPage: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Customer Identity Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label={t('cart.fullName')}
@@ -804,53 +956,120 @@ export const CartCheckoutPage: React.FC = () => {
                   leftIcon={<Mail className="w-4 h-4" />}
                 />
 
-                <Select
-                  label={t('cart.region')}
-                  required
-                  value={selectedRegionName}
-                  onChange={(e) => setSelectedRegionName(e.target.value)}
-                  options={
-                    enabledRegions.length > 0
-                      ? enabledRegions.map((reg) => ({
-                          value: reg.regionName,
-                          label: `${reg.regionName} — ${formatUZS(reg.fee)}`,
-                        }))
-                      : [{ value: 'Toshkent shahri', label: 'Toshkent shahri' }]
-                  }
-                  helperText={selectedRegionRule?.note}
-                />
+                {/* Requirement 2: Uzbekistan Region + District/City Selector + Opt-In Geolocation */}
+                <div className="p-4 rounded-2xl bg-surface-page border border-gray-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 pb-3">
+                    <div>
+                      <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
+                        Oʻzbekiston boʻylab yetkazib berish hududi
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        {t('cart.locationPrivacyNote')}
+                      </p>
+                    </div>
 
-                <Input
-                  label={t('cart.address')}
-                  required
-                  value={addressLine}
-                  onChange={(e) => {
-                    setAddressLine(e.target.value);
-                    if (errors.address)
-                      setErrors((prev) => ({ ...prev, address: undefined }));
-                  }}
-                  leftIcon={<MapPin className="w-4 h-4" />}
-                  error={errors.address}
-                />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      isLoading={isLocating}
+                      leftIcon={<LocateFixed className="w-4 h-4" />}
+                      onClick={handleUseMyLocation}
+                    >
+                      {isLocating
+                        ? t('cart.locatingBtn')
+                        : t('cart.useMyLocationBtn')}
+                    </Button>
+                  </div>
+
+                  {geoStatusMessage && (
+                    <div
+                      className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
+                        geoStatusMessage.type === 'success'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                          : 'bg-amber-50 border-amber-200 text-amber-800'
+                      }`}
+                    >
+                      <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{geoStatusMessage.text}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Select
+                      label={t('cart.region')}
+                      required
+                      value={selectedUzRegionId}
+                      onChange={(e) => handleRegionChange(e.target.value)}
+                      options={UZBEKISTAN_REGIONS.map((reg) => {
+                        const rule = resolveRegionTariffRule(
+                          reg.nameUz,
+                          enabledRegions
+                        );
+                        return {
+                          value: reg.id,
+                          label: `${getRegionDisplayName(reg)}${
+                            rule ? ` — ${formatUZS(rule.fee)}` : ''
+                          }`,
+                        };
+                      })}
+                      error={errors.region}
+                      helperText={selectedRegionRule?.note}
+                    />
+
+                    <Select
+                      label={t('cart.district')}
+                      required
+                      value={selectedDistrict}
+                      onChange={(e) => {
+                        setSelectedDistrict(e.target.value);
+                        if (errors.district)
+                          setErrors((prev) => ({
+                            ...prev,
+                            district: undefined,
+                          }));
+                      }}
+                      options={currentUzRegionObj.districts.map((dist) => ({
+                        value: dist,
+                        label: dist,
+                      }))}
+                      error={errors.district}
+                    />
+                  </div>
+
+                  <Input
+                    label={t('cart.address')}
+                    required
+                    value={addressLine}
+                    onChange={(e) => {
+                      setAddressLine(e.target.value);
+                      if (errors.address)
+                        setErrors((prev) => ({ ...prev, address: undefined }));
+                    }}
+                    placeholder={t('cart.addressPlaceholder')}
+                    leftIcon={<MapPin className="w-4 h-4" />}
+                    error={errors.address}
+                  />
+                </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1.5">
+                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
                     {t('cart.orderNote')}
                   </label>
                   <textarea
                     rows={2}
                     value={customerNote}
                     onChange={(e) => setCustomerNote(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
                   />
                 </div>
               </div>
             </section>
 
-            {/* Step 3: Payment Methods & Secure Bank Transfer Receipt Upload */}
+            {/* Step 3: Payment Methods & Conditional Receipt Upload */}
             <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
               <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center gap-2.5">
-                <span className="w-6 h-6 rounded-full bg-brand-green text-white text-xs font-extrabold flex items-center justify-center">
+                <span className="w-7 h-7 rounded-full bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center justify-center shrink-0">
                   3
                 </span>
                 <h2 className="text-base font-bold text-gray-900">
@@ -862,12 +1081,17 @@ export const CartCheckoutPage: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {enabledPayments.map((pm) => {
                     const isSelected = selectedPaymentId === pm.id;
+                    const pmNeedsReceipt =
+                      pm.requiresReceipt !== undefined
+                        ? pm.requiresReceipt
+                        : pm.type === 'card_transfer';
+
                     return (
                       <label
                         key={pm.id}
                         className={`cursor-pointer rounded-xl border-2 p-4 transition-all flex flex-col justify-between ${
                           isSelected
-                            ? 'border-brand-green bg-brand-green-light/40 shadow-sm'
+                            ? 'border-[#C89D54] bg-brand-green-light/50 shadow-sm'
                             : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
@@ -880,14 +1104,19 @@ export const CartCheckoutPage: React.FC = () => {
                                 value={pm.id}
                                 checked={isSelected}
                                 onChange={() => setSelectedPaymentId(pm.id)}
-                                className="w-4 h-4 text-brand-green"
+                                className="w-4 h-4 text-brand-green shrink-0"
                               />
                               <span className="text-sm font-bold text-gray-900">
                                 {pm.name}
                               </span>
                             </div>
+                            {pmNeedsReceipt && (
+                              <Badge variant="gold" size="sm">
+                                Chek
+                              </Badge>
+                            )}
                           </div>
-                          <p className="text-xs text-gray-600 mt-2 pl-6">
+                          <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
                             {pm.description}
                           </p>
                         </div>
@@ -896,9 +1125,9 @@ export const CartCheckoutPage: React.FC = () => {
                   })}
                 </div>
 
-                {/* Humo / Uzcard Bank Transfer Instructions & Receipt Upload Box */}
-                {isCardTransferSelected && (
-                  <div className="rounded-2xl border-2 border-brand-gold bg-brand-gold-light/40 p-5 space-y-5">
+                {/* Humo / Uzcard Bank Transfer Instructions & Receipt Upload Box (Shown only when selected method requires receipt) */}
+                {requiresPaymentReceipt && (
+                  <div className="rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/40 p-5 space-y-5">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-gold-border pb-3.5">
                       <div className="flex items-center gap-2.5">
                         <CreditCard className="w-5 h-5 text-brand-green" />
@@ -942,7 +1171,7 @@ export const CartCheckoutPage: React.FC = () => {
                                     'HUMO'
                                   )
                                 }
-                                className="p-1.5 rounded-lg bg-surface-page hover:bg-brand-green hover:text-white text-gray-700 transition-colors"
+                                className="p-1.5 rounded-lg bg-surface-page hover:bg-[#0F3D2E] hover:text-white text-gray-700 transition-colors"
                               >
                                 {copiedCardField === 'HUMO' ? (
                                   <Check className="w-4 h-4 text-emerald-600" />
@@ -986,7 +1215,7 @@ export const CartCheckoutPage: React.FC = () => {
                                     'UZCARD'
                                   )
                                 }
-                                className="p-1.5 rounded-lg bg-surface-page hover:bg-brand-green hover:text-white text-gray-700 transition-colors"
+                                className="p-1.5 rounded-lg bg-surface-page hover:bg-[#0F3D2E] hover:text-white text-gray-700 transition-colors"
                               >
                                 {copiedCardField === 'UZCARD' ? (
                                   <Check className="w-4 h-4 text-emerald-600" />
@@ -1105,7 +1334,7 @@ export const CartCheckoutPage: React.FC = () => {
         </div>
 
         {/* Right Column: Order Summary */}
-        <aside className="lg:col-span-5 space-y-5 lg:sticky lg:top-28">
+        <aside className="lg:col-span-5 space-y-5 lg:sticky lg:top-24">
           <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-6">
             <h2 className="text-lg font-extrabold text-gray-900 border-b border-gray-100 pb-3.5">
               {t('cart.summaryTitle')}
@@ -1141,7 +1370,7 @@ export const CartCheckoutPage: React.FC = () => {
                       setCouponError('');
                     }}
                     placeholder="ZAVEN10"
-                    className="flex-1 rounded-lg border border-gray-300 px-3.5 py-2 text-xs font-semibold uppercase"
+                    className="flex-1 rounded-xl border border-gray-300 px-3.5 py-2 text-xs font-semibold uppercase"
                   />
                   <Button type="submit" variant="secondary" size="sm">
                     {t('cart.applyBtn')}
@@ -1177,7 +1406,8 @@ export const CartCheckoutPage: React.FC = () => {
                 <div>
                   <span className="block">{t('cart.deliveryService')}</span>
                   <span className="text-xs text-gray-500">
-                    {selectedRegionName}
+                    {getRegionDisplayName(currentUzRegionObj)},{' '}
+                    {selectedDistrict}
                   </span>
                   <span className="block text-[11px] font-bold text-brand-green mt-0.5">
                     {t('delivery.estimateValue')}

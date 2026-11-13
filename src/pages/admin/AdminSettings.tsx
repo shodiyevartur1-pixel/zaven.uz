@@ -130,7 +130,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [editingBanner, setEditingBanner] = useState<HomepageBanner | null>(
     null
   );
-  const [bannerFormError, setBannerFormError] = useState<string>('');
   const [trustItemsDraft, setTrustItemsDraft] = useState<TrustItem[]>(
     storeSettings.trustItems
   );
@@ -140,7 +139,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
   }, [storeSettings.trustItems]);
 
   const handleOpenBannerModal = (banner?: HomepageBanner) => {
-    setBannerFormError('');
     if (banner) {
       setEditingBanner({ ...banner });
     } else {
@@ -180,11 +178,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   const handleSaveBannerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingBanner) return;
-    if (editingBanner.headline.trim().length < 5) {
-      setBannerFormError('Banner sarlavhasini kiriting');
-      return;
-    }
+    if (!editingBanner || editingBanner.headline.trim().length < 3) return;
     saveBanner({
       ...editingBanner,
       headline: editingBanner.headline.trim(),
@@ -208,7 +202,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
   const [editingRegion, setEditingRegion] = useState<DeliveryRegionRule | null>(
     null
   );
-  const [regionError, setRegionError] = useState<string>('');
 
   useEffect(() => {
     setDeliveryDraft(storeSettings.delivery);
@@ -223,7 +216,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
   };
 
   const handleOpenRegionModal = (region?: DeliveryRegionRule) => {
-    setRegionError('');
     if (region) {
       setEditingRegion({ ...region });
     } else {
@@ -232,7 +224,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
         regionName: '',
         fee: 35000,
         freeDeliveryThreshold: 500000,
-        note: 'Buyurtma tasdiqlangandan soʻng operator tomonidan yetkazib berish vaqti kelishiladi.',
+        note: 'Taxminiy yetkazib berish muddati: Taxminan 10–25 kun.',
         isEnabled: true,
       });
     }
@@ -241,11 +233,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
 
   const handleSaveRegionModal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRegion) return;
-    if (editingRegion.regionName.trim().length < 3) {
-      setRegionError('Hudud yoki shahar nomini kiriting');
-      return;
-    }
+    if (!editingRegion || editingRegion.regionName.trim().length < 2) return;
 
     const exists = deliveryDraft.regions.some((r) => r.id === editingRegion.id);
     const updatedRegions = exists
@@ -278,12 +266,21 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
     });
   };
 
-  // 4. Payment Methods & Humo/Uzcard Bank Transfer Recipient Configuration (Phase 4)
+  // ===========================================================================
+  // 4. REQUIREMENT 3: FULL PAYMENT METHODS CRUD (Add, Edit, Enable/Disable, Remove)
+  // ===========================================================================
   const [paymentsDraft, setPaymentsDraft] = useState<PaymentMethodOption[]>(
     storeSettings.paymentMethods
   );
   const [bankTransferDraft, setBankTransferDraft] =
     useState<BankTransferConfig>(storeSettings.bankTransfer);
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [editingPaymentMethod, setEditingPaymentMethod] =
+    useState<PaymentMethodOption | null>(null);
+  const [paymentModalError, setPaymentModalError] = useState<string>('');
+  const [paymentToDelete, setPaymentToDelete] =
+    useState<PaymentMethodOption | null>(null);
 
   useEffect(() => {
     setPaymentsDraft(storeSettings.paymentMethods);
@@ -304,6 +301,125 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
       paymentMethods: paymentsDraft,
       bankTransfer: bankTransferDraft,
     });
+  };
+
+  // Toggle Enable/Disable on a Payment Method and Persist Immediately
+  const handleTogglePaymentMethodEnabled = (pmId: string) => {
+    const target = paymentsDraft.find((pm) => pm.id === pmId);
+    if (!target) return;
+
+    const nextEnabled = !target.isEnabled;
+    const enabledCountAfter = paymentsDraft.filter((pm) =>
+      pm.id === pmId ? nextEnabled : pm.isEnabled
+    ).length;
+
+    if (enabledCountAfter === 0) {
+      addToast({
+        type: 'error',
+        title: 'Kamida bitta toʻlov usuli faol qolishi shart',
+      });
+      return;
+    }
+
+    const updatedList = paymentsDraft.map((pm) =>
+      pm.id === pmId ? { ...pm, isEnabled: nextEnabled } : pm
+    );
+    setPaymentsDraft(updatedList);
+    updateStoreSettings({
+      ...storeSettings,
+      paymentMethods: updatedList,
+      bankTransfer: bankTransferDraft,
+    });
+  };
+
+  // Open Modal to Add or Edit a Payment Method
+  const handleOpenPaymentModal = (pm?: PaymentMethodOption) => {
+    setPaymentModalError('');
+    if (pm) {
+      setEditingPaymentMethod({
+        ...pm,
+        requiresReceipt:
+          pm.requiresReceipt !== undefined
+            ? pm.requiresReceipt
+            : pm.type === 'card_transfer',
+      });
+    } else {
+      setEditingPaymentMethod({
+        id: `pay-${Date.now()}`,
+        name: '',
+        description: '',
+        type: 'card_transfer',
+        requiresReceipt: true,
+        isEnabled: true,
+        isDemoMode: false,
+        configurationNote: 'Doʻkon egasi tomonidan qoʻshilgan toʻlov usuli.',
+      });
+    }
+    setIsPaymentModalOpen(true);
+  };
+
+  // Save Added or Edited Payment Method and Persist Immediately
+  const handleSavePaymentModalSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPaymentMethod) return;
+
+    if (editingPaymentMethod.name.trim().length < 2) {
+      setPaymentModalError('Toʻlov usuli nomini kiriting');
+      return;
+    }
+
+    const normalizedMethod: PaymentMethodOption = {
+      ...editingPaymentMethod,
+      name: editingPaymentMethod.name.trim(),
+      description:
+        editingPaymentMethod.description.trim() ||
+        editingPaymentMethod.name.trim(),
+      requiresReceipt: Boolean(editingPaymentMethod.requiresReceipt),
+    };
+
+    const exists = paymentsDraft.some((p) => p.id === normalizedMethod.id);
+    const updatedList = exists
+      ? paymentsDraft.map((p) =>
+          p.id === normalizedMethod.id ? normalizedMethod : p
+        )
+      : [...paymentsDraft, normalizedMethod];
+
+    if (!updatedList.some((p) => p.isEnabled)) {
+      setPaymentModalError('Kamida bitta toʻlov usuli faol boʻlishi shart');
+      return;
+    }
+
+    setPaymentsDraft(updatedList);
+    updateStoreSettings({
+      ...storeSettings,
+      paymentMethods: updatedList,
+      bankTransfer: bankTransferDraft,
+    });
+    setIsPaymentModalOpen(false);
+  };
+
+  // Delete Payment Method with Confirmation (Never corrupts historical orders)
+  const handleConfirmDeletePaymentMethod = () => {
+    if (!paymentToDelete) return;
+    const remaining = paymentsDraft.filter(
+      (pm) => pm.id !== paymentToDelete.id
+    );
+    if (!remaining.some((pm) => pm.isEnabled)) {
+      addToast({
+        type: 'error',
+        title: 'Yagona faol toʻlov usulini oʻchirib boʻlmaydi',
+      });
+      setPaymentToDelete(null);
+      return;
+    }
+
+    setPaymentsDraft(remaining);
+    updateStoreSettings({
+      ...storeSettings,
+      paymentMethods: remaining,
+      bankTransfer: bankTransferDraft,
+    });
+    setPaymentToDelete(null);
   };
 
   // 5. General & SEO Settings state
@@ -328,7 +444,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
             Aksiyalar, Kontent, Yetkazib berish, Toʻlov va Owner Xavfsizligi
           </h1>
           <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Humo / Uzcard qabul qiluvchi rekvizitlari, promokodlar, bannerlar va Telegram Bot server integratsiyasi
+            Humo / Uzcard qabul qiluvchi rekvizitlari, toʻlov usullari boshqaruvi, promokodlar va bannerlar
           </p>
         </div>
 
@@ -379,7 +495,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
               }
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                 activeSection === tab.id
-                  ? 'bg-brand-green text-white shadow-sm'
+                  ? 'bg-[#0F3D2E] text-white shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
               }`}
             >
@@ -416,7 +532,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
-                      <span className="px-3 py-1 rounded-lg bg-brand-green text-brand-gold font-mono font-extrabold text-sm">
+                      <span className="px-3 py-1 rounded-lg bg-[#0F3D2E] text-[#C89D54] font-mono font-extrabold text-sm">
                         {coupon.code}
                       </span>
                       <span className="text-sm font-extrabold text-brand-green">
@@ -512,6 +628,48 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
               </div>
             </div>
           ))}
+
+          <section className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-5">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <h2 className="text-base sm:text-lg font-extrabold text-gray-900">
+                Ishonch bloklari (Trust Badges)
+              </h2>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveTrustItems}
+              >
+                Saqlash
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {trustItemsDraft.map((item, idx) => (
+                <div
+                  key={item.id}
+                  className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-3"
+                >
+                  <Input
+                    label="Sarlavha"
+                    value={item.title}
+                    onChange={(e) => {
+                      const next = [...trustItemsDraft];
+                      next[idx] = { ...item, title: e.target.value };
+                      setTrustItemsDraft(next);
+                    }}
+                  />
+                  <Input
+                    label="Izoh"
+                    value={item.description}
+                    onChange={(e) => {
+                      const next = [...trustItemsDraft];
+                      next[idx] = { ...item, description: e.target.value };
+                      setTrustItemsDraft(next);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       )}
 
@@ -524,7 +682,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
           >
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <h2 className="text-lg font-extrabold text-gray-900">
-                Yetkazib berish qoidalari
+                Yetkazib berish qoidalari (Taxminan 10–25 kun)
               </h2>
               <Button type="submit" variant="primary" size="sm">
                 Saqlash
@@ -544,7 +702,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     generalDeliveryNote: e.target.value,
                   })
                 }
-                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+                className="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm"
               />
             </div>
           </form>
@@ -602,37 +760,150 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* SECTION 4: HUMO / UZCARD RECIPIENT & PAYMENT SETTINGS (PHASE 4)       */}
+      {/* SECTION 4: PAYMENT METHODS CRUD & HUMO/UZCARD RECIPIENT SETTINGS       */}
       {/* ===================================================================== */}
       {activeSection === 'payments' && (
-        <form onSubmit={handleSavePaymentSettings} className="space-y-6">
+        <div className="space-y-6">
+          {/* Header & Add New Payment Method Button */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-extrabold text-gray-900">
-                Humo / Uzcard Qabul Qiluvchi Rekvizitlari va Toʻlov Usullari
+                Toʻlov Usullari va Humo / Uzcard Karta Sozlamalari
               </h2>
-              <p className="text-xs text-gray-600">
-                Hech qachon karta PIN-kodi, CVV yoki bank parollarini kiritmang. Bu yerda faqat xaridorga koʻrinadigan qabul qiluvchi karta raqami va F.I.Sh. saqlanadi.
+              <p className="text-xs text-gray-600 mt-0.5">
+                Yangi toʻlov usuli qoʻshish, tahrirlash, yoqish/oʻchirish va oʻchirish. Faqat faol usullar rasmiylashtirishda koʻrinadi.
               </p>
             </div>
-            <Button type="submit" variant="primary" size="sm">
-              Barcha toʻlov sozlamalarini saqlash
-            </Button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                leftIcon={<Plus className="w-4 h-4" />}
+                onClick={() => handleOpenPaymentModal()}
+              >
+                Yangi toʻlov usuli qoʻshish
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={handleSavePaymentSettings}
+              >
+                Barcha oʻzgarishlarni saqlash
+              </Button>
+            </div>
+          </div>
+
+          {/* Payment Methods List (Add, Edit, Enable/Disable, Remove) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {paymentsDraft.map((pm) => {
+              const requiresReceipt =
+                pm.requiresReceipt !== undefined
+                  ? pm.requiresReceipt
+                  : pm.type === 'card_transfer';
+
+              return (
+                <div
+                  key={pm.id}
+                  className={`bg-white rounded-2xl border-2 p-5 shadow-card flex flex-col justify-between gap-4 transition-all ${
+                    pm.isEnabled
+                      ? 'border-brand-green/60'
+                      : 'border-gray-200 opacity-75'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <h3 className="text-base font-extrabold text-gray-900">
+                          {pm.name}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            variant={pm.isEnabled ? 'success' : 'neutral'}
+                            size="sm"
+                          >
+                            {pm.isEnabled ? 'Faol (Checkoutda koʻrinadi)' : 'Oʻchirilgan'}
+                          </Badge>
+                          {requiresReceipt ? (
+                            <Badge variant="gold" size="sm">
+                              Chek yuklash majburiy
+                            </Badge>
+                          ) : (
+                            <Badge variant="info" size="sm">
+                              Chek talab qilinmaydi
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-800 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={pm.isEnabled}
+                          onChange={() =>
+                            handleTogglePaymentMethodEnabled(pm.id)
+                          }
+                          className="w-5 h-5 rounded text-brand-green"
+                        />
+                        <span>{pm.isEnabled ? 'Yoqilgan' : 'Oʻchiq'}</span>
+                      </label>
+                    </div>
+
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      {pm.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono text-gray-400">
+                      ID: {pm.id}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+                        onClick={() => handleOpenPaymentModal(pm)}
+                      >
+                        Tahrirlash
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentToDelete(pm)}
+                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                        title="Toʻlov usulini oʻchirish"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Protected Owner Humo & Uzcard Recipient Configuration Box */}
-          <div className="bg-white rounded-2xl border-2 border-brand-gold p-5 sm:p-6 shadow-card space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3.5">
+          <form
+            onSubmit={handleSavePaymentSettings}
+            className="bg-white rounded-2xl border-2 border-[#C89D54] p-5 sm:p-6 shadow-card space-y-5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3.5">
               <div className="flex items-center gap-2.5">
                 <CreditCard className="w-5 h-5 text-brand-green" />
                 <h3 className="text-base font-extrabold text-gray-900">
                   Oʻtkazma uchun Humo va Uzcard karta rekvizitlari (Owner tomonidan kiritiladi)
                 </h3>
               </div>
-              <Badge variant="gold" size="sm">
-                Xaridorga rasmiylashtirishda koʻrinadi
-              </Badge>
+              <Button type="submit" variant="primary" size="sm">
+                Rekvizitlarni saqlash
+              </Button>
             </div>
+
+            <p className="text-xs text-gray-600">
+              Hech qachon karta PIN-kodi, CVV yoki bank parollarini kiritmang. Bu yerda faqat xaridorga koʻrinadigan qabul qiluvchi karta raqami va F.I.Sh. saqlanadi.
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
@@ -644,7 +915,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     humoCardNumber: e.target.value,
                   })
                 }
-                placeholder="9860 •••• •••• •••• (Oʻz kartangizni kiriting)"
+                placeholder="9860 •••• •••• ••••"
               />
 
               <Input
@@ -668,7 +939,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     uzcardCardNumber: e.target.value,
                   })
                 }
-                placeholder="8600 •••• •••• •••• (Oʻz kartangizni kiriting)"
+                placeholder="8600 •••• •••• ••••"
               />
 
               <Input
@@ -692,12 +963,12 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     bankName: e.target.value,
                   })
                 }
-                placeholder="Masalan: Kapitalbank / Ipak Yoʻli Banki"
+                placeholder="Masalan: Kapitalbank"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1.5">
+              <label className="block text-sm font-semibold text-gray-800 mb-1.5">
                 Xaridorga koʻrinadigan oʻtkazma yoʻriqnomasi
               </label>
               <textarea
@@ -709,10 +980,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
                     transferInstructions: e.target.value,
                   })
                 }
-                className="w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm"
+                className="w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm"
               />
             </div>
-          </div>
+          </form>
 
           {/* Server-Side Telegram Bot Configuration Status Notice */}
           <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card space-y-2 text-xs">
@@ -723,54 +994,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
               </span>
             </div>
             <p className="text-gray-600 leading-relaxed">
-              Xavfsizlik uchun Telegram bot kaliti va admin chat raqami brauzer kodida saqlanmaydi. Ularni Supabase Edge Function Secrets muhitiga kiriting. Agar Telegram ulanmagan boʻlsa ham, barcha buyurtmalar va cheklar avtomatik ravishda veb-saytning Admin → Buyurtmalar boʻlimiga tushadi.
+              Xavfsizlik qoidasiga koʻra <code>Telegram bot kaliti</code> va{' '}
+              <code>admin chat raqami</code> hech qachon brauzer kodida saqlanmaydi. Ularni Supabase Edge Function Secrets muhitiga kiriting.
             </p>
           </div>
-
-          {/* Payment Methods Toggles */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {paymentsDraft.map((pm, idx) => (
-              <div
-                key={pm.id}
-                className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card space-y-4"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-extrabold text-gray-900">
-                    {pm.name}
-                  </h3>
-                  <input
-                    type="checkbox"
-                    checked={pm.isEnabled}
-                    onChange={(e) => {
-                      const next = [...paymentsDraft];
-                      next[idx] = { ...pm, isEnabled: e.target.checked };
-                      setPaymentsDraft(next);
-                    }}
-                    className="w-5 h-5 rounded text-brand-green"
-                  />
-                </div>
-                <Input
-                  label="Nomi"
-                  value={pm.name}
-                  onChange={(e) => {
-                    const next = [...paymentsDraft];
-                    next[idx] = { ...pm, name: e.target.value };
-                    setPaymentsDraft(next);
-                  }}
-                />
-                <Input
-                  label="Izoh"
-                  value={pm.description}
-                  onChange={(e) => {
-                    const next = [...paymentsDraft];
-                    next[idx] = { ...pm, description: e.target.value };
-                    setPaymentsDraft(next);
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </form>
+        </div>
       )}
 
       {/* SECTION 5: SINGLE-OWNER SECURITY */}
@@ -964,6 +1192,173 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({
           </div>
         </form>
       )}
+
+      {/* ===================================================================== */}
+      {/* MODAL: ADD / EDIT PAYMENT METHOD (Requirement 3)                      */}
+      {/* ===================================================================== */}
+      <Modal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        title="Toʻlov usulini sozlash"
+        maxWidth="md"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPaymentModalOpen(false)}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              type="submit"
+              form="payment-method-admin-form"
+              variant="primary"
+              size="sm"
+            >
+              Saqlash
+            </Button>
+          </>
+        }
+      >
+        {editingPaymentMethod && (
+          <form
+            id="payment-method-admin-form"
+            onSubmit={handleSavePaymentModalSubmit}
+            className="space-y-4 text-xs sm:text-sm"
+          >
+            {paymentModalError && (
+              <p className="text-xs font-bold text-red-600">
+                {paymentModalError}
+              </p>
+            )}
+
+            <Input
+              label="Toʻlov usuli nomi"
+              required
+              value={editingPaymentMethod.name}
+              onChange={(e) =>
+                setEditingPaymentMethod({
+                  ...editingPaymentMethod,
+                  name: e.target.value,
+                })
+              }
+              placeholder="Masalan: Humo / Uzcard kartaga oʻtkazma"
+            />
+
+            <Input
+              label="Xaridorga koʻrinadigan qisqa tavsif"
+              required
+              value={editingPaymentMethod.description}
+              onChange={(e) =>
+                setEditingPaymentMethod({
+                  ...editingPaymentMethod,
+                  description: e.target.value,
+                })
+              }
+              placeholder="Masalan: Kartaga oʻtkazib chek skrinshotini yuklang"
+            />
+
+            <Select
+              label="Toʻlov turi toifasi"
+              value={editingPaymentMethod.type}
+              onChange={(e) => {
+                const nextType = e.target.value as PaymentMethodOption['type'];
+                setEditingPaymentMethod({
+                  ...editingPaymentMethod,
+                  type: nextType,
+                  requiresReceipt: nextType === 'card_transfer',
+                });
+              }}
+              options={[
+                {
+                  value: 'card_transfer',
+                  label: 'Kartaga oʻtkazma (Bank Transfer)',
+                },
+                {
+                  value: 'cash',
+                  label: 'Yetkazib berilganda naqd yoki terminal (COD)',
+                },
+                {
+                  value: 'gateway_demo',
+                  label: 'Onlayn toʻlov tizimi (Click / Payme / Uzum)',
+                },
+              ]}
+            />
+
+            <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 cursor-pointer">
+              <div>
+                <span className="text-xs font-bold text-gray-900 block">
+                  Xaridordan toʻlov cheki (rasm/PDF) yuklashni talab qilish
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  Yoqilsa, buyurtma «Toʻlov tekshirilmoqda» holatida tushadi
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={Boolean(editingPaymentMethod.requiresReceipt)}
+                onChange={(e) =>
+                  setEditingPaymentMethod({
+                    ...editingPaymentMethod,
+                    requiresReceipt: e.target.checked,
+                  })
+                }
+                className="w-4 h-4 rounded text-brand-green"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 cursor-pointer">
+              <span className="text-xs font-bold text-gray-900">
+                Rasmiylashtirish sahifasida (Checkout) faol koʻrsatish
+              </span>
+              <input
+                type="checkbox"
+                checked={editingPaymentMethod.isEnabled}
+                onChange={(e) =>
+                  setEditingPaymentMethod({
+                    ...editingPaymentMethod,
+                    isEnabled: e.target.checked,
+                  })
+                }
+                className="w-4 h-4 rounded text-brand-green"
+              />
+            </label>
+          </form>
+        )}
+      </Modal>
+
+      {/* Confirm Delete Payment Method Modal */}
+      <Modal
+        isOpen={Boolean(paymentToDelete)}
+        onClose={() => setPaymentToDelete(null)}
+        title="Toʻlov usulini oʻchirish"
+        maxWidth="sm"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPaymentToDelete(null)}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmDeletePaymentMethod}
+            >
+              Oʻchirish
+            </Button>
+          </>
+        }
+      >
+        {paymentToDelete && (
+          <p className="text-xs sm:text-sm text-gray-700">
+            <strong>«{paymentToDelete.name}»</strong> usulini oʻchirmoqchimisiz? Avvalgi buyurtmalar tarixidagi toʻlov nomi oʻzgarishsiz saqlanib qoladi.
+          </p>
+        )}
+      </Modal>
 
       {/* Coupon Modal */}
       <Modal

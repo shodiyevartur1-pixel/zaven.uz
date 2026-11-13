@@ -29,16 +29,16 @@ export interface PaymentReceiptAttachment {
   fileName: string;
   mimeType: string;
   fileSize: number;
-  dataUrl: string; // Local preview / private signed URL fallback
-  storagePath?: string; // Private Supabase Storage path in `payment-receipts` bucket
+  dataUrl: string;
+  storagePath?: string;
   uploadedAt: string;
 }
 
 export interface BankTransferConfig {
   isEnabled: boolean;
-  humoCardNumber: string; // Configured by owner in Admin; never invented
+  humoCardNumber: string;
   humoCardHolder: string;
-  uzcardCardNumber: string; // Configured by owner in Admin; never invented
+  uzcardCardNumber: string;
   uzcardCardHolder: string;
   bankName: string;
   transferInstructions: string;
@@ -133,7 +133,13 @@ export interface Order {
   customerPhone: string;
   customerEmail?: string;
   region: string;
+  district?: string;
   address: string;
+  locationCoordinates?: {
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+  };
   customerNote?: string;
   internalNotes: string[];
   items: OrderItem[];
@@ -160,6 +166,7 @@ export interface CustomerAddress {
   id: string;
   title: string;
   region: string;
+  district?: string;
   addressLine: string;
   isDefault: boolean;
 }
@@ -233,6 +240,7 @@ export interface PaymentMethodOption {
   name: string;
   description: string;
   type: 'cash' | 'card_transfer' | 'gateway_demo';
+  requiresReceipt?: boolean;
   isEnabled: boolean;
   isDemoMode: boolean;
   configurationNote: string;

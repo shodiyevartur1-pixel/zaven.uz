@@ -6,7 +6,6 @@ import {
   Minus,
   Eye,
   Check,
-  AlertCircle,
   Sparkles,
   Flame,
 } from 'lucide-react';
@@ -64,10 +63,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <>
-      <article className="group bg-white rounded-2xl border border-gray-200 overflow-hidden flex flex-col justify-between h-full transition-all duration-200 hover:border-brand-green/60 hover:shadow-card-hover">
+      <article className="group bg-white dark:bg-[#12211C] rounded-xl sm:rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden flex flex-col justify-between h-full transition-all duration-200 hover:border-brand-green/60 dark:hover:border-brand-gold/60 hover:shadow-card-hover">
         <div className="flex-1 flex flex-col">
-          {/* Product Image & Restrained Badges */}
-          <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden shrink-0">
+          {/* Compact Square Image Area for 2-Column Mobile Comparison */}
+          <div className="relative aspect-square bg-gray-100 dark:bg-[#1A3028] overflow-hidden shrink-0">
             <Link
               to={`/product/${product.slug}`}
               onClick={() => recordRecentlyViewed(product.id)}
@@ -84,23 +83,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               />
             </Link>
 
-            {/* Top-left Restrained Badges */}
-            <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none max-w-[75%]">
+            {/* Restrained Top-Left Badges */}
+            <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1 pointer-events-none max-w-[78%]">
               {discountPercent > 0 && (
-                <Badge variant="gold" size="sm" className="shadow-sm">
+                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#C89D54] text-[#09261C] border border-[#E5C992] shadow-sm">
                   -{discountPercent}%
-                </Badge>
+                </span>
               )}
               {product.isNew ? (
-                <Badge variant="green" size="sm" className="shadow-sm">
-                  <Sparkles className="w-3 h-3 mr-1" />
+                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-[#0F3D2E] text-white border border-emerald-500/40 shadow-sm">
+                  <Sparkles className="w-2.5 h-2.5 mr-0.5 text-[#C89D54] shrink-0" />
                   {t('product.new')}
-                </Badge>
-              ) : product.isPopular ? (
-                <Badge variant="info" size="sm" className="shadow-sm">
-                  <Flame className="w-3 h-3 mr-1" />
+                </span>
+              ) : product.isPopular && discountPercent === 0 ? (
+                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-sky-950/90 text-sky-200 border border-sky-700/60 shadow-sm">
+                  <Flame className="w-2.5 h-2.5 mr-0.5 shrink-0" />
                   {t('product.popular')}
-                </Badge>
+                </span>
               ) : null}
             </div>
 
@@ -108,97 +107,74 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <button
               type="button"
               onClick={handleOpenQuickView}
-              className="absolute top-3 right-3 w-9 h-9 rounded-xl bg-white/95 hover:bg-brand-green text-gray-700 hover:text-white border border-gray-200 flex items-center justify-center shadow-sm transition-colors"
+              className="absolute top-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-sm transition-colors"
               title={t('product.quickView')}
               aria-label={`${localizedProduct.name} — ${t('product.quickView')}`}
             >
-              <Eye className="w-4 h-4" />
+              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             {/* Out of Stock Overlay */}
             {isOutOfStock && (
-              <div className="absolute inset-x-0 bottom-0 bg-gray-900/85 text-white text-xs font-semibold py-1.5 px-3 text-center">
-                {t('product.outOfStock')}
+              <div className="absolute inset-x-0 bottom-0 bg-gray-900/90 text-white text-[10px] sm:text-xs font-bold py-1 px-2 text-center">
+                {t('product.outOfStockShort')}
               </div>
             )}
           </div>
 
-          {/* Card Body Content */}
-          <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between space-y-3">
-            <div className="space-y-1.5">
-              {/* Category & SKU Meta Row */}
-              <div className="flex items-center justify-between gap-2 text-xs">
-                {showCategoryName && category && localizedCategory ? (
-                  <Link
-                    to={`/catalog?category=${category.slug}`}
-                    className="font-semibold text-brand-green hover:underline truncate"
-                    title={localizedCategory.name}
-                  >
-                    {localizedCategory.name}
-                  </Link>
-                ) : (
-                  <span className="text-gray-500">ZAVEN</span>
-                )}
-                <span className="text-[11px] font-mono text-gray-400 shrink-0">
-                  {product.sku}
-                </span>
-              </div>
+          {/* Compact Card Body (Title limited to 2 lines, prominent price, small stock label) */}
+          <div className="p-2.5 sm:p-4 flex-1 flex flex-col justify-between gap-2">
+            <div>
+              {showCategoryName && category && localizedCategory && (
+                <Link
+                  to={`/catalog?category=${category.slug}`}
+                  className="block text-[10px] sm:text-[11px] font-semibold text-brand-green hover:underline truncate mb-0.5"
+                  title={localizedCategory.name}
+                >
+                  {localizedCategory.name}
+                </Link>
+              )}
 
-              {/* Product Title with Full Accessible Tooltip */}
               <Link
                 to={`/product/${product.slug}`}
                 onClick={() => recordRecentlyViewed(product.id)}
                 title={localizedProduct.name}
-                className="block text-sm sm:text-[15px] font-bold text-gray-900 group-hover:text-brand-green transition-colors line-clamp-2 min-h-[2.6rem] leading-snug"
+                className="block text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 group-hover:text-brand-green transition-colors line-clamp-2 min-h-[2.1rem] sm:min-h-[2.4rem] leading-snug"
               >
                 {localizedProduct.name}
               </Link>
-
-              <p
-                className="text-xs text-gray-500 line-clamp-2 leading-relaxed"
-                title={localizedProduct.shortDescription}
-              >
-                {localizedProduct.shortDescription}
-              </p>
             </div>
 
-            {/* Price, Savings & Stock Status Block */}
-            <div className="pt-3 border-t border-gray-100 space-y-2">
-              <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-lg font-extrabold text-brand-green leading-none">
-                    {formatUZS(effectivePrice)}
-                  </div>
-                  {product.salePrice && (
-                    <div className="text-xs text-gray-400 line-through mt-1">
-                      {formatUZS(product.price)}
-                    </div>
-                  )}
-                </div>
-
-                {product.salePrice && (
-                  <span className="text-[11px] font-bold text-brand-gold-dark bg-brand-gold-light px-2 py-0.5 rounded-md border border-brand-gold-border shrink-0">
-                    {t('product.savings')}:{' '}
-                    {formatUZS(product.price - product.salePrice)}
+            {/* Price & Compact Stock Row */}
+            <div className="pt-1.5 border-t border-gray-100 dark:border-[#28453B]">
+              <div className="flex flex-col">
+                <span className="text-sm sm:text-base font-extrabold text-brand-green leading-tight">
+                  {formatUZS(effectivePrice)}
+                </span>
+                {product.salePrice ? (
+                  <span className="text-[11px] text-gray-400 line-through leading-tight mt-0.5">
+                    {formatUZS(product.price)}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-transparent select-none leading-tight mt-0.5">
+                    &nbsp;
                   </span>
                 )}
               </div>
 
-              {/* Restrained Stock Indicator */}
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="mt-1 flex items-center justify-between text-[10px] sm:text-[11px]">
                 {isOutOfStock ? (
-                  <span className="text-red-600 font-semibold">
+                  <span className="text-red-600 dark:text-red-400 font-semibold truncate">
                     {t('product.outOfStockShort')}
                   </span>
                 ) : isLowStock ? (
-                  <span className="inline-flex items-center gap-1 text-amber-700 font-semibold">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span className="text-amber-700 dark:text-amber-300 font-semibold truncate">
                     {t('product.lowStock')}: {product.stock}{' '}
                     {t('product.units')}
                   </span>
                 ) : (
-                  <span className="text-emerald-700 font-medium">
-                    {t('product.inStock')} ({product.stock} {t('product.units')})
+                  <span className="text-emerald-700 dark:text-emerald-300 font-medium truncate">
+                    {t('product.inStock')} ({product.stock})
                   </span>
                 )}
               </div>
@@ -206,26 +182,30 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         </div>
 
-        {/* Bottom Cart Action Area */}
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1">
+        {/* Consistent Compact Cart Action Area */}
+        <div className="px-2.5 pb-2.5 sm:px-4 sm:pb-4">
           {isOutOfStock ? (
-            <Button variant="outline" size="md" fullWidth disabled>
-              {t('product.outOfStock')}
-            </Button>
+            <button
+              type="button"
+              disabled
+              className="w-full h-9 sm:h-10 rounded-lg border border-gray-200 dark:border-[#28453B] bg-gray-100 dark:bg-[#162621] text-gray-400 text-xs font-bold cursor-not-allowed"
+            >
+              {t('product.outOfStockShort')}
+            </button>
           ) : quantityInCart > 0 ? (
-            <div className="flex items-center justify-between bg-brand-green-light rounded-xl p-1 border border-brand-green/25 min-h-[42px]">
+            <div className="flex items-center justify-between bg-brand-green-light dark:bg-[#1A332A] rounded-lg p-0.5 border border-brand-green/25 dark:border-emerald-600/40 h-9 sm:h-10">
               <button
                 type="button"
                 onClick={() =>
                   updateCartQuantity(product.id, quantityInCart - 1)
                 }
-                className="w-9 h-9 rounded-lg bg-white text-brand-green hover:bg-gray-50 flex items-center justify-center font-bold shadow-sm transition-colors"
+                className="w-8 h-8 rounded-md bg-white dark:bg-[#12211C] text-brand-green hover:bg-gray-50 flex items-center justify-center font-bold shadow-sm transition-colors shrink-0"
                 aria-label="Decrease quantity"
               >
-                <Minus className="w-4 h-4" />
+                <Minus className="w-3.5 h-3.5" />
               </button>
-              <span className="text-xs font-extrabold text-brand-green px-2">
-                {t('product.inCart')}: {quantityInCart} {t('product.units')}
+              <span className="text-xs font-extrabold text-brand-green px-1 truncate">
+                {quantityInCart} {t('product.units')}
               </span>
               <button
                 type="button"
@@ -233,27 +213,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   updateCartQuantity(product.id, quantityInCart + 1)
                 }
                 disabled={quantityInCart >= product.stock}
-                className="w-9 h-9 rounded-lg bg-brand-green text-white hover:bg-brand-green-hover disabled:opacity-40 flex items-center justify-center font-bold shadow-sm transition-colors"
+                className="w-8 h-8 rounded-md bg-[#0F3D2E] text-white hover:bg-[#16533F] disabled:opacity-40 flex items-center justify-center font-bold shadow-sm transition-colors shrink-0"
                 aria-label="Increase quantity"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
           ) : (
-            <Button
-              variant="primary"
-              size="md"
-              fullWidth
-              leftIcon={<ShoppingBag className="w-4 h-4" />}
+            <button
+              type="button"
               onClick={() => addToCart(product.id, 1)}
+              className="w-full h-9 sm:h-10 px-2.5 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] active:bg-[#09261C] text-white border border-emerald-500/30 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors"
             >
-              {t('product.addToCart')}
-            </Button>
+              <ShoppingBag className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+              <span className="truncate">{t('product.addToCart')}</span>
+            </button>
           )}
         </div>
       </article>
 
-      {/* Quick View Modal */}
+      {/* Quick View Modal (Preserves full description, SKU, savings, and feature list) */}
       <Modal
         isOpen={isQuickViewOpen}
         onClose={() => setIsQuickViewOpen(false)}
@@ -294,7 +273,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         }
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="rounded-xl overflow-hidden bg-gray-100 border border-gray-200 aspect-square">
+          <div className="rounded-xl overflow-hidden bg-gray-100 dark:bg-[#1A3028] border border-gray-200 dark:border-[#28453B] aspect-square">
             <img
               src={product.images[0]}
               alt={localizedProduct.name}
@@ -308,7 +287,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               )}
               <span className="text-xs text-gray-500">SKU: {product.sku}</span>
             </div>
-            <h4 className="text-lg font-bold text-gray-900">
+            <h4 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {localizedProduct.name}
             </h4>
             <div className="flex items-baseline gap-2.5">
@@ -321,19 +300,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-600 leading-relaxed">
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
               {localizedProduct.description}
             </p>
             {localizedProduct.features.length > 0 && (
               <div className="pt-2">
-                <p className="text-xs font-bold text-gray-800 mb-1.5">
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5">
                   {t('product.keyFeatures')}
                 </p>
                 <ul className="space-y-1">
                   {localizedProduct.features.map((feat, idx) => (
                     <li
                       key={idx}
-                      className="text-xs text-gray-700 flex items-start gap-1.5"
+                      className="text-xs text-gray-700 dark:text-gray-300 flex items-start gap-1.5"
                     >
                       <Check className="w-3.5 h-3.5 text-brand-green shrink-0 mt-0.5" />
                       <span>{feat}</span>

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?:
     | 'primary'
     | 'secondary'
@@ -34,24 +35,24 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantStyles: Record<NonNullable<ButtonProps['variant']>, string> = {
     primary:
-      'bg-brand-green text-white hover:bg-brand-green-hover active:bg-brand-green-dark shadow-sm',
+      'bg-[#0F3D2E] text-white hover:bg-[#16533F] active:bg-[#09261C] border border-emerald-500/30 shadow-sm',
     secondary:
-      'bg-brand-green-light text-brand-green hover:bg-[#d5e6df] border border-brand-green/15',
+      'bg-brand-green-light text-brand-green hover:bg-[#d5e6df] dark:bg-[#1A332A] dark:text-emerald-200 dark:hover:bg-[#224236] border border-brand-green/20 dark:border-emerald-700/50',
     gold:
-      'bg-brand-gold text-brand-green-dark font-bold hover:bg-brand-gold-hover active:bg-brand-gold-dark shadow-sm',
+      'bg-[#C89D54] text-[#09261C] font-extrabold hover:bg-[#B5893E] active:bg-[#9E7632] shadow-sm',
     outline:
-      'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-brand-green hover:text-brand-green',
+      'border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-brand-green dark:bg-[#12211C] dark:text-gray-100 dark:border-[#2F5246] dark:hover:bg-[#1A3028] dark:hover:border-brand-gold',
     'outline-light':
-      'border-2 border-brand-gold/80 bg-brand-green-dark/60 text-white hover:bg-brand-gold hover:text-brand-green-dark hover:border-brand-gold shadow-sm',
+      'border-2 border-[#C89D54] bg-[#09261C]/70 text-white hover:bg-[#C89D54] hover:text-[#09261C] shadow-sm',
     ghost:
-      'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-brand-green',
+      'bg-transparent text-gray-700 hover:bg-gray-100 hover:text-brand-green dark:text-gray-200 dark:hover:bg-[#1D352D]',
     danger:
       'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
   };
 
   const sizeStyles: Record<NonNullable<ButtonProps['size']>, string> = {
-    sm: 'min-h-[36px] text-xs px-3 py-1.5 gap-1.5',
-    md: 'min-h-[42px] text-sm px-4 py-2.5 gap-2',
+    sm: 'min-h-[38px] text-xs px-3 py-1.5 gap-1.5',
+    md: 'min-h-[44px] text-sm px-4 py-2.5 gap-2',
     lg: 'min-h-[48px] text-base px-6 py-3 gap-2.5',
   };
 
