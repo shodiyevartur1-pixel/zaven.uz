@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import { RealtimeChannel } from '@supabase/supabase-js';
 import {
   ADMIN_USERS,
   INITIAL_BANNERS,
@@ -18,6 +19,7 @@ import {
   INITIAL_STORE_SETTINGS,
 } from '../data/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { formatUZS } from '../utils/format';
 import {
   AdminRole,
   AdminUser,
@@ -39,7 +41,6 @@ import {
 } from '../types';
 
 interface StoreContextType {
-  // Store Data
   products: Product[];
   categories: Category[];
   banners: HomepageBanner[];
@@ -52,28 +53,26 @@ interface StoreContextType {
   adminUsers: AdminUser[];
   isSyncingSupabase: boolean;
 
-  // Active Customer & Cart
   cart: CartItem[];
+  favoriteIds: string[];
   recentlyViewedIds: string[];
   currentCustomer: Customer | null;
 
-  // Active Admin Role
   currentAdminRole: AdminRole;
   setCurrentAdminRole: (role: AdminRole) => void;
 
-  // Cart Actions
   addToCart: (productId: string, quantity?: number) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
+  toggleFavorite: (productId: string) => void;
+  clearFavorites: () => void;
   recordRecentlyViewed: (productId: string) => void;
 
-  // Customer Auth & Profile Actions
   signInCustomerDemo: (phone: string, fullName?: string) => void;
   signOutCustomer: () => void;
   updateCustomerProfile: (updated: Partial<Customer>) => void;
 
-  // Customer Inquiry Submission
   submitCustomerInquiry: (data: {
     customerName: string;
     phone: string;
@@ -81,7 +80,6 @@ interface StoreContextType {
     message: string;
   }) => void;
 
-  // Order Placement, Receipt Verification & Telegram Retry Actions
   placeOrder: (
     orderData: Omit<
       Order,
@@ -107,7 +105,6 @@ interface StoreContextType {
   ) => void;
   retryOrderTelegramNotification: (orderId: string) => Promise<void>;
 
-  // Admin Product & Inventory Actions
   saveProduct: (product: Product, isNewProduct?: boolean) => void;
   deleteProduct: (productId: string) => void;
   adjustProductStock: (
@@ -116,7 +113,6 @@ interface StoreContextType {
     reason: string
   ) => void;
 
-  // Admin Categories, Coupons, Banners & Settings
   saveCategory: (category: Category) => void;
   saveCoupon: (coupon: Coupon) => void;
   deleteCoupon: (couponId: string) => void;
@@ -128,7 +124,6 @@ interface StoreContextType {
   ) => void;
   refreshFromSupabase: () => Promise<void>;
 
-  // Notifications & Reset
   toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -136,10 +131,6 @@ interface StoreContextType {
 }
 
 const STORAGE_KEY = 'zaven_store_state_v2';
-
-// ============================================================================
-// DATABASE ROW <-> TYPESCRIPT MODEL MAPPERS
-// ============================================================================
 
 function mapRowToCategory(row: Record<string, unknown>): Category {
   return {
@@ -248,6 +239,11 @@ function mapRowToOrder(
     ? storagePath.split('/').pop() || 'receipt'
     : undefined;
 
+  const rawCoords = row.location_coordinates as
+    | { lat?: number; lng?: number; accuracyMeters?: number }
+    | null
+    | undefined;
+
   return {
     id: String(row.id),
     orderNumber: String(row.order_number),
@@ -255,7 +251,18 @@ function mapRowToOrder(
     customerPhone: String(row.customer_phone),
     customerEmail: row.customer_email ? String(row.customer_email) : undefined,
     region: String(row.region),
+    district: row.district ? String(row.district) : undefined,
     address: String(row.address),
+    locationCoordinates:
+      rawCoords &&
+      typeof rawCoords.lat === 'number' &&
+      typeof rawCoords.lng === 'number'
+        ? {
+            lat: rawCoords.lat,
+            lng: rawCoords.lng,
+            accuracyMeters: rawCoords.accuracyMeters,
+          }
+        : undefined,
     customerNote: row.customer_note ? String(row.customer_note) : undefined,
     internalNotes: Array.isArray(row.internal_notes)
       ? (row.internal_notes as string[])
@@ -436,6 +443,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [cart, setCart] = useState<CartItem[]>(
     savedState?.cart || [{ productId: 'prod-1', quantity: 1 }]
   );
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(
+    Array.isArray(savedState?.favoriteIds) ? savedState.favoriteIds : []
+  );
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(
     savedState?.recentlyViewedIds || ['prod-1', 'prod-2', 'prod-4']
   );
@@ -453,14 +463,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setToasts((prev) => [...prev, { ...toast, id }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
+    }, 4000);
   }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Helper to persist `store_settings` singleton payload (including coupons & banners)
   const syncStoreSettingsPayloadToSupabase = useCallback(
     async (
       nextSettings: StoreSettings,
@@ -485,15 +494,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     []
   );
 
-  // ============================================================================
-  // LIVE SUPABASE FETCH & HYDRATION (Public Catalog + Owner-Protected Tables)
-  // ============================================================================
   const refreshFromSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) return;
     setIsSyncingSupabase(true);
 
     try {
-      // 1. Fetch Public Storefront Tables (Categories, Products, Store Settings)
       const [catRes, prodRes, settingsRes] = await Promise.all([
         supabase
           .from('categories')
@@ -541,7 +546,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
-      // 2. If an authenticated Owner session is active, fetch Owner-Only RLS tables
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -567,7 +571,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         ]);
 
         if (!ordersRes.error && ordersRes.data) {
-          // Resolve private signed URLs for orders that have a receipt in `payment-receipts`
           const mappedOrders = await Promise.all(
             ordersRes.data.map(async (row) => {
               let signedUrl: string | undefined = undefined;
@@ -604,81 +607,216 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Run initial fetch on mount and re-sync whenever Supabase Auth session changes
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
+    let realtimeChannel: RealtimeChannel | null = null;
+    let isMounted = true;
+
+    const setupRealtimeChannel = async () => {
+      if (!supabase) return;
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
+
+      if (!session?.user || !isMounted) return;
+
+      realtimeChannel = supabase
+        .channel('zaven-owner-live-feed')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'orders',
+          },
+          async (payload) => {
+            if (!isMounted || !payload.new) return;
+            const rawRow = payload.new as Record<string, unknown>;
+
+            let signedUrl: string | undefined = undefined;
+            if (rawRow.payment_receipt_path && supabase) {
+              const { data: urlData } = await supabase.storage
+                .from('payment-receipts')
+                .createSignedUrl(String(rawRow.payment_receipt_path), 3600);
+              signedUrl = urlData?.signedUrl;
+            }
+
+            const incomingOrder = mapRowToOrder(rawRow, signedUrl);
+
+            let isGenuinelyNew = false;
+            setOrders((prev) => {
+              const exists = prev.some(
+                (o) =>
+                  o.orderNumber === incomingOrder.orderNumber ||
+                  o.id === incomingOrder.id
+              );
+              if (exists) {
+                return prev.map((o) =>
+                  o.orderNumber === incomingOrder.orderNumber
+                    ? {
+                        ...o,
+                        ...incomingOrder,
+                        paymentReceipt: incomingOrder.paymentReceipt
+                          ? {
+                              ...incomingOrder.paymentReceipt,
+                              dataUrl:
+                                incomingOrder.paymentReceipt.dataUrl ||
+                                o.paymentReceipt?.dataUrl ||
+                                '',
+                            }
+                          : o.paymentReceipt,
+                      }
+                    : o
+                );
+              }
+              isGenuinelyNew = true;
+              return [incomingOrder, ...prev];
+            });
+
+            if (isGenuinelyNew) {
+              addToast({
+                type: 'success',
+                title: `Yangi buyurtma #${incomingOrder.orderNumber}!`,
+                description: `${incomingOrder.customerName} — ${formatUZS(
+                  incomingOrder.totalAmount
+                )}`,
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'orders',
+          },
+          async (payload) => {
+            if (!isMounted || !payload.new) return;
+            const rawRow = payload.new as Record<string, unknown>;
+
+            let signedUrl: string | undefined = undefined;
+            if (rawRow.payment_receipt_path && supabase) {
+              const { data: urlData } = await supabase.storage
+                .from('payment-receipts')
+                .createSignedUrl(String(rawRow.payment_receipt_path), 3600);
+              signedUrl = urlData?.signedUrl;
+            }
+
+            const updatedOrder = mapRowToOrder(rawRow, signedUrl);
+
+            setOrders((prev) =>
+              prev.map((o) =>
+                o.orderNumber === updatedOrder.orderNumber ||
+                o.id === updatedOrder.id
+                  ? {
+                      ...o,
+                      ...updatedOrder,
+                      paymentReceipt: updatedOrder.paymentReceipt
+                        ? {
+                            ...updatedOrder.paymentReceipt,
+                            dataUrl:
+                              updatedOrder.paymentReceipt.dataUrl ||
+                              o.paymentReceipt?.dataUrl ||
+                              '',
+                          }
+                        : o.paymentReceipt,
+                    }
+                  : o
+              )
+            );
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'inquiries',
+          },
+          (payload) => {
+            if (!isMounted || !payload.new) return;
+            const incomingInquiry = mapRowToInquiry(
+              payload.new as Record<string, unknown>
+            );
+
+            let isGenuinelyNew = false;
+            setInquiries((prev) => {
+              const exists = prev.some(
+                (inq) =>
+                  inq.id === incomingInquiry.id ||
+                  (inq.phone === incomingInquiry.phone &&
+                    inq.message === incomingInquiry.message)
+              );
+              if (exists) return prev;
+              isGenuinelyNew = true;
+              return [incomingInquiry, ...prev];
+            });
+
+            if (isGenuinelyNew) {
+              addToast({
+                type: 'info',
+                title: `Yangi mijoz murojaati: ${incomingInquiry.customerName}`,
+                description: `«${incomingInquiry.subject}» (${incomingInquiry.phone})`,
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'inquiries',
+          },
+          (payload) => {
+            if (!isMounted || !payload.new) return;
+            const updatedInquiry = mapRowToInquiry(
+              payload.new as Record<string, unknown>
+            );
+            setInquiries((prev) =>
+              prev.map((inq) =>
+                inq.id === updatedInquiry.id ? updatedInquiry : inq
+              )
+            );
+          }
+        )
+        .subscribe();
+    };
+
     refreshFromSupabase();
+    setupRealtimeChannel();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         refreshFromSupabase();
+        setupRealtimeChannel();
+      } else if (event === 'SIGNED_OUT') {
+        if (realtimeChannel && supabase) {
+          supabase.removeChannel(realtimeChannel);
+          realtimeChannel = null;
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
-    };
-  }, [refreshFromSupabase]);
-
-  // Owner-only live order updates. RLS ensures only the authenticated owner
-  // receives order rows from Supabase Realtime.
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-
-    const supabaseClient = supabase;
-    let orderChannel: ReturnType<typeof supabaseClient.channel> | null = null;
-    let disposed = false;
-
-    const subscribeToOwnerOrders = (hasSession: boolean) => {
-      if (disposed || !hasSession || orderChannel) return;
-
-      orderChannel = supabaseClient
-        .channel('zaven-owner-orders')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'orders' },
-          (payload) => {
-            const row = payload.new as Record<string, unknown>;
-            const orderNumber =
-              typeof row.order_number === 'string' ? row.order_number : '';
-            addToast({
-              type: 'info',
-              title: 'Yangi buyurtma keldi',
-              description: orderNumber ? `Buyurtma #${orderNumber}` : undefined,
-            });
-            void refreshFromSupabase();
-          }
-        )
-        .subscribe();
-    };
-
-    const {
-      data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        // Defer Supabase work until after its auth callback completes.
-        setTimeout(() => subscribeToOwnerOrders(true), 0);
-      } else if (orderChannel) {
-        void supabaseClient.removeChannel(orderChannel);
-        orderChannel = null;
+      if (realtimeChannel && supabase) {
+        supabase.removeChannel(realtimeChannel);
       }
-    });
-
-    void supabaseClient.auth.getSession().then(({ data }) => {
-      subscribeToOwnerOrders(Boolean(data.session?.user));
-    });
-
-    return () => {
-      disposed = true;
-      subscription.unsubscribe();
-      if (orderChannel) void supabaseClient.removeChannel(orderChannel);
     };
-  }, [addToast, refreshFromSupabase]);
+  }, [refreshFromSupabase, addToast]);
 
-  // Keep localStorage cache synchronized as a fast local cache
   useEffect(() => {
     try {
       const stateToSave = {
@@ -692,6 +830,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         inquiries,
         storeSettings,
         cart,
+        favoriteIds,
         recentlyViewedIds,
         currentCustomer,
         currentAdminRole,
@@ -711,14 +850,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     inquiries,
     storeSettings,
     cart,
+    favoriteIds,
     recentlyViewedIds,
     currentCustomer,
     currentAdminRole,
   ]);
 
-  // ============================================================================
-  // CART & CUSTOMER ACTIONS
-  // ============================================================================
   const addToCart = (productId: string, quantity = 1) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
@@ -778,6 +915,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const clearCart = () => setCart([]);
+
+  // Requirement 2: Persistent Guest & Customer Favorites Toggle
+  const toggleFavorite = useCallback((productId: string) => {
+    setFavoriteIds((prev) => {
+      const exists = prev.includes(productId);
+      return exists
+        ? prev.filter((id) => id !== productId)
+        : [productId, ...prev];
+    });
+  }, []);
+
+  const clearFavorites = useCallback(() => {
+    setFavoriteIds([]);
+  }, []);
 
   const recordRecentlyViewed = (productId: string) => {
     setRecentlyViewedIds((prev) => {
@@ -854,9 +1005,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  // ============================================================================
-  // CUSTOMER INQUIRY SUBMISSION (Bi-Directional Sync)
-  // ============================================================================
   const submitCustomerInquiry: StoreContextType['submitCustomerInquiry'] =
     async ({ customerName, phone, subject, message }) => {
       const now = new Date().toISOString();
@@ -899,9 +1047,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     };
 
-  // ============================================================================
-  // ORDER PLACEMENT + RECEIPT UPLOAD + SUPABASE SYNC
-  // ============================================================================
   const placeOrder: StoreContextType['placeOrder'] = async (orderData) => {
     const now = new Date().toISOString();
     const orderNumber = `ZVN-2026-${1042 + orders.length}`;
@@ -935,14 +1080,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         if (error) {
           telegramStatus = 'failed';
           telegramError = error.message;
-          // Fallback direct insert so the order is still stored in `public.orders` even if the Edge Function was not deployed yet
           await supabase.from('orders').insert({
             order_number: orderNumber,
             customer_name: orderData.customerName,
             customer_phone: orderData.customerPhone,
             customer_email: orderData.customerEmail || null,
             region: orderData.region,
+            district: orderData.district || null,
             address: orderData.address,
+            location_coordinates: orderData.locationCoordinates || null,
             customer_note: orderData.customerNote || null,
             internal_notes: initialNotes,
             items: orderData.items,
@@ -992,9 +1138,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       updatedAt: now,
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev) => {
+      const exists = prev.some((o) => o.orderNumber === orderNumber);
+      return exists ? prev : [newOrder, ...prev];
+    });
 
-    // Deduct stock and record stock log
     const updatedProductsList: Product[] = [];
     setProducts((prev) =>
       prev.map((p) => {
@@ -1037,7 +1185,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       setStockLogs((prev) => [...newLogs, ...prev]);
     }
 
-    // Sync updated product stock & stock logs to Supabase if owner session is active
     if (isSupabaseConfigured && supabase) {
       for (const up of updatedProductsList) {
         supabase
@@ -1112,6 +1259,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             id: `addr-${Date.now()}`,
             title: 'Asosiy manzil',
             region: orderData.region,
+            district: orderData.district,
             addressLine: orderData.address,
             isDefault: true,
           },
@@ -1144,9 +1292,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return newOrder;
   };
 
-  // ============================================================================
-  // OWNER ADMIN ACTIONS (Bi-Directional Sync with PostgreSQL)
-  // ============================================================================
   const reviewOrderReceipt: StoreContextType['reviewOrderReceipt'] = (
     orderId,
     decision,
@@ -1224,7 +1369,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           type: 'warning',
           title: 'Telegram server funksiyasi ulanmagan',
           description:
-            'Haqiqiy Telegram xabarnomasi uchun Supabase Edge Function serveridagi bot kalitini sozlang. Buyurtma Admin panelda xavfsiz saqlangan.',
+            'Haqiqiy Telegram xabarnoma uchun Supabase Edge Function va TELEGRAM_BOT_TOKEN server kalitlarini sozlang. Buyurtma Admin panelda xavfsiz saqlangan.',
         });
         return;
       }
@@ -1244,7 +1389,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           const errMsg =
             error?.message ||
             data?.telegramNotificationError ||
-            'Telegram bot kaliti yoki admin chat raqami sozlanmagan';
+            'TELEGRAM_BOT_TOKEN yoki TELEGRAM_ADMIN_CHAT_ID sozlanmagan';
           setOrders((prev) =>
             prev.map((o) =>
               o.id === orderId
@@ -1400,6 +1545,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const deleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+    setFavoriteIds((prev) => prev.filter((id) => id !== productId));
 
     if (isSupabaseConfigured && supabase) {
       supabase
@@ -1587,6 +1733,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setInquiries(INITIAL_INQUIRIES);
     setStoreSettings(INITIAL_STORE_SETTINGS);
     setCart([{ productId: 'prod-1', quantity: 1 }]);
+    setFavoriteIds([]);
     setCurrentCustomer(INITIAL_CUSTOMERS[0]);
     setCurrentAdminRole('owner');
     addToast({
@@ -1610,6 +1757,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         adminUsers: ADMIN_USERS,
         isSyncingSupabase,
         cart,
+        favoriteIds,
         recentlyViewedIds,
         currentCustomer,
         currentAdminRole,
@@ -1618,6 +1766,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         updateCartQuantity,
         removeFromCart,
         clearCart,
+        toggleFavorite,
+        clearFavorites,
         recordRecentlyViewed,
         signInCustomerDemo,
         signOutCustomer,

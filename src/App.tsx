@@ -19,6 +19,7 @@ import { PrototypeToolbar } from './components/layout/PrototypeToolbar';
 import { HomePage } from './pages/store/HomePage';
 import { CatalogPage } from './pages/store/CatalogPage';
 import { ProductDetailPage } from './pages/store/ProductDetailPage';
+import { FavoritesPage } from './pages/store/FavoritesPage';
 import { CartCheckoutPage } from './pages/store/CartCheckoutPage';
 import { AccountPage } from './pages/store/AccountPage';
 import { AdminLoginPage } from './pages/admin/AdminLoginPage';
@@ -42,6 +43,8 @@ const RouteEffectsManager: React.FC = () => {
 
     if (location.pathname === '/catalog') {
       pageTitle = `${t('catalog.titleAll')} — ${baseName}`;
+    } else if (location.pathname === '/favorites') {
+      pageTitle = `${t('favorites.title')} — ${baseName}`;
     } else if (
       location.pathname === '/cart' ||
       location.pathname.startsWith('/checkout')
@@ -75,15 +78,15 @@ const RouteEffectsManager: React.FC = () => {
 const NotFoundPage: React.FC = () => {
   const { t } = useThemeLanguage();
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 sm:p-10 text-center shadow-card space-y-5">
+    <div className="zaven-page-container py-16">
+      <div className="max-w-2xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-8 sm:p-10 text-center shadow-card space-y-5">
         <div className="w-16 h-16 rounded-full bg-brand-green-light text-brand-green flex items-center justify-center mx-auto">
           <Compass className="w-8 h-8" />
         </div>
         <Badge variant="gold" size="md">
           404
         </Badge>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-100">
           404 — Page Not Found
         </h1>
         <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
@@ -129,7 +132,15 @@ export function App() {
                   <StoreLayout>
                     <CatalogPage />
                   </StoreLayout>
-                  }
+                }
+              />
+              <Route
+                path="/favorites"
+                element={
+                  <StoreLayout>
+                    <FavoritesPage />
+                  </StoreLayout>
+                }
               />
               <Route
                 path="/product/:slug"

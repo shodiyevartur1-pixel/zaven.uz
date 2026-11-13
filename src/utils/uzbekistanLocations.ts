@@ -7,6 +7,10 @@ export interface UzbekistanRegionOption {
   nameEn: string;
   tariffGroup: 'tashkent_city' | 'tashkent_region' | 'other_regions';
   districts: string[];
+  approxCenter: {
+    lat: number;
+    lng: number;
+  };
   approxBounds: {
     minLat: number;
     maxLat: number;
@@ -36,6 +40,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Yangihayot tumani',
       'Bektemir tumani',
     ],
+    approxCenter: { lat: 41.31108, lng: 69.24056 },
     approxBounds: { minLat: 41.18, maxLat: 41.4, minLng: 69.12, maxLng: 69.42 },
   },
   {
@@ -58,6 +63,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Parkent tumani',
       'Oʻrtachirchiq tumani',
     ],
+    approxCenter: { lat: 41.0416, lng: 69.3578 },
     approxBounds: { minLat: 40.6, maxLat: 41.8, minLng: 68.6, maxLng: 70.5 },
   },
   {
@@ -78,6 +84,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Bulungʻur tumani',
       'Jomboy tumani',
     ],
+    approxCenter: { lat: 39.65417, lng: 66.95972 },
     approxBounds: { minLat: 39.2, maxLat: 40.3, minLng: 65.5, maxLng: 67.6 },
   },
   {
@@ -96,6 +103,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Qorakoʻl tumani',
       'Shofirkon tumani',
     ],
+    approxCenter: { lat: 39.77472, lng: 64.42861 },
     approxBounds: { minLat: 39.1, maxLat: 40.8, minLng: 63.3, maxLng: 65.2 },
   },
   {
@@ -114,6 +122,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Rishton tumani',
       'Uchkoʻprik tumani',
     ],
+    approxCenter: { lat: 40.38421, lng: 71.78432 },
     approxBounds: { minLat: 40.1, maxLat: 40.7, minLng: 70.3, maxLng: 72.1 },
   },
   {
@@ -132,6 +141,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Qoʻrgʻontepa tumani',
       'Marhamat tumani',
     ],
+    approxCenter: { lat: 40.78206, lng: 72.34424 },
     approxBounds: { minLat: 40.5, maxLat: 41.0, minLng: 71.8, maxLng: 73.0 },
   },
   {
@@ -150,6 +160,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Pop tumani',
       'Yangiqoʻrgʻon tumani',
     ],
+    approxCenter: { lat: 40.9983, lng: 71.67257 },
     approxBounds: { minLat: 40.7, maxLat: 41.4, minLng: 70.6, maxLng: 72.0 },
   },
   {
@@ -168,6 +179,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Qamashi tumani',
       'Muborak tumani',
     ],
+    approxCenter: { lat: 38.86056, lng: 65.78905 },
     approxBounds: { minLat: 38.3, maxLat: 39.4, minLng: 64.8, maxLng: 67.3 },
   },
   {
@@ -185,6 +197,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Qumqoʻrgʻon tumani',
       'Sariosiyo tumani',
     ],
+    approxCenter: { lat: 37.22417, lng: 67.27833 },
     approxBounds: { minLat: 37.1, maxLat: 38.7, minLng: 66.5, maxLng: 68.4 },
   },
   {
@@ -202,6 +215,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Nurota tumani',
       'Uchquduq tumani',
     ],
+    approxCenter: { lat: 40.08444, lng: 65.37917 },
     approxBounds: { minLat: 39.8, maxLat: 43.0, minLng: 62.5, maxLng: 66.2 },
   },
   {
@@ -218,6 +232,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Doʻstlik tumani',
       'Paxtakor tumani',
     ],
+    approxCenter: { lat: 40.11583, lng: 67.84222 },
     approxBounds: { minLat: 39.6, maxLat: 40.9, minLng: 67.2, maxLng: 68.9 },
   },
   {
@@ -234,6 +249,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Boyovut tumani',
       'Mirzaobod tumani',
     ],
+    approxCenter: { lat: 40.48972, lng: 68.78417 },
     approxBounds: { minLat: 40.1, maxLat: 40.9, minLng: 68.4, maxLng: 69.2 },
   },
   {
@@ -251,6 +267,7 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Gurlan tumani',
       'Bogʻot tumani',
     ],
+    approxCenter: { lat: 41.55, lng: 60.63333 },
     approxBounds: { minLat: 41.1, maxLat: 42.0, minLng: 60.0, maxLng: 61.5 },
   },
   {
@@ -268,12 +285,14 @@ export const UZBEKISTAN_REGIONS: UzbekistanRegionOption[] = [
       'Amudaryo tumani',
       'Chimboy tumani',
     ],
+    approxCenter: { lat: 42.4602, lng: 59.6166 },
     approxBounds: { minLat: 41.2, maxLat: 45.5, minLng: 56.0, maxLng: 61.5 },
   },
 ];
 
 /**
- * Matches a chosen Uzbekistan region against the store owner's configured DeliveryRegionRule list
+ * Matches a chosen Uzbekistan region against the store owner's configured DeliveryRegionRule list.
+ * Never invents prices: returns null if no rule matches or no rules are enabled.
  */
 export function resolveRegionTariffRule(
   selectedRegionName: string,
@@ -283,7 +302,6 @@ export function resolveRegionTariffRule(
 
   const normalized = selectedRegionName.toLowerCase();
 
-  // 1. Direct or partial name match
   const directMatch = enabledRules.find(
     (r) =>
       r.regionName.toLowerCase() === normalized ||
@@ -292,7 +310,6 @@ export function resolveRegionTariffRule(
   );
   if (directMatch) return directMatch;
 
-  // 2. Match via tariffGroup
   const regionMeta = UZBEKISTAN_REGIONS.find(
     (reg) =>
       reg.nameUz.toLowerCase() === normalized ||
@@ -306,7 +323,7 @@ export function resolveRegionTariffRule(
         (r) =>
           r.id === 'reg-tashkent' ||
           r.regionName.toLowerCase().includes('toshkent sh')
-      ) || enabledRules[0]
+      ) || null
     );
   }
 
@@ -316,22 +333,25 @@ export function resolveRegionTariffRule(
         (r) =>
           r.id === 'reg-tashkent-vil' ||
           r.regionName.toLowerCase().includes('viloyat')
-      ) || enabledRules[0]
+      ) || null
     );
   }
 
-  return (
-    enabledRules.find(
-      (r) =>
-        r.id === 'reg-regions' ||
-        r.regionName.toLowerCase().includes('boshqa')
-    ) || enabledRules[enabledRules.length - 1]
-  );
+  if (regionMeta?.tariffGroup === 'other_regions') {
+    return (
+      enabledRules.find(
+        (r) =>
+          r.id === 'reg-regions' ||
+          r.regionName.toLowerCase().includes('boshqa')
+      ) || null
+    );
+  }
+
+  return null;
 }
 
 /**
- *Offline bounding-box matcher to suggest the closest Uzbekistan region from GPS coordinates
- * without sending coordinates to a paid third-party map API.
+ * Matches coordinates to the closest Uzbekistan region (first by bounding box, then by nearest center).
  */
 export function detectUzbekistanRegionFromCoords(
   lat: number,
@@ -348,5 +368,22 @@ export function detectUzbekistanRegionFromCoords(
       return reg;
     }
   }
+
+  // Fallback to closest regional center if within broader Uzbekistan bounds
+  if (lat >= 36.8 && lat <= 46.0 && lng >= 55.5 && lng <= 73.8) {
+    let closest: UzbekistanRegionOption | null = null;
+    let minDistance = Infinity;
+    for (const reg of UZBEKISTAN_REGIONS) {
+      const dLat = lat - reg.approxCenter.lat;
+      const dLng = lng - reg.approxCenter.lng;
+      const dist = dLat * dLat + dLng * dLng;
+      if (dist < minDistance) {
+        minDistance = dist;
+        closest = reg;
+      }
+    }
+    return closest;
+  }
+
   return null;
 }

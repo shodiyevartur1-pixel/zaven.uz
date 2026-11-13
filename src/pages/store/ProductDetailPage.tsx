@@ -7,6 +7,7 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   ZoomIn,
   Truck,
   AlertCircle,
@@ -17,6 +18,8 @@ import {
   Flame,
   CreditCard,
   Clock,
+  FileText,
+  Sliders,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -59,8 +62,10 @@ export const ProductDetailPage: React.FC = () => {
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
   const [isZoomedInLightbox, setIsZoomedInLightbox] = useState<boolean>(false);
   const [selectedQty, setSelectedQty] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<
-    'description' | 'specs' | 'delivery'
+
+  // Expandable Accordion Sections (Secondary information kept compact)
+  const [openSection, setOpenSection] = useState<
+    'description' | 'specs' | 'delivery' | null
   >('description');
 
   const purchaseActionsRef = useRef<HTMLDivElement>(null);
@@ -73,6 +78,7 @@ export const ProductDetailPage: React.FC = () => {
     setSelectedQty(1);
     setIsZoomedInLightbox(false);
     setShowStickyMobileBar(false);
+    setOpenSection('description');
 
     if (product) {
       recordRecentlyViewed(product.id);
@@ -190,14 +196,6 @@ export const ProductDetailPage: React.FC = () => {
     addToCart(product.id, selectedQty);
   };
 
-  const handleBuyNow = () => {
-    if (isOutOfStock) return;
-    if (quantityInCart === 0) {
-      addToCart(product.id, selectedQty);
-    }
-    navigate('/cart');
-  };
-
   const handleShareProduct = () => {
     const shareUrl = window.location.href;
     navigator.clipboard?.writeText(shareUrl).catch(() => {});
@@ -215,19 +213,26 @@ export const ProductDetailPage: React.FC = () => {
     setSelectedImageIdx((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
+  const toggleAccordion = (section: 'description' | 'specs' | 'delivery') => {
+    setOpenSection((prev) => (prev === section ? null : section));
+  };
+
   return (
-    <div className="zaven-page-container py-4 sm:py-8 pb-20 md:pb-8 space-y-8 sm:space-y-10">
-      {/* Breadcrumb Navigation & Back Link */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="zaven-page-container py-4 sm:py-7 pb-20 md:pb-8 space-y-6 sm:space-y-8">
+      {/* Compact Breadcrumb & Back Row */}
+      <div className="flex items-center justify-between gap-2">
         <nav
           aria-label="Breadcrumb"
-          className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
+          className="flex items-center gap-1.5 text-xs text-gray-500 min-w-0 truncate"
         >
-          <Link to="/" className="hover:text-brand-green font-medium">
+          <Link to="/" className="hover:text-brand-green font-medium shrink-0">
             {t('nav.home')}
           </Link>
           <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <Link to="/catalog" className="hover:text-brand-green font-medium">
+          <Link
+            to="/catalog"
+            className="hover:text-brand-green font-medium shrink-0"
+          >
             {t('nav.catalog')}
           </Link>
           {category && localizedCategory && (
@@ -235,7 +240,7 @@ export const ProductDetailPage: React.FC = () => {
               <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <Link
                 to={`/catalog?category=${category.slug}`}
-                className="hover:text-brand-green font-medium"
+                className="hover:text-brand-green font-medium truncate"
               >
                 {localizedCategory.name}
               </Link>
@@ -246,17 +251,17 @@ export const ProductDetailPage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1 text-xs font-bold text-brand-green hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-bold text-brand-green hover:underline shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>{t('product.back')}</span>
         </button>
       </div>
 
-      {/* Main Product Section */}
-      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-8 shadow-card">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
-          {/* Left Column: Multi-Image Gallery & Thumbnails */}
+      {/* Primary Product Card: Image Gallery + Title + Price + Delivery Badge + Single Clear Add-to-Cart */}
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 lg:p-8 shadow-card">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
+          {/* Left Column: Multi-Image Gallery & Thumbnail Switcher */}
           <div className="lg:col-span-6 space-y-3">
             <div className="relative aspect-square rounded-2xl bg-gray-100 dark:bg-[#1A3028] border border-gray-200 dark:border-[#28453B] overflow-hidden group">
               <img
@@ -266,7 +271,7 @@ export const ProductDetailPage: React.FC = () => {
                 className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 group-hover:scale-105"
               />
 
-              <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5 pointer-events-none">
+              <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
                 {discountPercent > 0 && (
                   <Badge variant="gold" size="md">
                     -{discountPercent}%
@@ -278,7 +283,7 @@ export const ProductDetailPage: React.FC = () => {
                     {t('product.new')}
                   </Badge>
                 )}
-                {product.isPopular && (
+                {product.isPopular && discountPercent === 0 && (
                   <Badge variant="info" size="md">
                     <Flame className="w-3.5 h-3.5 mr-1" />
                     {t('product.popular')}
@@ -289,7 +294,8 @@ export const ProductDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLightboxOpen(true)}
-                className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                className="absolute top-3 right-3 px-2.5 py-1.5 rounded-lg bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                aria-label={t('product.zoom')}
               >
                 <ZoomIn className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('product.zoom')}</span>
@@ -300,7 +306,7 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
                     aria-label="Previous image"
                   >
                     <ChevronLeft className="w-5 h-5" />
@@ -308,7 +314,7 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
                     aria-label="Next image"
                   >
                     <ChevronRight className="w-5 h-5" />
@@ -317,9 +323,8 @@ export const ProductDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* Interactive Thumbnail Gallery */}
             {images.length > 1 && (
-              <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-thin pb-1">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1">
                 {images.map((imgUrl, idx) => (
                   <button
                     key={idx}
@@ -343,373 +348,366 @@ export const ProductDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Right Column: Product Details */}
-          <div className="lg:col-span-6 flex flex-col justify-between space-y-5 min-w-0">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  {category && localizedCategory && (
-                    <Link to={`/catalog?category=${category.slug}`}>
-                      <Badge variant="neutral" size="md">
-                        {localizedCategory.name}
-                      </Badge>
+          {/* Right Column: Concise Core Purchase Panel + Expandable Secondary Accordions */}
+          <div className="lg:col-span-6 space-y-5 min-w-0">
+            {/* Category, Small Delivery-Time Badge (Strictly Time Only) & Share */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {category && localizedCategory && (
+                  <Link to={`/catalog?category=${category.slug}`}>
+                    <Badge variant="neutral" size="sm">
+                      {localizedCategory.name}</Badge>
                     </Link>
-                  )}
-                  <span className="text-xs font-mono text-gray-500">
-                    SKU: <strong className="text-gray-800">{product.sku}</strong>
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleShareProduct}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-brand-green transition-colors"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>{t('product.share')}</span>
-                </button>
-              </div>
-
-              <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-gray-900 leading-snug break-words">
-                  {localizedProduct.name}
-                </h1>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1.5 leading-relaxed break-words">
-                  {localizedProduct.shortDescription}
-                </p>
-              </div>
-
-              {/* Availability Status Badge */}
-              <div className="flex flex-wrap items-center gap-3">
-                {isOutOfStock ? (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{t('product.outOfStock')}</span>
-                  </div>
-                ) : isLowStock ? (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
-                    <Clock className="w-4 h-4 shrink-0 text-amber-600" />
-                    <span>
-                      {t('product.lowStock')}: {product.stock}{' '}
-                      {t('product.units')}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                    <span>
-                      {t('product.inStock')} ({product.stock}{' '}
-                      {t('product.units')})
-                    </span>
-                  </div>
                 )}
 
-                <span className="text-xs text-gray-500">
-                  {t('product.soldCount')}:{' '}
-                  <strong className="text-gray-800">
-                    {product.soldCount} {t('product.units')}
-                  </strong>
-                </span>
+                {/* Small Delivery-Time Badge containing ONLY the estimate */}
+                <Badge variant="gold" size="sm">
+                  <Clock className="w-3 h-3 mr-1 shrink-0" />
+                  <span>{t('delivery.estimateValue')}</span>
+                </Badge>
               </div>
 
-              {/* Pricing Card */}
-              <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-1.5">
-                <div className="flex flex-wrap items-baseline gap-3">
+              <button
+                type="button"
+                onClick={handleShareProduct}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-brand-green transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>{t('product.share')}</span>
+              </button>
+            </div>
+
+            {/* Product Title & Brief Summary */}
+            <div className="space-y-1.5">
+              <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 leading-snug break-words">
+                {localizedProduct.name}
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 leading-relaxed break-words">
+                {localizedProduct.shortDescription}
+              </p>
+            </div>
+
+            {/* Prominent Price Block */}
+            <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-baseline gap-2.5">
                   <span className="text-2xl sm:text-3xl font-extrabold text-brand-green">
                     {formatUZS(effectivePrice)}
                   </span>
                   {product.salePrice && (
-                    <>
-                      <span className="text-sm sm:text-base text-gray-400 line-through font-medium">
-                        {formatUZS(product.price)}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-brand-gold-light text-brand-gold-dark border border-brand-gold-border text-xs font-bold">
-                        {t('product.savings')}:{' '}
-                        {formatUZS(product.price - product.salePrice)}
-                      </span>
-                    </>
+                    <span className="text-sm text-gray-400 line-through font-medium">
+                      {formatUZS(product.price)}
+                    </span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500">
-                  {t('product.priceTaxNote')}
-                </p>
+                {product.salePrice && (
+                  <span className="inline-block mt-1 text-xs font-bold text-brand-gold-dark">
+                    {t('product.savings')}:{' '}
+                    {formatUZS(product.price - product.salePrice)}
+                  </span>
+                )}
               </div>
 
-              {/* Key Features List */}
-              {localizedProduct.features.length > 0 && (
-                <div className="space-y-2">
-                  <h2 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
-                    {t('product.keyFeatures')}
-                  </h2>
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {localizedProduct.features.map((feature, idx) => (
-                      <li
-                        key={idx}
-                        className="flex items-start gap-2 text-xs text-gray-700 bg-white p-2.5 rounded-lg border border-gray-200/80"
-                      >
-                        <Check className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                        <span className="break-words">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Quantity Selector & Main Add-to-Cart Block */}
-              <div ref={purchaseActionsRef} className="pt-1 space-y-2.5">
-                {!isOutOfStock ? (
-                  <>
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                      <div className="flex items-center justify-between sm:justify-start border border-gray-300 rounded-xl bg-white px-2 py-1">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedQty((prev) => Math.max(1, prev - 1))
-                            }
-                            disabled={selectedQty <= 1}
-                            className="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 font-bold"
-                            aria-label="Decrease quantity"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="w-10 text-center text-sm font-extrabold text-gray-900">
-                            {selectedQty}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedQty((prev) =>
-                                Math.min(product.stock, prev + 1)
-                              )
-                            }
-                            disabled={selectedQty >= product.stock}
-                            className="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 font-bold"
-                            aria-label="Increase quantity"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <Button
-                        variant="primary"
-                        size="lg"
-                        fullWidth
-                        leftIcon={<ShoppingBag className="w-5 h-5" />}
-                        onClick={handleAddSelectedQuantity}
-                      >
-                        {t('product.addToCart')} —{' '}
-                        {formatUZS(effectivePrice * selectedQty)}
-                      </Button>
-                    </div>
-
-                    <Button
-                      variant="gold"
-                      size="md"
-                      fullWidth
-                      onClick={handleBuyNow}
-                    >
-                      {t('product.buyNow')}
-                    </Button>
-                  </>
+              {/* Compact Stock Pill */}
+              <div>
+                {isOutOfStock ? (
+                  <Badge variant="danger" size="md">
+                    <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                    {t('product.outOfStockShort')}
+                  </Badge>
+                ) : isLowStock ? (
+                  <Badge variant="warning" size="md">
+                    {t('product.lowStock')}: {product.stock}{' '}
+                    {t('product.units')}
+                  </Badge>
                 ) : (
-                  <div className="p-4 rounded-xl bg-gray-100 border border-gray-200 text-center">
-                    <p className="text-sm font-bold text-gray-800">
-                      {t('product.outOfStock')}
-                    </p>
-                  </div>
+                  <Badge variant="success" size="md">
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                    {t('product.inStock')}
+                  </Badge>
                 )}
               </div>
             </div>
 
-            {/* Delivery Estimate ("Taxminan 10–25 kun") */}
-            {showDeliveryBlock && (
-              <div className="pt-4 border-t border-gray-200 space-y-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-gray-900 uppercase tracking-wider">
-                    <Truck className="w-4 h-4 text-brand-green" />
-                    <span>{t('product.deliveryRulesTitle')}</span>
+            {/* Clear Quantity Controls & Single Primary "Savatchaga qoʻshish" Action (No competing oversized buttons) */}
+            <div ref={purchaseActionsRef} className="space-y-3 pt-1">
+              {!isOutOfStock ? (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  {/* Quantity Stepper */}
+                  <div className="flex items-center justify-between sm:justify-start border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] px-2.5 py-1.5 shrink-0">
+                    <span className="text-xs font-semibold text-gray-500 sm:hidden mr-2">
+                      Miqdor:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedQty((prev) => Math.max(1, prev - 1))
+                        }
+                        disabled={selectedQty <= 1}
+                        className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-9 text-center text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        {selectedQty}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedQty((prev) =>
+                            Math.min(product.stock, prev + 1)
+                          )
+                        }
+                        disabled={selectedQty >= product.stock}
+                        className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <Badge variant="gold" size="md">
-                    <Clock className="w-3.5 h-3.5 mr-1" />
-                    {t('delivery.estimateValue')}
-                  </Badge>
-                </div>
 
-                <div className="p-3 rounded-xl bg-brand-green-light/60 border border-brand-green/20 text-xs space-y-1">
-                  <p className="text-[11px] text-gray-600 leading-relaxed">
-                    {t('delivery.estimateDisclaimer')}
-                  </p>
+                  {/* Single Primary Purchase CTA */}
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    fullWidth
+                    leftIcon={
+                      <ShoppingBag className="w-5 h-5 text-[#C89D54]" />
+                    }
+                    onClick={handleAddSelectedQuantity}
+                  >
+                    {t('product.addToCart')} —{' '}
+                    {formatUZS(effectivePrice * selectedQty)}
+                  </Button>
                 </div>
+              ) : (
+                <Button variant="outline" size="lg" fullWidth disabled>
+                  {t('product.outOfStock')}
+                </Button>
+              )}
+
+              {quantityInCart > 0 && (
+                <div className="px-3.5 py-2.5 rounded-xl bg-brand-green-light/60 border border-brand-green/25 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-brand-green">
+                    {t('product.inCart')}: {quantityInCart} {t('product.units')}
+                  </span>
+                  <Link
+                    to="/cart"
+                    className="font-extrabold text-brand-green hover:underline inline-flex items-center gap-1"
+                  >
+                    <span>{t('header.cart')}ga oʻtish</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* =============================================================== */}
+            {/* COMPACT EXPANDABLE ACCORDION SECTIONS FOR SECONDARY DETAILS     */}
+            {/* =============================================================== */}
+            <div className="pt-2 divide-y divide-gray-200 dark:divide-[#28453B] border-t border-b border-gray-200 dark:border-[#28453B]">
+              {/* Accordion 1: Full Description, Key Benefits & Stock/Sold Counts */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleAccordion('description')}
+                  aria-expanded={openSection === 'description'}
+                  className="w-full py-3.5 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-extrabold text-gray-900 dark:text-gray-100"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-brand-green shrink-0" />
+                    <span>{t('product.tabDescription')}</span>
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                      openSection === 'description' ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {openSection === 'description' && (
+                  <div className="pb-4 space-y-3.5 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+                    <p className="leading-relaxed break-words">
+                      {localizedProduct.description}
+                    </p>
+
+                    {localizedProduct.features.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <p className="text-xs font-bold text-gray-900 dark:text-gray-100">
+                          {t('product.keyFeatures')}
+                        </p>
+                        <ul className="space-y-1.5">
+                          {localizedProduct.features.map((feat, idx) => (
+                            <li
+                              key={idx}
+                              className="flex items-start gap-2 text-xs text-gray-700 dark:text-gray-300"
+                            >
+                              <Check className="w-3.5 h-3.5 text-brand-green shrink-0 mt-0.5" />
+                              <span className="break-words">{feat}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                      <span>
+                        {t('product.inStock')}:{' '}
+                        <strong className="text-gray-800 dark:text-gray-200">
+                          {product.stock} {t('product.units')}
+                        </strong>
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {t('product.soldCount')}:{' '}
+                        <strong className="text-gray-800 dark:text-gray-200">
+                          {product.soldCount} {t('product.units')}
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Accordion 2: Technical Specifications */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleAccordion('specs')}
+                  aria-expanded={openSection === 'specs'}
+                  className="w-full py-3.5 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-extrabold text-gray-900 dark:text-gray-100"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-brand-green shrink-0" />
+                    <span>
+                      {t('product.tabSpecs')} (
+                      {product.specifications.length + 1})
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                      openSection === 'specs' ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {openSection === 'specs' && (
+                  <div className="pb-4">
+                    <div className="border border-gray-200 dark:border-[#28453B] rounded-xl overflow-hidden">
+                      <table className="w-full text-xs text-left">
+                        <tbody className="divide-y divide-gray-200 dark:divide-[#28453B]">
+                          <tr className="bg-gray-50 dark:bg-[#162923]">
+                            <th className="py-2.5 px-3.5 font-semibold text-gray-600 dark:text-gray-300 w-1/2">
+                              SKU
+                            </th>
+                            <td className="py-2.5 px-3.5 font-mono font-bold text-gray-900 dark:text-gray-100">
+                              {product.sku}
+                            </td>
+                          </tr>
+                          {product.specifications.map((spec, idx) => (
+                            <tr
+                              key={idx}
+                              className={
+                                idx % 2 === 1
+                                  ? 'bg-gray-50 dark:bg-[#162923]'
+                                  : 'bg-white dark:bg-[#12211C]'
+                              }
+                            >
+                              <th className="py-2.5 px-3.5 font-semibold text-gray-600 dark:text-gray-300 w-1/2">
+                                {spec.label}
+                              </th>
+                              <td className="py-2.5 px-3.5 font-medium text-gray-900 dark:text-gray-100">
+                                {spec.value}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Accordion 3: Shipping & Payment Explanations */}
+              {showDeliveryBlock && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleAccordion('delivery')}
+                    aria-expanded={openSection === 'delivery'}
+                    className="w-full py-3.5 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-extrabold text-gray-900 dark:text-gray-100"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-brand-green shrink-0" />
+                      <span>{t('product.tabDelivery')}</span>
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                        openSection === 'delivery' ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {openSection === 'delivery' && (
+                    <div className="pb-4 space-y-3 text-xs text-gray-600 dark:text-gray-300">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">
+                          {t('delivery.estimateLabel')}
+                        </span>
+                        <Badge variant="gold" size="sm">
+                          {t('delivery.estimateValue')}
+                        </Badge>
+                      </div>
+
+                      <p className="leading-relaxed">
+                        {t('delivery.estimateDisclaimer')}
+                      </p>
+
+                      <div className="space-y-1.5 pt-1">
+                        {enabledRegions.map((reg) => (
+                          <div
+                            key={reg.id}
+                            className="p-2.5 rounded-lg bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-2"
+                          >
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                              {reg.regionName}
+                            </span>
+                            <span className="font-extrabold text-brand-green shrink-0">
+                              {formatUZS(reg.fee)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="pt-2 border-t border-gray-100 dark:border-[#28453B] flex flex-wrap items-center gap-2">
+                        <CreditCard className="w-3.5 h-3.5 text-brand-green shrink-0" />
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">
+                          {t('home.acceptedPayments')}:
+                        </span>
+                        {storeSettings.paymentMethods
+                          .filter((pm) => pm.isEnabled)
+                          .map((pm) => (
+                            <Badge key={pm.id} variant="neutral" size="sm">
+                              {pm.name}
+                            </Badge>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Detailed Description, Technical Specifications & Delivery Tabs */}
-      <section className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
-        <div className="border-b border-gray-200 bg-gray-50 px-4 sm:px-8 flex items-center gap-2 overflow-x-auto scrollbar-thin">
-          <button
-            type="button"
-            onClick={() => setActiveTab('description')}
-            className={`py-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'description'
-                ? 'border-brand-green text-brand-green'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t('product.tabDescription')}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('specs')}
-            className={`py-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === 'specs'
-                ? 'border-brand-green text-brand-green'
-                : 'border-transparent text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            {t('product.tabSpecs')} ({product.specifications.length})
-          </button>
-
-          {showDeliveryBlock && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('delivery')}
-              className={`py-3.5 px-4 text-xs sm:text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'delivery'
-                  ? 'border-brand-green text-brand-green'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {t('product.tabDelivery')}
-            </button>
-          )}
-        </div>
-
-        <div className="p-5 sm:p-8">
-          {activeTab === 'description' && (
-            <div className="max-w-3xl space-y-5">
-              <p className="text-sm text-gray-700 leading-relaxed break-words">
-                {localizedProduct.description}
-              </p>
-
-              {localizedProduct.features.length > 0 && (
-                <ul className="space-y-2">
-                  {localizedProduct.features.map((feat, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-2.5 text-sm text-gray-700"
-                    >
-                      <div className="w-5 h-5 rounded-full bg-brand-green-light text-brand-green flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="break-words">{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'specs' && (
-            <div className="max-w-2xl">
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <table className="w-full text-xs sm:text-sm text-left">
-                  <tbody className="divide-y divide-gray-200">
-                    <tr className="bg-gray-50">
-                      <th className="py-3 px-4 font-semibold text-gray-600 w-1/2">
-                        SKU
-                      </th>
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {product.sku}
-                      </td>
-                    </tr>
-                    {product.specifications.map((spec, idx) => (
-                      <tr
-                        key={idx}
-                        className={idx % 2 === 1 ? 'bg-gray-50' : 'bg-white'}
-                      >
-                        <th className="py-3 px-4 font-semibold text-gray-600 w-1/2">
-                          {spec.label}
-                        </th>
-                        <td className="py-3 px-4 font-medium text-gray-900">
-                          {spec.value}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'delivery' && showDeliveryBlock && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-brand-green" />
-                    <span>{t('home.regionalTariffs')}</span>
-                  </h3>
-                  <Badge variant="gold" size="sm">
-                    {t('delivery.estimateValue')}
-                  </Badge>
-                </div>
-
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {storeSettings.delivery.generalDeliveryNote}
-                </p>
-                <div className="space-y-2 pt-1">
-                  {enabledRegions.map((reg) => (
-                    <div
-                      key={reg.id}
-                      className="p-3 rounded-lg bg-surface-page border border-gray-200 flex items-center justify-between text-xs"
-                    >
-                      <span className="font-bold text-gray-900">
-                        {reg.regionName}
-                      </span>
-                      <span className="font-extrabold text-brand-green shrink-0 ml-3">
-                        {formatUZS(reg.fee)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-brand-green" />
-                  <span>{t('home.acceptedPayments')}</span>
-                </h3>
-                <div className="space-y-2">
-                  {storeSettings.paymentMethods
-                    .filter((pm) => pm.isEnabled)
-                    .map((pm) => (
-                      <div
-                        key={pm.id}
-                        className="p-3 rounded-lg bg-surface-page border border-gray-200 text-xs"
-                      >
-                        <span className="font-bold text-gray-900 block">
-                          {pm.name}
-                        </span>
-                        <p className="text-gray-600 mt-1">{pm.description}</p>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* Related Products Section */}
       {fallbackRelated.length > 0 && (
-        <section className="space-y-3.5">
-          <h2 className="text-base sm:text-xl font-extrabold text-gray-900">
+        <section className="space-y-3">
+          <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100">
             {t('product.relatedTitle')}
           </h2>
 
@@ -723,8 +721,8 @@ export const ProductDetailPage: React.FC = () => {
 
       {/* Recently Viewed Products Section */}
       {recentlyViewedProducts.length > 0 && (
-        <section className="space-y-3.5 pt-4 border-t border-gray-200">
-          <h2 className="text-base sm:text-xl font-extrabold text-gray-900">
+        <section className="space-y-3 pt-4 border-t border-gray-200 dark:border-[#28453B]">
+          <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100">
             {t('product.recentlyViewedTitle')}
           </h2>
 
@@ -754,11 +752,9 @@ export const ProductDetailPage: React.FC = () => {
                 <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">
                   {localizedProduct.name}
                 </p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-extrabold text-brand-green">
-                    {formatUZS(effectivePrice)}
-                  </span>
-                </div>
+                <span className="text-sm font-extrabold text-brand-green block">
+                  {formatUZS(effectivePrice)}
+                </span>
               </div>
             </div>
 

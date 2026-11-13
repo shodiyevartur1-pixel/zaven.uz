@@ -9,12 +9,11 @@ import {
   ShieldCheck,
   X,
   ChevronRight,
-  Sparkles,
-  Tag,
   ArrowLeft,
   Lock,
   Sun,
   Moon,
+  Heart,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -35,7 +34,7 @@ const COMPACT_LANGS: { code: Language; label: string }[] = [
 export const StoreHeader: React.FC<StoreHeaderProps> = ({
   onOpenMobileMenu,
 }) => {
-  const { products, categories, cart, currentCustomer, storeSettings } =
+  const { products, cart, favoriteIds, currentCustomer, storeSettings } =
     useStore();
   const {
     t,
@@ -44,7 +43,6 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     language,
     setLanguage,
     getProductText,
-    getCategoryText,
   } = useThemeLanguage();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,11 +58,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
     location.pathname.startsWith('/cart/') ||
     location.pathname.startsWith('/checkout');
 
-  const activeCategories = categories
-    .filter((c) => c.isActive)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const favoritesCount = favoriteIds.length;
   const cartSubtotal = cart.reduce((total, item) => {
     const product = products.find((p) => p.id === item.productId);
     if (!product) return total;
@@ -198,7 +193,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   }
 
   // ============================================================================
-  // STOREFRONT HEADER (Redundant mobile category ribbon removed below search bar)
+  // Requirement 1: Clean Storefront Header (No horizontal category ribbon on
+  // mobile OR desktop; focused on Logo, Menu, Lang/Theme, Favorites, Account, Cart & 1 Search Bar)
   // ============================================================================
   return (
     <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
@@ -227,12 +223,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       </div>
 
-      {/* Main Header Row + Search Bar */}
+      {/* Main Header Row + Single Search Bar */}
       <div ref={searchContainerRef} className="bg-[#0F3D2E] text-white">
         <div className="zaven-page-container py-2 sm:py-2.5">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Menu Button + Brand Identity */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Left: Menu Button, Brand Identity & Desktop Catalog Link */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               <button
                 type="button"
                 onClick={onOpenMobileMenu}
@@ -258,6 +254,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                     {t('header.onlineStore')}
                   </span>
                 </div>
+              </Link>
+
+              <Link
+                to="/catalog"
+                className="hidden lg:inline-flex items-center gap-1.5 ml-2 px-3 py-2 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-xs font-bold text-white transition-colors"
+              >
+                <Menu className="w-3.5 h-3.5 text-[#C89D54]" />
+                <span>{t('nav.catalog')}</span>
               </Link>
             </div>
 
@@ -296,12 +300,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               </form>
             </div>
 
-            {/* Right Actions: Mobile Lang/Theme + Account + Cart */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Right Actions: Mobile Lang/Theme + Favorites + Account + Cart */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               <button
                 type="button"
                 onClick={cycleLanguageMobile}
-                className="md:hidden h-8 px-2.5 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
+                className="md:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
                 title="Til / Язык / Language"
                 aria-label="Switch language"
               >
@@ -323,9 +327,36 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                 )}
               </button>
 
+              {/* Favorites Entry */}
+              <Link
+                to="/favorites"
+                className="relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
+                title={t('header.favorites')}
+                aria-label={t('header.favorites')}
+              >
+                <div className="relative w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
+                  <Heart
+                    className={`w-4 h-4 ${
+                      favoritesCount > 0
+                        ? 'text-rose-400 fill-rose-400'
+                        : 'text-[#C89D54]'
+                    }`}
+                  />
+                  {favoritesCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+                      {favoritesCount}
+                    </span>
+                  )}
+                </div>
+                <span className="hidden xl:inline text-xs font-bold text-white">
+                  {t('header.favorites')}
+                </span>
+              </Link>
+
+              {/* Account Entry */}
               <Link
                 to="/account"
-                className="flex items-center gap-2 px-1.5 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
+                className="hidden sm:flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
                 title={t('header.account')}
               >
                 <div className="w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
@@ -337,7 +368,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                       ? t('header.welcome')
                       : t('header.account')}
                   </span>
-                  <span className="text-xs font-bold text-white truncate max-w-[100px] mt-0.5">
+                  <span className="text-xs font-bold text-white truncate max-w-[90px] mt-0.5">
                     {currentCustomer
                       ? currentCustomer.fullName.split(' ')[0]
                       : t('header.signIn')}
@@ -345,6 +376,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                 </div>
               </Link>
 
+              {/* Cart Entry */}
               <Link
                 to="/cart"
                 className="relative flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#09261C] hover:bg-[#C89D54] hover:text-[#09261C] border border-[#C89D54]/60 transition-colors group"
@@ -434,9 +466,6 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                                 <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
                                   {loc.name}
                                 </p>
-                                <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                  SKU: {item.sku}
-                                </p>
                               </div>
                               <div className="text-right shrink-0">
                                 <p className="text-xs sm:text-sm font-bold text-brand-green">
@@ -471,72 +500,6 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           )}
         </div>
       </div>
-
-      {/* Requirement 2: Desktop-Only Category Navigation Strip (Removed from mobile header) */}
-      <nav
-        aria-label={t('nav.categoriesTitle')}
-        className="hidden lg:block bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] text-gray-900 dark:text-gray-100"
-      >
-        <div className="zaven-page-container py-1.5 flex items-center justify-between gap-3">
-          <div className="flex-1 flex items-center gap-1.5 flex-wrap py-0.5 min-w-0">
-            <Link
-              to="/catalog"
-              className={`shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                location.pathname === '/catalog' && !location.search
-                  ? 'bg-[#0F3D2E] text-white font-bold shadow-sm border border-emerald-500/30'
-                  : 'text-gray-800 dark:text-gray-200 bg-surface-page dark:bg-[#162923] hover:bg-brand-green-light dark:hover:bg-[#1D352D] hover:text-brand-green'
-              }`}
-            >
-              {t('nav.allProducts')}
-            </Link>
-
-            {activeCategories.map((cat) => {
-              const locCat = getCategoryText(cat);
-              const isActive =
-                location.search.includes(`category=${cat.slug}`) ||
-                location.search.includes(`category=${cat.id}`);
-              return (
-                <Link
-                  key={cat.id}
-                  to={`/catalog?category=${cat.slug}`}
-                  className={`shrink-0 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    isActive
-                      ? 'bg-[#0F3D2E] text-white font-bold shadow-sm border border-emerald-500/30'
-                      : 'text-gray-700 dark:text-gray-200 hover:bg-brand-green-light/70 dark:hover:bg-[#1D352D] hover:text-brand-green'
-                  }`}
-                >
-                  {locCat.name}
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-gray-200 dark:border-[#28453B]">
-            <Link
-              to="/catalog?filter=discounted"
-              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors ${
-                location.search.includes('filter=discounted')
-                  ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54]'
-                  : 'text-brand-gold-dark bg-brand-gold-light border-brand-gold-border hover:bg-[#C89D54] hover:text-[#09261C]'
-              }`}
-            >
-              <Tag className="w-3 h-3 shrink-0" />
-              <span>{t('nav.discounts')}</span>
-            </Link>
-            <Link
-              to="/catalog?filter=new"
-              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors ${
-                location.search.includes('filter=new')
-                  ? 'bg-[#0F3D2E] text-white border border-emerald-500/30'
-                  : 'text-brand-green bg-brand-green-light/60 hover:bg-brand-green-light'
-              }`}
-            >
-              <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
-              <span>{t('nav.newShort')}</span>
-            </Link>
-          </div>
-        </div>
-      </nav>
     </header>
   );
 };

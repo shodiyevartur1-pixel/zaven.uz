@@ -13,11 +13,11 @@ import {
   KeyRound,
   ShieldCheck,
   Info,
-  Eye,
   RotateCcw,
   Mail,
   ChevronRight,
   Clock,
+  CreditCard,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -386,6 +386,7 @@ export const AccountPage: React.FC = () => {
 
   return (
     <div className="zaven-page-container py-5 sm:py-8 space-y-6 sm:space-y-8">
+      {/* Customer Header Card */}
       <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#0F3D2E] text-[#C89D54] flex items-center justify-center font-extrabold text-xl shrink-0">
@@ -476,83 +477,87 @@ export const AccountPage: React.FC = () => {
           </button>
         </aside>
 
+        {/* Tappable Order Cards (No redundant count strip) */}
         <div className="lg:col-span-9">
           {activeTab === 'orders' && (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {customerOrders.length > 0 ? (
                 customerOrders.map((order) => {
                   const statusMeta = ORDER_STATUS_META[order.status];
+                  const totalUnits = order.items.reduce(
+                    (s, i) => s + i.quantity,
+                    0
+                  );
+
                   return (
-                    <div
+                    <article
                       key={order.id}
-                      className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedOrder(order)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedOrder(order);
+                        }
+                      }}
+                      className="group cursor-pointer bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] hover:border-brand-green dark:hover:border-brand-gold overflow-hidden shadow-card transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold"
                     >
-                      <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-sm font-extrabold text-brand-green">
+                      <div className="px-4 py-3 sm:px-5 sm:py-3.5 bg-gray-50 dark:bg-[#162923] border-b border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="font-mono text-sm font-extrabold text-brand-green group-hover:underline">
                             #{order.orderNumber}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {formatDateUz(order.createdAt, true)}
+                            • {formatDateUz(order.createdAt, true)}
                           </span>
-                          <Badge variant={statusMeta.badgeVariant} size="md">
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant={statusMeta.badgeVariant} size="sm">
                             {statusMeta.label}
                           </Badge>
-
                           {order.paymentVerificationStatus ===
                             'pending_verification' && (
-                            <Badge variant="warning" size="md">
-                              <Clock className="w-3.5 h-3.5 mr-1" />
+                            <Badge variant="warning" size="sm">
                               {t('transfer.statusPending')}
                             </Badge>
                           )}
-                          {order.paymentVerificationStatus === 'verified' && (
-                            <Badge variant="success" size="md">
-                              {t('transfer.statusVerified')}
-                            </Badge>
-                          )}
-                          {order.paymentVerificationStatus === 'rejected' && (
-                            <Badge variant="danger" size="md">
-                              {t('transfer.statusRejected')}
-                            </Badge>
-                          )}
                         </div>
-                        <span className="text-base font-extrabold text-gray-900">
-                          {formatUZS(order.totalAmount)}
-                        </span>
                       </div>
 
-                      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {order.items.map((item) => (
-                            <img
-                              key={item.productId}
-                              src={item.image}
-                              alt={item.productName}
-                              className="w-12 h-12 rounded-lg object-cover border border-gray-200"
-                            />
-                          ))}
+                      <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="flex items-center -space-x-2 shrink-0">
+                            {order.items.slice(0, 3).map((item) => (
+                              <img
+                                key={item.productId}
+                                src={item.image}
+                                alt={item.productName}
+                                className="w-11 h-11 rounded-xl object-cover border-2 border-white dark:border-[#12211C] bg-gray-100"
+                              />
+                            ))}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                              {order.items.map((i) => i.productName).join(', ')}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              {totalUnits} {t('product.units')} • {order.region}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            leftIcon={<Eye className="w-4 h-4" />}
-                            onClick={() => setSelectedOrder(order)}
-                          >
-                            {t('product.quickView')}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            leftIcon={<RotateCcw className="w-4 h-4" />}
-                            onClick={() => handleReorder(order)}
-                          >
-                            {t('product.addToCart')}
-                          </Button>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            <span className="text-sm sm:text-base font-extrabold text-brand-green block">
+                              {formatUZS(order.totalAmount)}
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-brand-green group-hover:translate-x-0.5 transition-transform" />
                         </div>
                       </div>
-                    </div>
+                    </article>
                   );
                 })
               ) : (
@@ -660,10 +665,11 @@ export const AccountPage: React.FC = () => {
         title={t('account.savedAddresses')}
         maxWidth="md"
         footer={
-          <>
+          <div className="w-full grid grid-cols-2 gap-3">
             <Button
               variant="outline"
-              size="sm"
+              size="md"
+              fullWidth
               onClick={() => setIsAddressModalOpen(false)}
             >
               {t('footer.cancelBtn')}
@@ -672,11 +678,12 @@ export const AccountPage: React.FC = () => {
               type="submit"
               form="customer-address-form"
               variant="primary"
-              size="sm"
+              size="md"
+              fullWidth
             >
               {t('account.saveChanges')}
             </Button>
-          </>
+          </div>
         }
       >
         <form
@@ -709,50 +716,187 @@ export const AccountPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Order Details Modal */}
+      {/* ===================================================================== */}
+      {/* STRUCTURED ORDER DETAILS MODAL (Distinct Readable Sections)           */}
+      {/* ===================================================================== */}
       <Modal
         isOpen={Boolean(selectedOrder)}
         onClose={() => setSelectedOrder(null)}
-        title={selectedOrder ? `#${selectedOrder.orderNumber}` : ''}
+        title={
+          selectedOrder
+            ? `${t('cart.orderNumberLabel')}: #${selectedOrder.orderNumber}`
+            : ''
+        }
         maxWidth="xl"
         footer={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedOrder(null)}
-          >
-            {t('product.close')}
-          </Button>
+          selectedOrder ? (
+            <div className="w-full grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                fullWidth
+                onClick={() => setSelectedOrder(null)}
+              >
+                {t('product.close')}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                fullWidth
+                leftIcon={<RotateCcw className="w-4 h-4 text-[#C89D54]" />}
+                onClick={() => handleReorder(selectedOrder)}
+              >
+                {t('product.addToCart')}
+              </Button>
+            </div>
+          ) : undefined
         }
       >
         {selectedOrder && (
           <div className="space-y-4 text-xs sm:text-sm">
-            {selectedOrder.paymentVerificationStatus ===
-              'pending_verification' && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold">
-                {t('transfer.statusPending')} — {t('transfer.pendingNotice')}
-              </div>
-            )}
-
-            {selectedOrder.items.map((item) => (
-              <div
-                key={item.productId}
-                className="flex items-center justify-between py-2 border-b border-gray-100"
-              >
-                <span>
-                  {item.productName} ({item.quantity} ×{' '}
-                  {formatUZS(item.unitPrice)})
+            {/* Section 1: Order Status & Date */}
+            <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="font-mono font-extrabold text-brand-green text-sm">
+                  #{selectedOrder.orderNumber}
                 </span>
-                <strong className="text-brand-green">
-                  {formatUZS(item.totalPrice)}
-                </strong>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {formatDateUz(selectedOrder.createdAt, true)}
+                </p>
               </div>
-            ))}
-            <div className="flex justify-between font-extrabold text-base pt-2">
-              <span>{t('cart.totalAmount')}</span>
-              <span className="text-brand-green">
-                {formatUZS(selectedOrder.totalAmount)}
+              <Badge
+                variant={ORDER_STATUS_META[selectedOrder.status].badgeVariant}
+                size="md"
+              >
+                {ORDER_STATUS_META[selectedOrder.status].label}
+              </Badge>
+            </div>
+
+            {/* Section 2: Estimated Delivery Time (Strictly separated from Address) */}
+            <div className="p-3 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex items-center justify-between gap-2">
+              <span className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-brand-green shrink-0" />
+                <span>{t('delivery.estimateLabel')}</span>
               </span>
+              <Badge variant="gold" size="sm">
+                {t('delivery.estimateValue')}
+              </Badge>
+            </div>
+
+            {/* Section 3: Delivery Address & Payment Method */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
+                <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-brand-green" />
+                  <span>{t('cart.step2Title')}</span>
+                </p>
+                <p className="font-bold text-gray-900 dark:text-gray-100">
+                  {selectedOrder.region}
+                  {selectedOrder.district ? `, ${selectedOrder.district}` : ''}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-300 break-words">
+                  {selectedOrder.address}
+                </p>
+                {selectedOrder.locationCoordinates && (
+                  <p className="text-[11px] font-mono text-brand-green">
+                    Pin: {selectedOrder.locationCoordinates.lat},{' '}
+                    {selectedOrder.locationCoordinates.lng}
+                  </p>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
+                <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-brand-green" />
+                  <span>{t('cart.step3Title')}</span>
+                </p>
+                <p className="font-bold text-gray-900 dark:text-gray-100 break-words">
+                  {selectedOrder.paymentMethodLabel}
+                </p>
+                <div className="pt-1">
+                  {selectedOrder.paymentVerificationStatus ===
+                    'pending_verification' && (
+                    <Badge variant="warning" size="sm">
+                      {t('transfer.statusPending')}
+                    </Badge>
+                  )}
+                  {selectedOrder.paymentVerificationStatus === 'verified' && (
+                    <Badge variant="success" size="sm">
+                      {t('transfer.statusVerified')}
+                    </Badge>
+                  )}
+                  {selectedOrder.paymentVerificationStatus === 'rejected' && (
+                    <Badge variant="danger" size="sm">
+                      {t('transfer.statusRejected')}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Itemized Products List */}
+            <div className="border border-gray-200 dark:border-[#28453B] rounded-xl divide-y divide-gray-200 dark:divide-[#28453B] overflow-hidden">
+              {selectedOrder.items.map((item) => (
+                <div
+                  key={item.productId}
+                  className="p-3 flex items-center justify-between gap-3 bg-white dark:bg-[#12211C]"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={item.image}
+                      alt={item.productName}
+                      className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 dark:text-gray-100 truncate">
+                        {item.productName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {item.quantity} × {formatUZS(item.unitPrice)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-extrabold text-brand-green shrink-0">
+                    {formatUZS(item.totalPrice)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Section 5: Order Totals Breakdown */}
+            <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2">
+              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+                <span>{t('cart.productsSubtotal')}:</span>
+                <span className="font-bold">
+                  {formatUZS(selectedOrder.subtotal)}
+                </span>
+              </div>
+              {selectedOrder.discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Promokod:</span>
+                  <span className="font-bold">
+                    -{formatUZS(selectedOrder.discountAmount)}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+                <span>{t('cart.deliveryService')}:</span>
+                <span className="font-bold">
+                  {selectedOrder.deliveryFee === 0
+                    ? t('cart.freeDelivery')
+                    : formatUZS(selectedOrder.deliveryFee)}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-gray-200 dark:border-[#28453B] flex justify-between items-baseline text-base">
+                <span className="font-extrabold text-gray-900 dark:text-gray-100">
+                  {t('cart.totalAmount')}
+                </span>
+                <span className="text-lg font-extrabold text-brand-green">
+                  {formatUZS(selectedOrder.totalAmount)}
+                </span>
+              </div>
             </div>
           </div>
         )}

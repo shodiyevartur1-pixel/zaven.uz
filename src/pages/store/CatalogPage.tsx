@@ -59,7 +59,6 @@ export const CatalogPage: React.FC = () => {
   const [visibleMultiplier, setVisibleMultiplier] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState<boolean>(false);
 
-  // Lock background scroll & hide bottom nav while the mobile filter drawer is open
   useEffect(() => {
     if (isMobileFilterOpen) {
       document.body.style.overflow = 'hidden';
@@ -306,7 +305,6 @@ export const CatalogPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Requirement 3: Compact, touch-friendly filter controls
   const renderFilterSidebarContent = () => (
     <div className="space-y-4">
       <div>
@@ -355,23 +353,12 @@ export const CatalogPage: React.FC = () => {
               }`}
             >
               <span>{t('nav.allCategories')}</span>
-              <span
-                className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                  !selectedCategorySlug
-                    ? 'bg-[#C89D54] text-[#09261C] font-extrabold'
-                    : 'bg-gray-100 dark:bg-[#162923] text-gray-600 dark:text-gray-300'
-                }`}
-              >
-                {catalogProducts.length}
-              </span>
+              {!selectedCategorySlug && <Check className="w-3.5 h-3.5 shrink-0" />}
             </button>
           </li>
 
           {activeCategories.map((cat) => {
             const locCat = getCategoryText(cat);
-            const count = catalogProducts.filter(
-              (p) => p.categoryId === cat.id
-            ).length;
             const isSelected =
               selectedCategorySlug === cat.slug ||
               selectedCategorySlug === cat.id;
@@ -388,15 +375,7 @@ export const CatalogPage: React.FC = () => {
                   }`}
                 >
                   <span className="leading-snug truncate">{locCat.name}</span>
-                  <span
-                    className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                      isSelected
-                        ? 'bg-[#C89D54] text-[#09261C] font-extrabold'
-                        : 'bg-gray-100 dark:bg-[#162923] text-gray-600 dark:text-gray-300'
-                    }`}
-                  >
-                    {count}
-                  </span>
+                  {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
                 </button>
               </li>
             );
@@ -531,8 +510,8 @@ export const CatalogPage: React.FC = () => {
 
   return (
     <>
-      <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-6">
-        {/* Compact Catalog Header */}
+      <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-5">
+        {/* Requirement 3: Clean Catalog Header (Removed "8 ta mahsulot" badge) */}
         <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3.5 sm:p-5 shadow-card space-y-1.5">
           <nav
             aria-label="Breadcrumb"
@@ -561,25 +540,18 @@ export const CatalogPage: React.FC = () => {
             )}
           </nav>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 break-words">
-                {localizedSelectedCategory
-                  ? localizedSelectedCategory.name
-                  : searchQuery.trim()
-                  ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
-                  : t('catalog.titleAll')}
-              </h1>
-              <Badge variant="gold" size="sm">
-                {filteredProducts.length} {t('home.productsCount')}
-              </Badge>
-            </div>
-          </div>
+          <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 break-words">
+            {localizedSelectedCategory
+              ? localizedSelectedCategory.name
+              : searchQuery.trim()
+              ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
+              : t('catalog.titleAll')}
+          </h1>
         </div>
 
         {/* Main Catalog Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-          <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-28">
+          <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-24">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
               <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
                 <SlidersHorizontal className="w-4 h-4 text-brand-green" />
@@ -642,7 +614,6 @@ export const CatalogPage: React.FC = () => {
                 setSortBy(nextSort);
                 syncUrlParams({ sort: nextSort });
               }}
-              totalFilteredCount={filteredProducts.length}
               activeFilterCount={activeFilterCount}
               onResetAll={handleResetAllFilters}
               onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
@@ -656,71 +627,63 @@ export const CatalogPage: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="text-xs text-gray-600">
-                    <strong className="text-brand-green">
-                      {startIndex + 1}–
-                      {Math.min(endIndex, filteredProducts.length)}
-                    </strong>{' '}
-                    / {filteredProducts.length} {t('catalog.showingCount')}
-                  </div>
-
-                  {hasMoreToLoad && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      rightIcon={<ChevronDown className="w-4 h-4" />}
-                      onClick={handleShowMore}
-                    >
-                      {t('catalog.showMore')} (
-                      {Math.min(
-                        ITEMS_PER_PAGE,
-                        filteredProducts.length - endIndex
-                      )}
-                      )
-                    </Button>
-                  )}
-
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={currentPage <= 1}
-                        onClick={() => handlePageSelect(currentPage - 1)}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                {/* Pagination / Load More (Rendered only when there are more items or pages; no redundant "1–8 / 8 koʻrsatilmoqda" line) */}
+                {(hasMoreToLoad || totalPages > 1) && (
+                  <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-center gap-3">
+                    {hasMoreToLoad && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        rightIcon={<ChevronDown className="w-4 h-4" />}
+                        onClick={handleShowMore}
                       >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
+                        {t('catalog.showMore')}
+                      </Button>
+                    )}
 
-                      {Array.from(
-                        { length: totalPages },
-                        (_, idx) => idx + 1
-                      ).map((page) => (
+                    {totalPages > 1 && (
+                      <div className="flex items-center gap-1.5">
                         <button
-                          key={page}
                           type="button"
-                          onClick={() => handlePageSelect(page)}
-                          className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
-                            currentPage === page
-                              ? 'bg-[#0F3D2E] text-white'
-                              : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                          }`}
+                          disabled={currentPage <= 1}
+                          onClick={() => handlePageSelect(currentPage - 1)}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          aria-label="Previous page"
                         >
-                          {page}
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
-                      ))}
 
-                      <button
-                        type="button"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => handlePageSelect(currentPage + 1)}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                        {Array.from(
+                          { length: totalPages },
+                          (_, idx) => idx + 1
+                        ).map((page) => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => handlePageSelect(page)}
+                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                              currentPage === page
+                                ? 'bg-[#0F3D2E] text-white'
+                                : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+
+                        <button
+                          type="button"
+                          disabled={currentPage >= totalPages}
+                          onClick={() => handlePageSelect(currentPage + 1)}
+                          className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          aria-label="Next page"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <EmptyState
@@ -735,7 +698,7 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Requirement 3: Filter Drawer Rendered Outside space-y Container so it starts directly at top-0 with zero blank band */}
+      {/* Mobile Slide-Over Filter Drawer Flush at Top Safe Area */}
       {isMobileFilterOpen && (
         <div
           className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[100] xl:hidden flex justify-end"
@@ -749,7 +712,6 @@ export const CatalogPage: React.FC = () => {
             aria-hidden="true"
           />
           <div className="relative w-full max-w-xs sm:max-w-sm bg-white dark:bg-[#12211C] h-full max-h-[100dvh] flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
-            {/* Sticky Drawer Header Flush at Top Safe Area */}
             <div className="px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-[#0F3D2E] text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 font-bold text-sm">
                 <SlidersHorizontal className="w-4 h-4 text-[#C89D54]" />
@@ -770,12 +732,10 @@ export const CatalogPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Scrollable Filter Groups */}
             <div className="p-4 flex-1 overflow-y-auto scrollbar-thin min-h-0">
               {renderFilterSidebarContent()}
             </div>
 
-            {/* Sticky Drawer Footer with Safe-Area Clearance */}
             <div className="p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
               <Button
                 variant="outline"
@@ -792,7 +752,7 @@ export const CatalogPage: React.FC = () => {
                 fullWidth
                 onClick={() => setIsMobileFilterOpen(false)}
               >
-                {t('catalog.applyFilters')} ({filteredProducts.length})
+                {t('catalog.applyFilters')}
               </Button>
             </div>
           </div>

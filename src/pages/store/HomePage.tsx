@@ -18,8 +18,8 @@ import {
   Gift,
   Compass,
   MapPin,
-  Info,
   Clock,
+  ChevronDown,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -40,6 +40,11 @@ export const HomePage: React.FC = () => {
   const { t, language, getCategoryText, getBannerText } = useThemeLanguage();
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Requirement 8: Collapsible trust/tariff/payment sections closed by default on mobile
+  const [openTrustPanel, setOpenTrustPanel] = useState<
+    'quality' | 'tariffs' | 'payments' | null
+  >(null);
 
   const visibleProducts = products.filter(
     (p) => p.status === 'active' || p.status === 'out_of_stock'
@@ -77,7 +82,6 @@ export const HomePage: React.FC = () => {
     (pm) => pm.isEnabled
   );
 
-  // Concise mobile hero copy so text wraps cleanly in 2 lines without awkward ellipses
   const compactHeroDescription =
     language === 'ru'
       ? 'Товары для дома, гаджеты и аксессуары с проверкой качества на складе ZAVEN.'
@@ -113,19 +117,23 @@ export const HomePage: React.FC = () => {
   const renderTrustIcon = (iconName: string) => {
     switch (iconName) {
       case 'ShieldCheck':
-        return <ShieldCheck className="w-5 h-5 text-brand-green" />;
+        return <ShieldCheck className="w-4 h-4 text-brand-green shrink-0" />;
       case 'Truck':
-        return <Truck className="w-5 h-5 text-brand-green" />;
+        return <Truck className="w-4 h-4 text-brand-green shrink-0" />;
       case 'CreditCard':
-        return <CreditCard className="w-5 h-5 text-brand-green" />;
+        return <CreditCard className="w-4 h-4 text-brand-green shrink-0" />;
       default:
-        return <Headphones className="w-5 h-5 text-brand-green" />;
+        return <Headphones className="w-4 h-4 text-brand-green shrink-0" />;
     }
+  };
+
+  const toggleTrustPanel = (panel: 'quality' | 'tariffs' | 'payments') => {
+    setOpenTrustPanel((prev) => (prev === panel ? null : panel));
   };
 
   return (
     <div className="w-full max-w-full overflow-x-clip bg-[#F8F9FA] dark:bg-[#0B1512] space-y-6 sm:space-y-10 py-3 sm:py-6">
-      {/* 1. Requirement 1: Compact Marketplace Hero (~190-220px tall on phones, clean 2-line wrap, restrained gold accent) */}
+      {/* 1. Compact Marketplace Hero (~185–220px tall on phones) */}
       {activeBanner && localizedBanner && (
         <section className="zaven-page-container">
           <div className="bg-[#0F3D2E] rounded-2xl overflow-hidden border border-[#1D4D3C] shadow-sm">
@@ -140,11 +148,11 @@ export const HomePage: React.FC = () => {
                   </span>
                 </div>
 
-                <h1 className="text-[15px] sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug break-words">
+                <h1 className="text-[15px] sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug line-clamp-2 break-words">
                   {localizedBanner.headline}
                 </h1>
 
-                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed max-w-2xl break-words">
+                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed line-clamp-2 max-w-2xl break-words">
                   {compactHeroDescription}
                 </p>
 
@@ -188,7 +196,7 @@ export const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* 2. Popular Products — Immediately Visible Above the Fold on Mobile */}
+      {/* 2. Popular Products — Visible Near First Screen on Mobile */}
       <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -231,9 +239,6 @@ export const HomePage: React.FC = () => {
         <div className="flex lg:grid lg:grid-cols-5 gap-3 sm:gap-4 overflow-x-auto lg:overflow-visible scrollbar-thin pb-1">
           {activeCategories.map((category) => {
             const locCat = getCategoryText(category);
-            const count = visibleProducts.filter(
-              (p) => p.categoryId === category.id
-            ).length;
             return (
               <Link
                 key={category.id}
@@ -255,9 +260,6 @@ export const HomePage: React.FC = () => {
                   <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 group-hover:text-brand-green line-clamp-2 leading-tight break-words">
                     {locCat.name}
                   </h3>
-                  <p className="text-[10px] sm:text-xs text-brand-green font-semibold mt-0.5">
-                    {count} {t('home.productsCount')}
-                  </p>
                 </div>
               </Link>
             );
@@ -315,130 +317,185 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. Requirement 5: Trust & Information Section (Blends into deep forest dark background with zero pale gray outer band) */}
+      {/* ===================================================================== */}
+      {/* 6. Requirement 8: Compact Collapsible Trust, Delivery & Payment Block */}
+      {/* Closed by default on mobile; deep forest surfaces with zero gray band */}
+      {/* ===================================================================== */}
       <section className="zaven-page-container bg-transparent">
-        <div className="bg-white dark:bg-[#0F1D18] rounded-2xl border border-gray-200 dark:border-[#243E35] p-4 sm:p-6 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-[#243E35] pb-3.5">
+        <div className="bg-white dark:bg-[#0F1D18] rounded-2xl border border-gray-200 dark:border-[#243E35] p-4 sm:p-6 shadow-sm space-y-3">
+          {/* Compact Summary Header */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-100 dark:border-[#243E35]">
             <div className="min-w-0">
-              <Badge variant="green" size="sm">
-                {t('home.transparentRulesBadge')}
-              </Badge>
-              <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 mt-1.5 break-words">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="green" size="sm">
+                  {t('home.transparentRulesBadge')}
+                </Badge>
+                <Badge variant="gold" size="sm">
+                  <Clock className="w-3 h-3 mr-1 shrink-0" />
+                  <span>{t('delivery.estimateValue')}</span>
+                </Badge>
+              </div>
+              <h2 className="text-sm sm:text-lg font-extrabold text-gray-900 dark:text-gray-100 mt-1.5 break-words">
                 {t('home.trustSectionTitle')}
               </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {t('home.trustSectionSub')}
+              </p>
             </div>
-            <Badge variant="gold" size="md">
-              <Clock className="w-3.5 h-3.5 mr-1 shrink-0" />
-              <span>{t('delivery.estimateValue')}</span>
-            </Badge>
           </div>
 
-          {enabledTrustItems.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {enabledTrustItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#142620] border border-gray-200 dark:border-[#28453B] flex items-start gap-3 min-w-0"
+          {/* 3 Labeled Collapsible Sections (Closed by default on mobile) */}
+          <div className="divide-y divide-gray-200 dark:divide-[#243E35]">
+            {/* Collapsible 1: Quality & Store Guarantees */}
+            {enabledTrustItems.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleTrustPanel('quality')}
+                  aria-expanded={openTrustPanel === 'quality'}
+                  className="w-full py-3 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-brand-green-light flex items-center justify-center shrink-0">
-                    {renderTrustIcon(item.iconName)}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 break-words">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
-                      {item.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#142620] p-4 space-y-3 min-w-0">
-              <div className="flex items-center gap-2">
-                <Truck className="w-4 h-4 text-brand-green shrink-0" />
-                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                  {t('home.regionalTariffs')}
-                </h3>
-              </div>
-
-              {storeSettings.delivery.isDeliveryEnabled && (
-                <>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-[#0D1915] p-2.5 rounded-lg border border-gray-200 dark:border-[#28453B] flex items-start gap-2">
-                    <Info className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                    <span className="break-words">
-                      {storeSettings.delivery.generalDeliveryNote}
+                  <span className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className="w-4 h-4 text-brand-green shrink-0" />
+                    <span className="truncate">
+                      {t('home.trustAccordionQuality')}
                     </span>
-                  </p>
-                  <div className="divide-y divide-gray-200 dark:divide-[#28453B] text-xs">
-                    {enabledRegions.map((reg) => (
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                      openTrustPanel === 'quality' ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {openTrustPanel === 'quality' && (
+                  <div className="pb-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {enabledTrustItems.map((item) => (
                       <div
-                        key={reg.id}
-                        className="py-2 flex items-start justify-between gap-3"
+                        key={item.id}
+                        className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#142620] border border-gray-200 dark:border-[#28453B] flex items-start gap-2.5 min-w-0"
                       >
-                        <p className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1 min-w-0">
-                          <MapPin className="w-3 h-3 text-brand-gold-dark shrink-0" />
-                          <span className="break-words">{reg.regionName}</span>
-                        </p>
-                        <span className="font-extrabold text-brand-green shrink-0">
-                          {formatUZS(reg.fee)}
-                        </span>
+                        <div className="w-8 h-8 rounded-lg bg-brand-green-light flex items-center justify-center shrink-0">
+                          {renderTrustIcon(item.iconName)}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-xs font-bold text-gray-900 dark:text-gray-100 break-words">
+                            {item.title}
+                          </h3>
+                          <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
+                            {item.description}
+                          </p>
+                        </div>
                       </div>
                     ))}
                   </div>
-                </>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#142620] p-4 space-y-3 min-w-0">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-brand-green shrink-0" />
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                    {t('home.acceptedPayments')}
-                  </h3>
-                </div>
-                <Badge variant="gold" size="sm">
-                  {t('home.transparentBilling')}
-                </Badge>
+                )}
               </div>
+            )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {enabledPayments.map((pm) => (
-                  <div
-                    key={pm.id}
-                    className="p-3 rounded-lg border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#0D1915] min-w-0"
-                  >
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block break-words">
-                      {pm.name}
+            {/* Collapsible 2: Regional Delivery Tariffs */}
+            {storeSettings.delivery.isDeliveryEnabled && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => toggleTrustPanel('tariffs')}
+                  aria-expanded={openTrustPanel === 'tariffs'}
+                  className="w-full py-3 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <Truck className="w-4 h-4 text-brand-green shrink-0" />
+                    <span className="truncate">
+                      {t('home.regionalTariffs')}
                     </span>
-                    <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5 line-clamp-2 break-words">
-                      {pm.description}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                      openTrustPanel === 'tariffs' ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {openTrustPanel === 'tariffs' && (
+                  <div className="pb-3.5 space-y-2.5 text-xs">
+                    <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                      {storeSettings.delivery.generalDeliveryNote}
                     </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {enabledRegions.map((reg) => (
+                        <div
+                          key={reg.id}
+                          className="p-2.5 rounded-xl bg-[#F8F9FA] dark:bg-[#142620] border border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-2"
+                        >
+                          <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1 min-w-0">
+                            <MapPin className="w-3 h-3 text-brand-gold-dark shrink-0" />
+                            <span className="truncate">{reg.regionName}</span>
+                          </span>
+                          <span className="font-extrabold text-brand-green shrink-0">
+                            {formatUZS(reg.fee)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
+            )}
+
+            {/* Collapsible 3: Accepted Payment Methods */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleTrustPanel('payments')}
+                aria-expanded={openTrustPanel === 'payments'}
+                className="w-full py-3 flex items-center justify-between gap-3 text-left text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100"
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <CreditCard className="w-4 h-4 text-brand-green shrink-0" />
+                  <span className="truncate">
+                    {t('home.acceptedPayments')}
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+                    openTrustPanel === 'payments' ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {openTrustPanel === 'payments' && (
+                <div className="pb-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {enabledPayments.map((pm) => (
+                    <div
+                      key={pm.id}
+                      className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#142620] border border-gray-200 dark:border-[#28453B] min-w-0"
+                    >
+                      <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block break-words">
+                        {pm.name}
+                      </span>
+                      <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
+                        {pm.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* 7. Compact Instagram Banner */}
+      {/* 7. Compact Instagram Community Banner */}
       <section className="zaven-page-container">
-        <div className="bg-[#09261C] rounded-2xl p-4 sm:p-5 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5 min-w-0">
+        <div className="bg-[#09261C] rounded-2xl p-4 sm:p-5 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-[#C89D54] text-[#09261C] flex items-center justify-center shrink-0 shadow-sm">
               <Instagram className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-sm sm:text-base font-extrabold text-white break-words">
+              <h3 className="text-xs sm:text-base font-extrabold text-white break-words">
                 {t('home.instagramTitle')}
               </h3>
               <p className="text-xs text-emerald-100 mt-0.5 break-words">
-                {t('home.instagramDesc')}{' '}
                 <strong className="text-[#C89D54]">
                   {storeSettings.instagramHandle}
                 </strong>
