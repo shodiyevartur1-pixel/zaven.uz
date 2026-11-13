@@ -3,10 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   html,
   body,
   #root {
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     overflow-x: clip;
   }
 
@@ -33,23 +40,67 @@
   }
 }
 
-/* Strict responsive product grid that never overflows 360px-414px viewports */
+/* ============================================================================
+   Consistent Mobile & Responsive Page Container
+   - 16px (1rem) left/right gutters on narrow phones (< 390px)
+   - 20px (1.25rem) left/right gutters on wider phones (390px - 639px)
+   - 24px (1.5rem) on tablets (640px - 1023px)
+   - 32px (2rem) on desktop (1024px+)
+   ============================================================================ */
+.zaven-page-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 390px) {
+  .zaven-page-container {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .zaven-page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .zaven-page-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* ============================================================================
+   Responsive Product Card Grid
+   - 1 column on very narrow phones (< 350px) so cards are never squeezed
+   - 2 columns with a clear 14px (0.875rem) gap on standard phones (350px+)
+   - 3 columns with 18px gap on tablets (768px+)
+   - 4 columns with 20px gap on desktop when .zaven-product-grid-4 is applied
+   ============================================================================ */
 .zaven-product-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.625rem;
+  gap: 0.875rem;
   width: 100%;
 }
 
-@media (max-width: 335px) {
+@media (max-width: 349px) {
   .zaven-product-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem;
   }
 }
 
 @media (min-width: 640px) {
   .zaven-product-grid {
-    gap: 1rem;
+    gap: 1.125rem;
   }
 }
 
@@ -63,13 +114,21 @@
 @media (min-width: 1024px) {
   .zaven-product-grid-4 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem;
   }
 }
 
 /* ============================================================================
-   High-Contrast Dark Mode Token Overrides
+   High-Contrast Dark Mode Token Overrides (Fixes gray trust-card backgrounds)
    ============================================================================ */
-html.dark .bg-surface-page {
+html.dark .bg-surface-page,
+html.dark .bg-surface-page\/70,
+html.dark .bg-surface-page\/80,
+html.dark .bg-surface-page\/90 {
+  background-color: #0D1915 !important;
+}
+
+html.dark main > .bg-surface-page {
   background-color: #0B1512 !important;
 }
 
@@ -80,6 +139,7 @@ html.dark .bg-white\/90 {
 }
 
 html.dark .bg-gray-50,
+html.dark .bg-gray-50\/80,
 html.dark .bg-surface-subtle {
   background-color: #162923 !important;
 }
@@ -128,6 +188,7 @@ html.dark .bg-sky-50 {
   background-color: rgba(14, 165, 233, 0.18) !important;
 }
 
+/* Readable Text Contrast in Dark Mode */
 html.dark .text-gray-900 {
   color: #F9FAFB !important;
 }
@@ -183,6 +244,7 @@ html.dark .text-sky-700 {
   color: #7DD3FC !important;
 }
 
+/* Borders & Dividers in Dark Mode */
 html.dark .border-gray-100,
 html.dark .border-gray-200,
 html.dark .border-gray-200\/80,
@@ -213,6 +275,7 @@ html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: #28453B !important;
 }
 
+/* Form Controls */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
 html.dark textarea {

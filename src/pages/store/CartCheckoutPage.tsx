@@ -73,7 +73,6 @@ export const CartCheckoutPage: React.FC = () => {
   } = useStore();
   const { t, language, getProductText } = useThemeLanguage();
 
-  // Requirement 6 & 7: Separate /cart (Cart-Focused) from /checkout (Sequential Address -> Payment -> Confirm)
   const isCheckoutRoute = location.pathname.startsWith('/checkout');
   const [activeStep, setActiveStep] = useState<CheckoutStep>(
     isCheckoutRoute ? 'address' : 'cart'
@@ -100,7 +99,6 @@ export const CartCheckoutPage: React.FC = () => {
     [storeSettings.paymentMethods]
   );
 
-  // Persistent Customer & Address State across steps
   const [customerName, setCustomerName] = useState<string>(
     currentCustomer?.fullName || ''
   );
@@ -302,7 +300,6 @@ export const CartCheckoutPage: React.FC = () => {
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   }, [cart, products, getProductText]);
 
-  // Requirement 6: Up to 4 recommended products on /cart excluding items already in the cart
   const cartProductIds = useMemo(
     () => new Set(cart.map((c) => c.productId)),
     [cart]
@@ -381,7 +378,6 @@ export const CartCheckoutPage: React.FC = () => {
     couponDiscountAmount,
   ]);
 
-  // On /cart (before address is chosen), total shows subtotal minus coupon; on checkout steps, includes regional delivery fee
   const cartPageTotalAmount = Math.max(
     0,
     productsSubtotal - couponDiscountAmount
@@ -450,6 +446,11 @@ export const CartCheckoutPage: React.FC = () => {
           dataUrl: reader.result,
           uploadedAt: new Date().toISOString(),
         });
+        addToast({
+          type: 'success',
+          title: t('transfer.uploadSuccessReady'),
+          description: file.name,
+        });
       }
     };
     reader.readAsDataURL(file);
@@ -484,7 +485,6 @@ export const CartCheckoutPage: React.FC = () => {
     });
   };
 
-  // Step Transitions with Validation
   const goToStep = (targetStep: CheckoutStep) => {
     if (targetStep === 'cart') {
       setActiveStep('cart');
@@ -521,7 +521,7 @@ export const CartCheckoutPage: React.FC = () => {
     if (Object.keys(nextErrors).length > 0) {
       addToast({
         type: 'error',
-        title: 'Yetkazib berish maʼlumotlarini toʻliq kiriting',
+        title: t('cart.step2Title'),
       });
       return;
     }
@@ -610,58 +610,14 @@ export const CartCheckoutPage: React.FC = () => {
     setTimeout(() => setCopiedOrderNumber(false), 3000);
   };
 
-  const stepLabels = {
-    uz: {
-      s1: '1. Savatcha',
-      s2: '2. Manzil',
-      s3: '3. Toʻlov',
-      s4: '4. Tasdiqlash',
-      proceedBtn: 'Xaridni rasmiylashtirishga oʻtish',
-      nextPaymentBtn: 'Toʻlov usulini tanlashga oʻtish',
-      nextReviewBtn: 'Buyurtmani tekshirishga oʻtish',
-      backToCartBtn: 'Savatchaga qaytish',
-      backToAddressBtn: 'Manzil qadamiga qaytish',
-      backToPaymentBtn: 'Toʻlov qadamiga qaytish',
-      reviewTitle: 'Buyurtmani yakuniy tekshirish va tasdiqlash',
-    },
-    ru: {
-      s1: '1. Корзина',
-      s2: '2. Адрес',
-      s3: '3. Оплата',
-      s4: '4. Подтверждение',
-      proceedBtn: 'Перейти к оформлению покупки',
-      nextPaymentBtn: 'Далее: Выбор способа оплаты',
-      nextReviewBtn: 'Далее: Проверка заказа',
-      backToCartBtn: 'Вернуться в корзину',
-      backToAddressBtn: 'Назад к адресу',
-      backToPaymentBtn: 'Назад к оплате',
-      reviewTitle: 'Проверка данных перед отправкой заказа',
-    },
-    en: {
-      s1: '1. Cart',
-      s2: '2. Address',
-      s3: '3. Payment',
-      s4: '4. Confirm',
-      proceedBtn: 'Proceed to Purchase',
-      nextPaymentBtn: 'Continue to Payment',
-      nextReviewBtn: 'Continue to Order Review',
-      backToCartBtn: 'Return to Cart',
-      backToAddressBtn: 'Back to Address',
-      backToPaymentBtn: 'Back to Payment',
-      reviewTitle: 'Review & Confirm Your Order',
-    },
-  }[language];
-
-  // ===========================================================================
-  // 1. POST-SUBMISSION ORDER CONFIRMATION RECEIPT SCREEN
-  // ===========================================================================
+  // 1. Order Confirmation Screen
   if (completedOrder) {
     const isPendingTransfer =
       completedOrder.paymentVerificationStatus === 'pending_verification';
 
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-12">
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
+      <div className="zaven-page-container py-6 sm:py-12">
+        <div className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
           <div className="bg-[#0F3D2E] text-white p-6 sm:p-8 text-center space-y-3">
             <div className="w-16 h-16 rounded-full bg-[#C89D54] text-[#09261C] flex items-center justify-center mx-auto shadow-md">
               <PackageCheck className="w-9 h-9" />
@@ -708,7 +664,7 @@ export const CartCheckoutPage: React.FC = () => {
                   <span>{t('delivery.estimateLabel')}</span>
                 </div>
                 <p className="text-xs text-gray-600">
-                  <strong>Manzil:</strong> {completedOrder.region},{' '}
+                  <strong>{t('cart.address')}:</strong> {completedOrder.region},{' '}
                   {completedOrder.address}
                 </p>
               </div>
@@ -722,7 +678,6 @@ export const CartCheckoutPage: React.FC = () => {
                 <Clock className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-extrabold">Toʻlov holati:</span>
                     <Badge variant="warning" size="md">
                       {t('transfer.statusPending')}
                     </Badge>
@@ -807,12 +762,10 @@ export const CartCheckoutPage: React.FC = () => {
     );
   }
 
-  // ===========================================================================
-  // 2. EMPTY CART VIEW
-  // ===========================================================================
+  // 2. Empty Cart View
   if (detailedCartItems.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 lg:px-8 py-12">
+      <div className="zaven-page-container py-12">
         <EmptyState
           icon={<ShoppingBag className="w-7 h-7" />}
           title={t('cart.emptyTitle')}
@@ -833,16 +786,16 @@ export const CartCheckoutPage: React.FC = () => {
   const currentStepNumber = stepIndexMap[activeStep];
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
-      {/* 4-Step Sequential Progress Indicator: Cart -> Address -> Payment -> Confirm */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-3.5 sm:p-5 shadow-card">
+    <div className="zaven-page-container py-4 sm:py-8 space-y-6">
+      {/* 4-Step Sequential Progress Indicator */}
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3.5 sm:p-5 shadow-card">
         <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
           {(
             [
-              { id: 'cart', num: 1, label: stepLabels.s1 },
-              { id: 'address', num: 2, label: stepLabels.s2 },
-              { id: 'payment', num: 3, label: stepLabels.s3 },
-              { id: 'confirm', num: 4, label: stepLabels.s4 },
+              { id: 'cart', num: 1, label: t('cart.stepIndicatorCart') },
+              { id: 'address', num: 2, label: t('cart.stepIndicatorAddress') },
+              { id: 'payment', num: 3, label: t('cart.stepIndicatorPayment') },
+              { id: 'confirm', num: 4, label: t('cart.stepIndicatorConfirm') },
             ] as { id: CheckoutStep; num: number; label: string }[]
           ).map((step) => {
             const isCurrent = activeStep === step.id;
@@ -857,7 +810,7 @@ export const CartCheckoutPage: React.FC = () => {
                     goToStep(step.id);
                   }
                 }}
-                className={`py-2 px-2 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1.5 min-w-0 ${
+                className={`min-h-[38px] py-2 px-2 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1.5 min-w-0 ${
                   isCurrent
                     ? 'bg-[#0F3D2E] text-white border-[#0F3D2E] font-extrabold shadow-sm'
                     : isCompleted
@@ -878,13 +831,13 @@ export const CartCheckoutPage: React.FC = () => {
       </div>
 
       {/* ===================================================================== */}
-      {/* STEP 1: CART-FOCUSED VIEW (/cart) — No address or payment fields here */}
+      {/* STEP 1: CART-FOCUSED VIEW (/cart)                                     */}
       {/* ===================================================================== */}
       {activeStep === 'cart' && (
         <div className="space-y-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Cart Items List */}
-            <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
+            <div className="lg:col-span-7 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
               <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4 text-brand-green" />
@@ -917,7 +870,7 @@ export const CartCheckoutPage: React.FC = () => {
                     return (
                       <div
                         key={product.id}
-                        className="p-3.5 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5"
+                        className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5"
                       >
                         <div className="flex items-start gap-3.5 min-w-0">
                           <Link
@@ -950,7 +903,7 @@ export const CartCheckoutPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                        <div className="flex items-center justify-between sm:justify-end gap-4 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                           <div className="flex items-center border border-gray-300 rounded-xl bg-white p-0.5">
                             <button
                               type="button"
@@ -978,7 +931,7 @@ export const CartCheckoutPage: React.FC = () => {
                             </button>
                           </div>
 
-                          <div className="text-right min-w-[100px]">
+                          <div className="text-right min-w-[105px]">
                             <div className="text-xs sm:text-sm font-extrabold text-gray-900">
                               {formatUZS(lineTotal)}
                             </div>
@@ -999,13 +952,12 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Cart Order Summary & Prominent "Proceed to Purchase" Button */}
-            <aside className="lg:col-span-5 bg-white rounded-2xl border border-gray-200 p-4 sm:p-6 shadow-card space-y-5 lg:sticky lg:top-24">
+            {/* Cart Summary & Prominent "Sotib olish / Proceed to Purchase" Button */}
+            <aside className="lg:col-span-5 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card space-y-5 lg:sticky lg:top-24">
               <h2 className="text-base sm:text-lg font-extrabold text-gray-900 border-b border-gray-100 pb-3">
                 {t('cart.summaryTitle')}
               </h2>
 
-              {/* Promo Code Input */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
                   {t('cart.promoLabel')}
@@ -1089,12 +1041,12 @@ export const CartCheckoutPage: React.FC = () => {
                 rightIcon={<ArrowRight className="w-5 h-5" />}
                 onClick={() => goToStep('address')}
               >
-                {stepLabels.proceedBtn}
+                {t('cart.proceedToPurchaseBtn')}
               </Button>
             </aside>
           </div>
 
-          {/* Requirement 6: Up to 4 Relevant Recommendations below the Cart section (Excluding items already in cart) */}
+          {/* Secondary Recommendations (Excluding products already in cart) */}
           {recommendedForCart.length > 0 && (
             <section className="pt-6 border-t border-gray-200 space-y-3.5">
               <div className="flex items-center gap-2">
@@ -1114,12 +1066,12 @@ export const CartCheckoutPage: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* STEP 2: SEQUENTIAL ADDRESS STEP                                       */}
+      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS STEP                              */}
       {/* ===================================================================== */}
       {activeStep === 'address' && (
         <form
           onSubmit={handleContinueFromAddress}
-          className="max-w-3xl mx-auto bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card"
+          className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card"
           noValidate
         >
           <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
@@ -1138,6 +1090,21 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
+            {/* Non-Guaranteed Delivery Estimate Callout ("Taxminan 10–25 kun") */}
+            <div className="p-3.5 rounded-xl bg-brand-green-light/60 border border-brand-green/20 text-xs space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-gray-800">
+                  {t('delivery.estimateLabel')}
+                </span>
+                <strong className="text-brand-green font-extrabold">
+                  {t('delivery.estimateValue')}
+                </strong>
+              </div>
+              <p className="text-[11px] text-gray-600 leading-relaxed">
+                {t('delivery.estimateDisclaimer')}
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label={t('cart.fullName')}
@@ -1178,12 +1145,12 @@ export const CartCheckoutPage: React.FC = () => {
               leftIcon={<Mail className="w-4 h-4" />}
             />
 
-            {/* Uzbekistan Location Selector + Opt-In Geolocation */}
+            {/* Uzbekistan Region + District Selector + Optional "Use my location" */}
             <div className="p-4 rounded-2xl bg-surface-page border border-gray-200 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 pb-3">
                 <div>
                   <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
-                    Oʻzbekiston boʻylab yetkazib berish hududi
+                    {t('cart.region')} & {t('cart.district')}
                   </p>
                   <p className="text-[11px] text-gray-500 mt-0.5">
                     {t('cart.locationPrivacyNote')}
@@ -1294,7 +1261,7 @@ export const CartCheckoutPage: React.FC = () => {
                 leftIcon={<ArrowLeft className="w-4 h-4" />}
                 onClick={() => goToStep('cart')}
               >
-                {stepLabels.backToCartBtn}
+                {t('cart.returnToCartBtn')}
               </Button>
               <Button
                 type="submit"
@@ -1302,7 +1269,7 @@ export const CartCheckoutPage: React.FC = () => {
                 size="lg"
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                {stepLabels.nextPaymentBtn}
+                {t('cart.continueToPaymentBtn')}
               </Button>
             </div>
           </div>
@@ -1315,7 +1282,7 @@ export const CartCheckoutPage: React.FC = () => {
       {activeStep === 'payment' && (
         <form
           onSubmit={handleContinueFromPayment}
-          className="max-w-3xl mx-auto bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card"
+          className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card"
           noValidate
         >
           <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
@@ -1487,7 +1454,6 @@ export const CartCheckoutPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Receipt Upload */}
                 <div className="space-y-2 pt-2 border-t border-brand-gold-border">
                   <label className="block text-xs font-bold text-gray-900">
                     {t('transfer.uploadLabel')}
@@ -1512,7 +1478,8 @@ export const CartCheckoutPage: React.FC = () => {
                             {receiptAttachment.fileName}
                           </p>
                           <p className="text-[11px] text-emerald-700 font-semibold">
-                            {(receiptAttachment.fileSize / 1024).toFixed(1)} KB
+                            {(receiptAttachment.fileSize / 1024).toFixed(1)} KB •{' '}
+                            {t('transfer.uploadSuccessReady')}
                           </p>
                         </div>
                       </div>
@@ -1559,7 +1526,7 @@ export const CartCheckoutPage: React.FC = () => {
                 leftIcon={<ArrowLeft className="w-4 h-4" />}
                 onClick={() => goToStep('address')}
               >
-                {stepLabels.backToAddressBtn}
+                {t('cart.returnToAddressBtn')}
               </Button>
               <Button
                 type="submit"
@@ -1567,7 +1534,7 @@ export const CartCheckoutPage: React.FC = () => {
                 size="lg"
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                {stepLabels.nextReviewBtn}
+                {t('cart.continueToReviewBtn')}
               </Button>
             </div>
           </div>
@@ -1578,14 +1545,14 @@ export const CartCheckoutPage: React.FC = () => {
       {/* STEP 4: SEQUENTIAL CONFIRMATION / REVIEW STEP                         */}
       {/* ===================================================================== */}
       {activeStep === 'confirm' && (
-        <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
+        <div className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
           <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span className="w-7 h-7 rounded-full bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center justify-center shrink-0">
                 4
               </span>
               <h1 className="text-sm sm:text-base font-extrabold text-gray-900">
-                {stepLabels.reviewTitle}
+                {t('cart.step4Title')}
               </h1>
             </div>
             <Badge variant="gold" size="sm">
@@ -1594,26 +1561,25 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5 text-xs sm:text-sm">
-            {/* Customer, Address & Payment Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-xl bg-surface-page border border-gray-200 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-extrabold uppercase text-gray-400">
-                    Xaridor va Manzil
+                    {t('cart.step2Title')}
                   </span>
                   <button
                     type="button"
                     onClick={() => goToStep('address')}
                     className="text-xs font-bold text-brand-green hover:underline"
                   >
-                    Oʻzgartirish
+                    {t('cart.editStepBtn')}
                   </button>
                 </div>
                 <p className="font-bold text-gray-900">{customerName}</p>
                 <p className="text-brand-green font-semibold">
                   {customerPhone}
                 </p>
-                <p className="text-gray-600">
+                <p className="text-gray-600 break-words">
                   {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
                   , {addressLine}
                 </p>
@@ -1622,28 +1588,28 @@ export const CartCheckoutPage: React.FC = () => {
               <div className="p-3.5 rounded-xl bg-surface-page border border-gray-200 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-extrabold uppercase text-gray-400">
-                    Toʻlov usuli
+                    {t('cart.step3Title')}
                   </span>
                   <button
                     type="button"
                     onClick={() => goToStep('payment')}
                     className="text-xs font-bold text-brand-green hover:underline"
                   >
-                    Oʻzgartirish
+                    {t('cart.editStepBtn')}
                   </button>
                 </div>
                 <p className="font-bold text-gray-900">
                   {selectedPaymentMethod?.name}
                 </p>
                 {requiresPaymentReceipt && receiptAttachment && (
-                  <p className="text-emerald-700 font-semibold">
-                    Chek biriktirilgan: {receiptAttachment.fileName}
+                  <p className="text-emerald-700 font-semibold truncate">
+                    {t('transfer.uploadSuccessReady')}:{' '}
+                    {receiptAttachment.fileName}
                   </p>
                 )}
               </div>
             </div>
 
-            {/* Items Review */}
             <div className="border border-gray-200 rounded-xl divide-y divide-gray-200 overflow-hidden">
               {detailedCartItems.map(
                 ({ product, localized, quantity, unitPrice, lineTotal }) => (
@@ -1674,7 +1640,6 @@ export const CartCheckoutPage: React.FC = () => {
               )}
             </div>
 
-            {/* Final Totals Breakdown */}
             <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-2">
               <div className="flex justify-between text-gray-700">
                 <span>{t('cart.productsSubtotal')}:</span>
@@ -1717,7 +1682,7 @@ export const CartCheckoutPage: React.FC = () => {
                 leftIcon={<ArrowLeft className="w-4 h-4" />}
                 onClick={() => goToStep('payment')}
               >
-                {stepLabels.backToPaymentBtn}
+                {t('cart.returnToPaymentBtn')}
               </Button>
               <Button
                 type="button"

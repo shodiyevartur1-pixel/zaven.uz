@@ -59,6 +59,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Simplified task-focused header on /cart and /checkout routes
   const isCompactCheckoutRoute =
     location.pathname === '/cart' ||
     location.pathname.startsWith('/cart/') ||
@@ -146,12 +147,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   };
 
   // ============================================================================
-  // COMPACT HEADER FOR CART & CHECKOUT ROUTES
+  // COMPACT TASK-FOCUSED HEADER FOR CART & CHECKOUT ROUTES
   // ============================================================================
   if (isCompactCheckoutRoute) {
     return (
       <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
-        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-2.5">
+        <div className="zaven-page-container h-14 flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
             <Link
               to="/"
@@ -166,8 +167,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
                   {storeSettings.storeName}
                 </span>
                 <span className="text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5 flex items-center gap-1">
-                  <Lock className="w-2.5 h-2.5" />
-                  <span className="truncate max-w-[130px] sm:max-w-none">
+                  <Lock className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate max-w-[120px] sm:max-w-none">
                     {t('header.secureCheckoutBadge')}
                   </span>
                 </span>
@@ -176,7 +177,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
             <Link
               to="/catalog"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#09261C]/80 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 text-xs font-bold transition-colors truncate"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#09261C]/80 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 text-xs font-bold transition-colors truncate"
             >
               <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">{t('cart.backToShop')}</span>
@@ -191,10 +192,10 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             <button
               type="button"
               onClick={cycleLanguageMobile}
-              className="sm:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700 text-[11px] font-extrabold text-[#C89D54]"
+              className="sm:hidden h-8 px-2.5 rounded-lg bg-[#09261C]/80 border border-emerald-700 text-[11px] font-extrabold text-[#C89D54]"
               aria-label="Switch language"
             >
-              {language.toUpperCase()}
+              {COMPACT_LANGS.find((l) => l.code === language)?.label || 'OʻZ'}
             </button>
 
             <button
@@ -225,13 +226,13 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   }
 
   // ============================================================================
-  // MOBILE-FIRST HIGH-DENSITY HEADER FOR STOREFRONT & CATALOG
+  // STANDARD STOREFRONT HEADER (Consistent 16px/20px Mobile Gutters)
   // ============================================================================
   return (
     <header className="sticky top-0 z-40 bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] shadow-sm">
-      {/* Desktop-Only Top Utility Bar (Hidden on mobile so products appear sooner; accessible via MobileDrawer) */}
+      {/* Desktop Top Utility Bar */}
       <div className="hidden md:block bg-[#09261C] text-emerald-50 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-8 flex items-center justify-between gap-3">
+        <div className="zaven-page-container h-8 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <ShieldCheck className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
             <span className="font-medium truncate">{t('top.tagline')}</span>
@@ -254,12 +255,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       </div>
 
-      {/* Main Header Row + Unified Search */}
+      {/* Main Header Row */}
       <div ref={searchContainerRef} className="bg-[#0F3D2E] text-white">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-2.5">
+        <div className="zaven-page-container py-2.5">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Mobile Menu Button & Compact Brand Logo */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* Left: Menu Button + Brand Identity */}
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={onOpenMobileMenu}
@@ -288,7 +289,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               </Link>
             </div>
 
-            {/* Desktop & Tablet Inline Search Bar */}
+            {/* Desktop & Tablet Search Bar */}
             <div className="hidden md:block flex-1 max-w-2xl relative">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
@@ -323,13 +324,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               </form>
             </div>
 
-            {/* Right Actions: Compact Mobile Lang/Theme + Account + Cart */}
+            {/* Right Actions: Mobile Lang/Theme + Account + Cart */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-              {/* Compact Mobile Language & Theme pills (Replaces the tall top support bar) */}
               <button
                 type="button"
                 onClick={cycleLanguageMobile}
-                className="md:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
+                className="md:hidden h-8 px-2.5 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
                 title="Til / Язык / Language"
                 aria-label="Switch language"
               >
@@ -353,7 +353,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
               <Link
                 to="/account"
-                className="flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
+                className="flex items-center gap-2 px-1.5 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
                 title={t('header.account')}
               >
                 <div className="w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
@@ -396,7 +396,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             </div>
           </div>
 
-          {/* Compact Mobile Search Bar (h-9) */}
+          {/* Mobile Single Search Bar */}
           <div className="mt-2 md:hidden relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -431,7 +431,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             </form>
           </div>
 
-          {/* Live Search Suggestions Dropdown (Works on both Desktop and Mobile) */}
+          {/* Live Search Suggestions Dropdown */}
           {isSearchFocused && searchQuery.trim().length >= 1 && (
             <div className="relative max-w-2xl mx-auto">
               <div className="absolute left-0 right-0 mt-1.5 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#2F5246] shadow-xl overflow-hidden z-50 text-gray-900 dark:text-gray-100">
@@ -500,12 +500,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       </div>
 
-      {/* Streamlined Horizontally Scrollable Category Strip (No redundant 'Menu' pill) */}
+      {/* Category Navigation Bar (Contained inside zaven-page-container) */}
       <nav
         aria-label={t('nav.categoriesTitle')}
         className="bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] relative"
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 flex items-center justify-between gap-2">
+        <div className="zaven-page-container py-1.5 flex items-center justify-between gap-2">
           {canScrollLeft && (
             <button
               type="button"
@@ -520,7 +520,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           <div
             ref={categoryScrollRef}
             onScroll={updateScrollIndicators}
-            className="flex-1 flex items-center gap-1.5 overflow-x-auto xl:overflow-visible xl:flex-wrap scrollbar-thin py-0.5 scroll-smooth"
+            className="flex-1 flex items-center gap-1.5 overflow-x-auto xl:overflow-visible xl:flex-wrap scrollbar-thin py-0.5 scroll-smooth min-w-0"
           >
             <Link
               to="/catalog"

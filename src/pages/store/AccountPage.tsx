@@ -261,14 +261,14 @@ export const AccountPage: React.FC = () => {
 
   if (!currentCustomer) {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
-          <div className="lg:col-span-7 p-6 sm:p-8 space-y-6">
+      <div className="zaven-page-container py-6 sm:py-12">
+        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
+          <div className="lg:col-span-7 p-5 sm:p-8 space-y-6">
             <div>
               <Badge variant="gold" size="sm">
                 {t('account.demoBadge')}
               </Badge>
-              <h1 className="text-2xl font-extrabold text-gray-900 mt-2">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 mt-2">
                 {t('account.signInTitle')}
               </h1>
               <p className="text-xs sm:text-sm text-gray-600 mt-1">
@@ -345,9 +345,9 @@ export const AccountPage: React.FC = () => {
             )}
           </div>
 
-          <div className="lg:col-span-5 bg-brand-green text-white p-6 sm:p-8 flex flex-col justify-between space-y-6">
+          <div className="lg:col-span-5 bg-[#0F3D2E] text-white p-5 sm:p-8 flex flex-col justify-between space-y-6">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-brand-gold font-bold text-xs uppercase tracking-wider">
+              <div className="flex items-center gap-2 text-[#C89D54] font-bold text-xs uppercase tracking-wider">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Demo Profiles</span>
               </div>
@@ -359,17 +359,17 @@ export const AccountPage: React.FC = () => {
                     onClick={() =>
                       signInCustomerDemo(demoCust.phone, demoCust.fullName)
                     }
-                    className="w-full text-left p-3 rounded-xl bg-brand-green-dark/80 hover:bg-brand-gold hover:text-brand-green-dark border border-emerald-700/80 transition-colors flex items-center justify-between group"
+                    className="w-full text-left p-3 rounded-xl bg-[#09261C]/80 hover:bg-[#C89D54] hover:text-[#09261C] border border-emerald-700/80 transition-colors flex items-center justify-between group"
                   >
                     <div>
-                      <p className="text-xs font-bold text-white group-hover:text-brand-green-dark">
+                      <p className="text-xs font-bold text-white group-hover:text-[#09261C]">
                         {demoCust.fullName}
                       </p>
-                      <p className="text-[11px] text-emerald-200 group-hover:text-brand-green-dark/80">
+                      <p className="text-[11px] text-emerald-200 group-hover:text-[#09261C]/80">
                         {demoCust.phone}
                       </p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-brand-gold group-hover:text-brand-green-dark shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-[#C89D54] group-hover:text-[#09261C] shrink-0" />
                   </button>
                 ))}
               </div>
@@ -385,17 +385,17 @@ export const AccountPage: React.FC = () => {
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="flex items-start sm:items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-brand-green text-brand-gold flex items-center justify-center font-extrabold text-xl shrink-0">
+    <div className="zaven-page-container py-5 sm:py-8 space-y-6 sm:space-y-8">
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#0F3D2E] text-[#C89D54] flex items-center justify-center font-extrabold text-xl shrink-0">
             {currentCustomer.fullName.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">
+            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">
               {currentCustomer.fullName}
             </h1>
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-gray-600 mt-0.5">
               {currentCustomer.phone}
             </p>
           </div>
@@ -423,13 +423,13 @@ export const AccountPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <aside className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-3 shadow-card space-y-1">
+        <aside className="lg:col-span-3 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#28453B] p-3 shadow-card space-y-1">
           <button
             type="button"
             onClick={() => setActiveTab('orders')}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-colors ${
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-bold transition-colors ${
               activeTab === 'orders'
-                ? 'bg-brand-green text-white'
+                ? 'bg-[#0F3D2E] text-white'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
@@ -437,7 +437,7 @@ export const AccountPage: React.FC = () => {
               <Package className="w-4 h-4" />
               <span>{t('account.myOrders')}</span>
             </div>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold text-brand-green-dark font-extrabold">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] font-extrabold">
               {customerOrders.length}
             </span>
           </button>
@@ -445,9 +445,9 @@ export const AccountPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('addresses')}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-colors ${
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-bold transition-colors ${
               activeTab === 'addresses'
-                ? 'bg-brand-green text-white'
+                ? 'bg-[#0F3D2E] text-white'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
@@ -455,7 +455,7 @@ export const AccountPage: React.FC = () => {
               <MapPin className="w-4 h-4" />
               <span>{t('account.savedAddresses')}</span>
             </div>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-gold text-brand-green-dark font-extrabold">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] font-extrabold">
               {currentCustomer.addresses.length}
             </span>
           </button>
@@ -463,9 +463,9 @@ export const AccountPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-lg text-sm font-bold transition-colors ${
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-bold transition-colors ${
               activeTab === 'profile'
-                ? 'bg-brand-green text-white'
+                ? 'bg-[#0F3D2E] text-white'
                 : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
@@ -485,10 +485,10 @@ export const AccountPage: React.FC = () => {
                   return (
                     <div
                       key={order.id}
-                      className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card"
+                      className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card"
                     >
-                      <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-extrabold text-brand-green">
                             #{order.orderNumber}
                           </span>
@@ -499,7 +499,6 @@ export const AccountPage: React.FC = () => {
                             {statusMeta.label}
                           </Badge>
 
-                          {/* Payment Receipt Verification Status Badge */}
                           {order.paymentVerificationStatus ===
                             'pending_verification' && (
                             <Badge variant="warning" size="md">
@@ -523,8 +522,8 @@ export const AccountPage: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-2">
+                      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {order.items.map((item) => (
                             <img
                               key={item.productId}
@@ -568,7 +567,7 @@ export const AccountPage: React.FC = () => {
           )}
 
           {activeTab === 'addresses' && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-6">
+            <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-extrabold text-gray-900">
                   {t('account.savedAddresses')}
@@ -620,7 +619,7 @@ export const AccountPage: React.FC = () => {
           )}
 
           {activeTab === 'profile' && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card">
+            <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card">
               <form
                 onSubmit={handleSaveProfile}
                 className="max-w-lg space-y-4"

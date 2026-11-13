@@ -291,10 +291,8 @@ export const CatalogPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Requirement 5: Compact, scannable filter controls grouped cleanly
   const renderFilterSidebarContent = () => (
     <div className="space-y-4">
-      {/* 1. Search by Name */}
       <div>
         <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">
           {t('catalog.searchByName')}
@@ -325,7 +323,6 @@ export const CatalogPage: React.FC = () => {
         />
       </div>
 
-      {/* 2. Categories */}
       <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
         <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">
           {t('nav.categoriesTitle')}
@@ -335,7 +332,7 @@ export const CatalogPage: React.FC = () => {
             <button
               type="button"
               onClick={() => handleSelectCategory('')}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs text-left transition-colors ${
                 !selectedCategorySlug
                   ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                   : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
@@ -368,7 +365,7 @@ export const CatalogPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSelectCategory(cat.slug)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs text-left transition-colors ${
                     isSelected
                       ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                       : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
@@ -391,7 +388,6 @@ export const CatalogPage: React.FC = () => {
         </ul>
       </div>
 
-      {/* 3. Price Range (UZS) + Compact Presets */}
       <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
@@ -420,7 +416,7 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => setMinPrice(e.target.value)}
             placeholder={t('catalog.minFrom')}
             aria-label={t('catalog.minFrom')}
-            className="w-full h-9 rounded-lg border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+            className="w-full h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
           />
           <input
             type="number"
@@ -430,7 +426,7 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => setMaxPrice(e.target.value)}
             placeholder={t('catalog.maxTo')}
             aria-label={t('catalog.maxTo')}
-            className="w-full h-9 rounded-lg border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+            className="w-full h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
           />
         </div>
 
@@ -451,7 +447,7 @@ export const CatalogPage: React.FC = () => {
                     setMaxPrice(preset.max);
                   }
                 }}
-                className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors flex items-center justify-between gap-1 ${
+                className={`text-left px-2.5 py-2 rounded-xl text-[11px] font-semibold border transition-colors flex items-center justify-between gap-1 ${
                   isPresetActive
                     ? 'bg-brand-green-light border-brand-green text-brand-green font-bold'
                     : 'bg-surface-page dark:bg-[#162923] border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200'
@@ -465,7 +461,6 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Discounts, Stock Availability & New Arrivals */}
       <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B] space-y-2">
         <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
           {t('catalog.discountAndStock')}
@@ -519,9 +514,9 @@ export const CatalogPage: React.FC = () => {
   );
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+    <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-6">
       {/* Compact Catalog Header */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card space-y-2">
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-5 shadow-card space-y-2">
         <nav
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
@@ -567,8 +562,8 @@ export const CatalogPage: React.FC = () => {
 
       {/* Main Catalog Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        <aside className="hidden xl:block xl:col-span-3 bg-white rounded-2xl border border-gray-200 p-4 shadow-card sticky top-28">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
+        <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-28">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
             <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
               <SlidersHorizontal className="w-4 h-4 text-brand-green" />
               <span>{t('catalog.filtersAndSort')}</span>
@@ -581,7 +576,7 @@ export const CatalogPage: React.FC = () => {
           </div>
           {renderFilterSidebarContent()}
           {activeFilterCount > 0 && (
-            <div className="pt-3 mt-3 border-t border-gray-200">
+            <div className="pt-3 mt-3 border-t border-gray-200 dark:border-[#28453B]">
               <Button
                 variant="outline"
                 size="sm"
@@ -644,7 +639,7 @@ export const CatalogPage: React.FC = () => {
                 ))}
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div className="text-xs text-gray-600">
                   <strong className="text-brand-green">
                     {startIndex + 1}–
@@ -721,7 +716,7 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Requirement 5: Compact Slide-Over Filter Drawer at z-[70] with Sticky Header & Footer */}
+      {/* Mobile Slide-Over Filter Drawer at z-[70] */}
       {isMobileFilterOpen && (
         <div
           className="fixed inset-0 z-[70] xl:hidden flex justify-end"
@@ -762,7 +757,7 @@ export const CatalogPage: React.FC = () => {
             </div>
 
             {/* Sticky Drawer Footer with Safe-Area Clearance */}
-            <div className="p-3.5 pb-6 sm:pb-4 bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
+            <div className="p-4 pb-6 sm:pb-4 bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -778,7 +773,7 @@ export const CatalogPage: React.FC = () => {
                 fullWidth
                 onClick={() => setIsMobileFilterOpen(false)}
               >
-                Koʻrsatish ({filteredProducts.length})
+                {t('catalog.applyFilters')} ({filteredProducts.length})
               </Button>
             </div>
           </div>

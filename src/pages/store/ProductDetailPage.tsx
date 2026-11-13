@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ZoomIn,
   Truck,
-  MapPin,
   AlertCircle,
   CheckCircle2,
   Share2,
@@ -64,7 +63,6 @@ export const ProductDetailPage: React.FC = () => {
     'description' | 'specs' | 'delivery'
   >('description');
 
-  // Tracks whether the user has scrolled past the main purchase action block
   const purchaseActionsRef = useRef<HTMLDivElement>(null);
   const [showStickyMobileBar, setShowStickyMobileBar] =
     useState<boolean>(false);
@@ -85,15 +83,12 @@ export const ProductDetailPage: React.FC = () => {
     }
   }, [product?.id, slug]);
 
-  // Observe the primary purchase buttons container so the sticky bar appears
-  // only when the user scrolls past the main CTA on mobile screens.
   useEffect(() => {
     const targetEl = purchaseActionsRef.current;
     if (!targetEl) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Show sticky bar only when the main purchase block is out of view AND above the viewport
         const isPastMainCta =
           !entry.isIntersecting && entry.boundingClientRect.top < 0;
         setShowStickyMobileBar(isPastMainCta);
@@ -110,7 +105,7 @@ export const ProductDetailPage: React.FC = () => {
 
   if (!product) {
     return (
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="zaven-page-container py-12">
         <EmptyState
           title={t('product.notFoundTitle')}
           description={t('product.notFoundDesc')}
@@ -221,7 +216,7 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-20 md:pb-8 space-y-10">
+    <div className="zaven-page-container py-4 sm:py-8 pb-20 md:pb-8 space-y-8 sm:space-y-10">
       {/* Breadcrumb Navigation & Back Link */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <nav
@@ -259,11 +254,11 @@ export const ProductDetailPage: React.FC = () => {
       </div>
 
       {/* Main Product Section */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-8 shadow-card">
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-8 shadow-card">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10">
-          {/* Left Column: Multi-Image Gallery */}
+          {/* Left Column: Multi-Image Gallery & Thumbnails */}
           <div className="lg:col-span-6 space-y-3">
-            <div className="relative aspect-square rounded-2xl bg-gray-100 border border-gray-200 overflow-hidden group">
+            <div className="relative aspect-square rounded-2xl bg-gray-100 dark:bg-[#1A3028] border border-gray-200 dark:border-[#28453B] overflow-hidden group">
               <img
                 src={currentImage}
                 alt={`${localizedProduct.name} — ${selectedImageIdx + 1}`}
@@ -294,7 +289,7 @@ export const ProductDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsLightboxOpen(true)}
-                className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-white hover:bg-[#0F3D2E] text-gray-800 hover:text-white border border-gray-200 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                className="absolute top-3 right-3 px-3 py-1.5 rounded-lg bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
               >
                 <ZoomIn className="w-4 h-4" />
                 <span className="hidden sm:inline">{t('product.zoom')}</span>
@@ -305,14 +300,16 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white hover:bg-[#0F3D2E] text-gray-800 hover:text-white border border-gray-200 flex items-center justify-center shadow-md transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    aria-label="Previous image"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     type="button"
                     onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white hover:bg-[#0F3D2E] text-gray-800 hover:text-white border border-gray-200 flex items-center justify-center shadow-md transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-[#12211C] hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    aria-label="Next image"
                   >
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -320,6 +317,7 @@ export const ProductDetailPage: React.FC = () => {
               )}
             </div>
 
+            {/* Interactive Thumbnail Gallery */}
             {images.length > 1 && (
               <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-thin pb-1">
                 {images.map((imgUrl, idx) => (
@@ -332,6 +330,7 @@ export const ProductDetailPage: React.FC = () => {
                         ? 'border-brand-green ring-2 ring-brand-gold/50'
                         : 'border-gray-200 opacity-75 hover:opacity-100'
                     }`}
+                    aria-label={`Rasm ${idx + 1}`}
                   >
                     <img
                       src={imgUrl}
@@ -345,7 +344,7 @@ export const ProductDetailPage: React.FC = () => {
           </div>
 
           {/* Right Column: Product Details */}
-          <div className="lg:col-span-6 flex flex-col justify-between space-y-5">
+          <div className="lg:col-span-6 flex flex-col justify-between space-y-5 min-w-0">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -372,10 +371,10 @@ export const ProductDetailPage: React.FC = () => {
               </div>
 
               <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-gray-900 leading-snug">
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-gray-900 leading-snug break-words">
                   {localizedProduct.name}
                 </h1>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1.5 leading-relaxed">
+                <p className="text-xs sm:text-sm text-gray-600 mt-1.5 leading-relaxed break-words">
                   {localizedProduct.shortDescription}
                 </p>
               </div>
@@ -449,14 +448,14 @@ export const ProductDetailPage: React.FC = () => {
                         className="flex items-start gap-2 text-xs text-gray-700 bg-white p-2.5 rounded-lg border border-gray-200/80"
                       >
                         <Check className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                        <span>{feature}</span>
+                        <span className="break-words">{feature}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
 
-              {/* Quantity Selector & Main Add-to-Cart Block (Observed for Mobile Sticky Bar) */}
+              {/* Quantity Selector & Main Add-to-Cart Block */}
               <div ref={purchaseActionsRef} className="pt-1 space-y-2.5">
                 {!isOutOfStock ? (
                   <>
@@ -550,7 +549,7 @@ export const ProductDetailPage: React.FC = () => {
       </div>
 
       {/* Detailed Description, Technical Specifications & Delivery Tabs */}
-      <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
+      <section className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
         <div className="border-b border-gray-200 bg-gray-50 px-4 sm:px-8 flex items-center gap-2 overflow-x-auto scrollbar-thin">
           <button
             type="button"
@@ -594,7 +593,7 @@ export const ProductDetailPage: React.FC = () => {
         <div className="p-5 sm:p-8">
           {activeTab === 'description' && (
             <div className="max-w-3xl space-y-5">
-              <p className="text-sm text-gray-700 leading-relaxed">
+              <p className="text-sm text-gray-700 leading-relaxed break-words">
                 {localizedProduct.description}
               </p>
 
@@ -608,7 +607,7 @@ export const ProductDetailPage: React.FC = () => {
                       <div className="w-5 h-5 rounded-full bg-brand-green-light text-brand-green flex items-center justify-center shrink-0 mt-0.5">
                         <Check className="w-3.5 h-3.5" />
                       </div>
-                      <span>{feat}</span>
+                      <span className="break-words">{feat}</span>
                     </li>
                   ))}
                 </ul>
@@ -707,14 +706,14 @@ export const ProductDetailPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Related Products Section (2-Column Mobile Grid) */}
+      {/* Related Products Section */}
       {fallbackRelated.length > 0 && (
         <section className="space-y-3.5">
           <h2 className="text-base sm:text-xl font-extrabold text-gray-900">
             {t('product.relatedTitle')}
           </h2>
 
-          <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+          <div className="zaven-product-grid zaven-product-grid-4">
             {fallbackRelated.map((relProduct) => (
               <ProductCard key={relProduct.id} product={relProduct} />
             ))}
@@ -722,14 +721,14 @@ export const ProductDetailPage: React.FC = () => {
         </section>
       )}
 
-      {/* Recently Viewed Products Section (2-Column Mobile Grid) */}
+      {/* Recently Viewed Products Section */}
       {recentlyViewedProducts.length > 0 && (
         <section className="space-y-3.5 pt-4 border-t border-gray-200">
           <h2 className="text-base sm:text-xl font-extrabold text-gray-900">
             {t('product.recentlyViewedTitle')}
           </h2>
 
-          <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+          <div className="zaven-product-grid zaven-product-grid-4">
             {recentlyViewedProducts.map((viewedProduct) => (
               <ProductCard key={viewedProduct.id} product={viewedProduct} />
             ))}
@@ -737,18 +736,14 @@ export const ProductDetailPage: React.FC = () => {
         </section>
       )}
 
-      {/* ===================================================================== */}
-      {/* COMPACT STICKY BOTTOM PURCHASE BAR ON MOBILE (When past main CTA)     */}
-      {/* Anchored at `bottom-16` right above the 64px mobile bottom nav bar    */}
-      {/* ===================================================================== */}
+      {/* Sticky Bottom Purchase Bar on Mobile */}
       {showStickyMobileBar && (
         <div
-          className="md:hidden fixed bottom-16 left-0 right-0 z-30 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] px-3 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
+          className="md:hidden fixed bottom-16 left-0 right-0 z-30 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] px-4 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
           role="region"
           aria-label={localizedProduct.name}
         >
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
-            {/* Left: Thumbnail, Clamped Title & Current Price */}
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <img
                 src={images[0]}
@@ -763,16 +758,10 @@ export const ProductDetailPage: React.FC = () => {
                   <span className="text-sm font-extrabold text-brand-green">
                     {formatUZS(effectivePrice)}
                   </span>
-                  {product.salePrice && (
-                    <span className="text-[10px] text-gray-400 line-through truncate">
-                      {formatUZS(product.price)}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* Right: Add to Cart Button or Quantity Stepper */}
             <div className="shrink-0">
               {isOutOfStock ? (
                 <span className="inline-flex items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-[#162621] text-gray-400 text-xs font-bold">

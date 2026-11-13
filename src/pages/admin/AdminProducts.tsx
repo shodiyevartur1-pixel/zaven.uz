@@ -20,6 +20,7 @@ import {
   Globe,
   Loader2,
   Star,
+  ListChecks,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -102,6 +103,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   const [formProduct, setFormProduct] = useState<Product | null>(null);
   const [activeTransLang, setActiveTransLang] = useState<Language>('uz');
   const [newImageUrl, setNewImageUrl] = useState<string>('');
+  const [newFeatureText, setNewFeatureText] = useState<string>('');
   const [isUploadingImages, setIsUploadingImages] = useState<boolean>(false);
   const [imageUploadError, setImageUploadError] = useState<string>('');
   const [productFormError, setProductFormError] = useState<string>('');
@@ -187,6 +189,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     setActiveTransLang('uz');
     setFormProduct(createBlankProduct());
     setNewImageUrl('');
+    setNewFeatureText('');
     setIsProductModalOpen(true);
   };
 
@@ -231,6 +234,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       },
     });
     setNewImageUrl('');
+    setNewFeatureText('');
     setIsProductModalOpen(true);
   };
 
@@ -279,7 +283,6 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     setNewImageUrl('');
   };
 
-  // Requirement 4: Multi-file upload with validation, Supabase Storage upload (never large base64 in DB), and progress state
   const handleMultiFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -292,14 +295,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     for (const file of files) {
       if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
         setImageUploadError(
-          `Notoʻgʻri fayl formati (${file.name}). Faqat JPG, PNG yoki WEBP rasm yuklang.`
+          `Notoʻgʻri fayl formati (${file.name}). Faqat JPG, PNG yoki WEBP rasm yuklash mumkin.`
         );
         e.target.value = '';
         return;
       }
       if (file.size > MAX_IMAGE_SIZE_BYTES) {
         setImageUploadError(
-          `${file.name} hajmi 4 MB dan katta. Iltimos, kichikroq rasm tanlang.`
+          `${file.name} hajmi 4 MB dan oshib ketdi. Iltimos, 4 MB dan kichik rasm tanlang.`
         );
         e.target.value = '';
         return;
@@ -332,7 +335,6 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
           }
         }
 
-        // Local dev preview fallback using lightweight object URL
         const localObjectUrl = URL.createObjectURL(file);
         uploadedUrls.push(localObjectUrl);
       }
@@ -348,7 +350,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         );
         addToast({
           type: 'success',
-          title: `${uploadedUrls.length} ta rasm qoʻshildi`,
+          title: `${uploadedUrls.length} ta rasm muvaffaqiyatli qoʻshildi`,
         });
       }
     } catch (err) {
@@ -384,13 +386,30 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     if (formProduct.images.length <= 1) {
       addToast({
         type: 'warning',
-        title: 'Kamida 1 ta asosiy rasm boʻlishi zarur',
+        title: 'Kamida 1 ta asosiy muqova rasmi boʻlishi shart',
       });
       return;
     }
     setFormProduct({
       ...formProduct,
       images: formProduct.images.filter((_, idx) => idx !== index),
+    });
+  };
+
+  const handleAddFeature = () => {
+    if (!formProduct || !newFeatureText.trim()) return;
+    setFormProduct({
+      ...formProduct,
+      features: [...formProduct.features, newFeatureText.trim()],
+    });
+    setNewFeatureText('');
+  };
+
+  const handleRemoveFeature = (idx: number) => {
+    if (!formProduct) return;
+    setFormProduct({
+      ...formProduct,
+      features: formProduct.features.filter((_, i) => i !== idx),
     });
   };
 
@@ -1142,14 +1161,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL 1: ADD / EDIT PRODUCT WITH MULTI-IMAGE GALLERY & ORDERING       */}
+      {/* MODAL 1: ADD / EDIT PRODUCT (5 Clearly Headed Sections)               */}
       {/* ===================================================================== */}
       <Modal
         isOpen={isProductModalOpen}
         onClose={() => setIsProductModalOpen(false)}
         title={
           isCreatingNewProduct
-            ? 'Yangi mahsulot qoʻshish (Koʻp rasmli galereya va 3 til)'
+            ? 'Yangi mahsulot qoʻshish'
             : `Mahsulotni tahrirlash: ${formProduct?.sku}`
         }
         maxWidth="2xl"
@@ -1169,7 +1188,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               size="sm"
               disabled={isUploadingImages}
             >
-              Saqlash
+              Mahsulotni saqlash
             </Button>
           </>
         }
@@ -1186,20 +1205,20 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               </div>
             )}
 
-            {/* Multi-Language Content Switcher Tabs */}
+            {/* SECTION 1: 3-LANGUAGE NAME & DESCRIPTION */}
             <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-3">
-                <div className="flex items-center gap-2 font-bold text-gray-900">
+                <div className="flex items-center gap-2 font-extrabold text-gray-900">
                   <Globe className="w-4 h-4 text-brand-green" />
-                  <span>Mahsulot nomi va tavsifi tarjimalari:</span>
+                  <span>1. Mahsulot nomi va tavsifi (UZ / RU / EN)</span>
                 </div>
 
                 <div className="inline-flex rounded-lg bg-white p-1 border border-gray-200">
                   {(
                     [
-                      { code: 'uz', label: 'Oʻzbekcha (Asosiy)' },
-                      { code: 'ru', label: 'Русский (RU)' },
-                      { code: 'en', label: 'English (EN)' },
+                      { code: 'uz', label: 'Oʻzbekcha *' },
+                      { code: 'ru', label: 'Русский' },
+                      { code: 'en', label: 'English' },
                     ] as { code: Language; label: string }[]
                   ).map((langTab) => (
                     <button
@@ -1221,7 +1240,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               {activeTransLang === 'uz' && (
                 <div className="space-y-3">
                   <Input
-                    label="Mahsulot nomi (Oʻzbek lotin — Majburiy asosiy til)"
+                    label="Mahsulot nomi (Oʻzbek lotin — Majburiy)"
                     required
                     value={formProduct.name}
                     onChange={(e) =>
@@ -1237,7 +1256,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   />
 
                   <Input
-                    label="Qisqacha tavsif (Tezkor koʻrish oynasida chiqadi)"
+                    label="Qisqacha xulosa (Tezkor koʻrish oynasida chiqadi)"
                     required
                     value={formProduct.shortDescription}
                     onChange={(e) =>
@@ -1249,7 +1268,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   />
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1.5">
+                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">
                       Batafsil tavsif (Mahsulot sahifasida chiqadi)
                     </label>
                     <textarea
@@ -1261,7 +1280,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           description: e.target.value,
                         })
                       }
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1303,7 +1322,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                     }
                   />
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1.5">
+                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">
                       Подробное описание (Русский)
                     </label>
                     <textarea
@@ -1321,7 +1340,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           },
                         })
                       }
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1347,7 +1366,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                     placeholder={formProduct.name}
                   />
                   <Input
-                    label="Short Description (English)"
+                    label="Short Summary (English)"
                     value={formProduct.translations?.en?.shortDescription || ''}
                     onChange={(e) =>
                       setFormProduct({
@@ -1363,7 +1382,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                     }
                   />
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1.5">
+                    <label className="block text-sm font-semibold text-gray-800 mb-1.5">
                       Full Description (English)
                     </label>
                     <textarea
@@ -1381,134 +1400,178 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           },
                         })
                       }
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-brand-green focus:outline-none"
                     />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* SKU, Category & Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Input
-                label="Ichki kod (SKU)"
-                required
-                value={formProduct.sku}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    sku: e.target.value.toUpperCase(),
-                  })
-                }
-              />
+            {/* SECTION 2: CATEGORY, SKU & STATUS */}
+            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-3.5">
+              <h4 className="font-extrabold text-gray-900">
+                2. Toifa, SKU kodi va koʻrinish holati
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Input
+                  label="Ichki kod (SKU)"
+                  required
+                  value={formProduct.sku}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      sku: e.target.value.toUpperCase(),
+                    })
+                  }
+                />
 
-              <Select
-                label="Toifa"
-                required
-                value={formProduct.categoryId}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    categoryId: e.target.value,
-                  })
-                }
-                options={categories.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                }))}
-              />
+                <Select
+                  label="Toifa"
+                  required
+                  value={formProduct.categoryId}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      categoryId: e.target.value,
+                    })
+                  }
+                  options={categories.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                  }))}
+                />
 
-              <Select
-                label="Holati"
-                required
-                value={formProduct.status}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    status: e.target.value as ProductStatus,
-                  })
-                }
-                options={[
-                  { value: 'active', label: 'Faol' },
-                  { value: 'out_of_stock', label: 'Vaqtincha tugagan' },
-                  { value: 'hidden', label: 'Yashirilgan' },
-                  { value: 'archived', label: 'Arxivlangan' },
-                ]}
-              />
+                <Select
+                  label="Sotuv holati"
+                  required
+                  value={formProduct.status}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      status: e.target.value as ProductStatus,
+                    })
+                  }
+                  options={[
+                    { value: 'active', label: 'Faol (Sotuvda)' },
+                    { value: 'out_of_stock', label: 'Vaqtincha tugagan' },
+                    { value: 'hidden', label: 'Yashirilgan' },
+                    { value: 'archived', label: 'Arxivlangan' },
+                  ]}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 pt-1">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formProduct.isNew)}
+                    onChange={(e) =>
+                      setFormProduct({
+                        ...formProduct,
+                        isNew: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded text-brand-green"
+                  />
+                  <span>«Yangi» (New) belgisi</span>
+                </label>
+
+                <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-gray-800">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formProduct.isPopular)}
+                    onChange={(e) =>
+                      setFormProduct({
+                        ...formProduct,
+                        isPopular: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded text-brand-green"
+                  />
+                  <span>«Ommabop» (Popular) boʻlimida koʻrsatish</span>
+                </label>
+              </div>
             </div>
 
-            {/* Pricing & Stock */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 rounded-xl bg-surface-page border border-gray-200">
-              <Input
-                label="Narx (soʻm)"
-                type="number"
-                required
-                value={formProduct.price}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    price: Number(e.target.value),
-                  })
-                }
-              />
-              <Input
-                label="Chegirma narx"
-                type="number"
-                value={formProduct.salePrice ?? ''}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    salePrice: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              />
-              <Input
-                label="Tannarx"
-                type="number"
-                required
-                value={formProduct.costPrice}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    costPrice: Number(e.target.value),
-                  })
-                }
-              />
-              <Input
-                label="Zaxira (dona)"
-                type="number"
-                required
-                value={formProduct.stock}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    stock: Math.max(0, Number(e.target.value)),
-                  })
-                }
-              />
-              <Input
-                label="Min chegara"
-                type="number"
-                required
-                value={formProduct.lowStockThreshold}
-                onChange={(e) =>
-                  setFormProduct({
-                    ...formProduct,
-                    lowStockThreshold: Math.max(1, Number(e.target.value)),
-                  })
-                }
-              />
+            {/* SECTION 3: PRICING & STOCK */}
+            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-3.5">
+              <h4 className="font-extrabold text-gray-900">
+                3. Narxlar (soʻm) va ombor qoldigʻi
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <Input
+                  label="Asosiy narx *"
+                  type="number"
+                  required
+                  value={formProduct.price}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      price: Number(e.target.value),
+                    })
+                  }
+                />
+                <Input
+                  label="Chegirma narx"
+                  type="number"
+                  value={formProduct.salePrice ?? ''}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      salePrice: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                  placeholder="Ixtiyoriy"
+                />
+                <Input
+                  label="Tannarx *"
+                  type="number"
+                  required
+                  value={formProduct.costPrice}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      costPrice: Number(e.target.value),
+                    })
+                  }
+                />
+                <Input
+                  label="Zaxira (dona) *"
+                  type="number"
+                  required
+                  value={formProduct.stock}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      stock: Math.max(0, Number(e.target.value)),
+                    })
+                  }
+                />
+                <Input
+                  label="Kam qoldi chegarasi"
+                  type="number"
+                  required
+                  value={formProduct.lowStockThreshold}
+                  onChange={(e) =>
+                    setFormProduct({
+                      ...formProduct,
+                      lowStockThreshold: Math.max(1, Number(e.target.value)),
+                    })
+                  }
+                />
+              </div>
             </div>
 
-            {/* Requirement 4: Multi-Image Upload, Primary Cover Badge, Reordering & Removal */}
-            <div className="space-y-3.5 pt-3 border-t border-gray-200">
+            {/* SECTION 4: MULTI-IMAGE GALLERY & ORDERING */}
+            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-sm font-extrabold text-gray-900">
-                    Mahsulot rasmlari galereyasi ({formProduct.images.length} ta)
+                  <h4 className="font-extrabold text-gray-900">
+                    4. Mahsulot rasmlari galereyasi ({formProduct.images.length}{' '}
+                    ta rasm)
                   </h4>
                   <p className="text-[11px] text-gray-500">
-                    1-rasm katalog va bosh sahifada asosiy muqova sifatida koʻrinadi. Format: JPG, PNG, WEBP (≤ 4 MB).
+                    1-rasm katalog va bosh sahifada asosiy muqova boʻladi. Format: JPG, PNG, WEBP (maksimal 4 MB).
                   </p>
                 </div>
 
@@ -1521,7 +1584,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   <span>
                     {isUploadingImages
                       ? 'Yuklanmoqda...'
-                      : 'Bir nechta rasm yuklash'}
+                      : 'Kompyuter yoki telefondan rasm yuklash'}
                   </span>
                   <input
                     type="file"
@@ -1634,6 +1697,50 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   );
                 })}
               </div>
+            </div>
+
+            {/* SECTION 5: KEY FEATURES */}
+            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-3">
+              <div className="flex items-center gap-2 font-extrabold text-gray-900">
+                <ListChecks className="w-4 h-4 text-brand-green" />
+                <span>5. Asosiy afzalliklari ({formProduct.features.length})</span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newFeatureText}
+                  onChange={(e) => setNewFeatureText(e.target.value)}
+                  placeholder="Yangi afzallik qoʻshish..."
+                  className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleAddFeature}
+                >
+                  Qoʻshish
+                </Button>
+              </div>
+
+              <ul className="space-y-1.5">
+                {formProduct.features.map((feat, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 text-xs"
+                  >
+                    <span className="text-gray-800">{feat}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFeature(idx)}
+                      className="text-red-600 hover:underline font-bold"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           </form>
         )}
