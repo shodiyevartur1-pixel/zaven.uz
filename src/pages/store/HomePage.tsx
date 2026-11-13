@@ -114,13 +114,13 @@ export const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 sm:space-y-12 py-3 sm:py-6">
-      {/* 1. Compact, Marketplace-Style Hero Strip (Shows products immediately below on mobile) */}
+    <div className="w-full max-w-full overflow-x-clip space-y-7 sm:space-y-12 py-3 sm:py-6">
+      {/* 1. Compact, Zero-Overflow Hero Banner */}
       {activeBanner && localizedBanner && (
         <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="bg-[#0F3D2E] rounded-2xl overflow-hidden border border-[#09261C] shadow-card">
             <div className="grid grid-cols-1 lg:grid-cols-12 items-center">
-              <div className="p-4 sm:p-7 lg:p-8 lg:col-span-8 space-y-3">
+              <div className="min-w-0 p-4 sm:p-7 lg:p-8 lg:col-span-8 space-y-2.5 sm:space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="gold" size="sm">
                     {localizedBanner.badgeText}
@@ -130,15 +130,15 @@ export const HomePage: React.FC = () => {
                   </span>
                 </div>
 
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug">
+                <h1 className="text-base sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug break-words">
                   {localizedBanner.headline}
                 </h1>
 
-                <p className="text-xs sm:text-sm text-emerald-100/90 line-clamp-2 max-w-2xl">
+                <p className="text-xs sm:text-sm text-emerald-100/90 line-clamp-2 max-w-2xl break-words">
                   {localizedBanner.subheadline}
                 </p>
 
-                <div className="pt-1 flex flex-wrap items-center gap-2.5">
+                <div className="pt-1 flex flex-wrap items-center gap-2">
                   <Link to={activeBanner.ctaLink || '/catalog'}>
                     <Button
                       variant="gold"
@@ -153,23 +153,24 @@ export const HomePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleCopyCoupon(activeCoupon.code)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#09261C]/90 hover:bg-[#09261C] border border-[#C89D54]/50 text-xs font-bold text-[#E5C992] transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#09261C]/90 hover:bg-[#09261C] border border-[#C89D54]/50 text-xs font-bold text-[#E5C992] transition-colors max-w-full"
                       title={activeCoupon.description}
                     >
                       <Tag className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
-                      <span>Promokod: {activeCoupon.code}</span>
+                      <span className="truncate">
+                        Promokod: {activeCoupon.code}
+                      </span>
                       {copiedCode === activeCoupon.code ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-[#C89D54]" />
+                        <Copy className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
                       )}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Hero Image Shown on Tablet/Desktop so Mobile Shoppers Reach Products Immediately */}
-              <div className="hidden lg:block lg:col-span-4 h-full max-h-[250px] bg-[#09261C] relative overflow-hidden">
+              <div className="hidden lg:block lg:col-span-4 h-full max-h-[240px] bg-[#09261C] relative overflow-hidden">
                 <img
                   src={activeBanner.image}
                   alt={localizedBanner.headline}
@@ -181,9 +182,9 @@ export const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* 2. Popular Products (Ommabop mahsulotlar) — Immediately Visible in 2-Column Mobile Grid */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3.5">
-        <div className="flex items-center justify-between gap-2">
+      {/* 2. Popular Products (2-Column Mobile Grid via .zaven-product-grid) */}
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <Flame className="w-5 h-5 text-[#C89D54] shrink-0" />
             <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
@@ -199,16 +200,16 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+        <div className="zaven-product-grid zaven-product-grid-4">
           {popularProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>
 
-      {/* 3. Compact Products by Category Strip (Horizontal Scroll on Mobile, 5-Column Grid on Desktop) */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3.5">
-        <div className="flex items-center justify-between gap-2">
+      {/* 3. Categories Strip (Contained Horizontal Scroll on Mobile, 5-Col Grid on Desktop) */}
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
             {t('home.shopByCategory')}
           </h2>
@@ -221,7 +222,7 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="flex lg:grid lg:grid-cols-5 gap-2.5 sm:gap-4 overflow-x-auto lg:overflow-visible scrollbar-thin pb-1">
+        <div className="flex lg:grid lg:grid-cols-5 gap-2.5 sm:gap-4 overflow-x-auto lg:overflow-visible scrollbar-thin pb-1 -mx-3 px-3 sm:mx-0 sm:px-0">
           {activeCategories.map((category) => {
             const locCat = getCategoryText(category);
             const count = visibleProducts.filter(
@@ -231,9 +232,9 @@ export const HomePage: React.FC = () => {
               <Link
                 key={category.id}
                 to={`/catalog?category=${category.slug}`}
-                className="w-40 sm:w-48 lg:w-auto shrink-0 group bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-brand-green transition-all flex items-center lg:flex-col p-2.5 lg:p-3 gap-2.5"
+                className="w-40 sm:w-48 lg:w-auto shrink-0 group bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-brand-green transition-all flex items-center lg:flex-col p-2.5 lg:p-3 gap-2.5 min-w-0"
               >
-                <div className="w-12 h-12 lg:w-full lg:h-28 rounded-lg bg-gray-100 overflow-hidden shrink-0 relative">
+                <div className="w-11 h-11 lg:w-full lg:h-28 rounded-lg bg-gray-100 overflow-hidden shrink-0 relative">
                   <img
                     src={category.image}
                     alt={locCat.name}
@@ -245,7 +246,7 @@ export const HomePage: React.FC = () => {
                   </div>
                 </div>
                 <div className="min-w-0 flex-1 lg:w-full">
-                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 group-hover:text-brand-green line-clamp-2 leading-tight">
+                  <h3 className="text-xs sm:text-sm font-bold text-gray-900 group-hover:text-brand-green line-clamp-2 leading-tight break-words">
                     {locCat.name}
                   </h3>
                   <p className="text-[10px] sm:text-xs text-brand-green font-semibold mt-0.5">
@@ -258,9 +259,9 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 4. New Arrivals Section (Yangi kelganlar) */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3.5">
-        <div className="flex items-center justify-between gap-2">
+      {/* 4. New Arrivals Section */}
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <Sparkles className="w-5 h-5 text-[#C89D54] shrink-0" />
             <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
@@ -276,16 +277,16 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+        <div className="zaven-product-grid zaven-product-grid-4">
           {newArrivals.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>
 
-      {/* 5. Discounted Products Section (Maxsus chegirmalar) */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3.5">
-        <div className="flex items-center justify-between gap-2">
+      {/* 5. Discounted Products Section */}
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-3">
+        <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <Tag className="w-5 h-5 text-[#C89D54] shrink-0" />
             <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
@@ -301,7 +302,7 @@ export const HomePage: React.FC = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-5">
+        <div className="zaven-product-grid zaven-product-grid-4">
           {specialOffers.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
@@ -312,17 +313,17 @@ export const HomePage: React.FC = () => {
       <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-7 shadow-card space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-4">
-            <div>
+            <div className="min-w-0">
               <Badge variant="green" size="sm">
                 {t('home.transparentRulesBadge')}
               </Badge>
-              <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 mt-1.5">
+              <h2 className="text-base sm:text-xl font-extrabold text-gray-900 mt-1.5 break-words">
                 {t('home.trustSectionTitle')}
               </h2>
             </div>
             <Badge variant="gold" size="md">
-              <Clock className="w-3.5 h-3.5 mr-1" />
-              {t('delivery.estimateValue')}
+              <Clock className="w-3.5 h-3.5 mr-1 shrink-0" />
+              <span>{t('delivery.estimateValue')}</span>
             </Badge>
           </div>
 
@@ -331,16 +332,16 @@ export const HomePage: React.FC = () => {
               {enabledTrustItems.map((item) => (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-xl bg-surface-page border border-gray-200/80 flex items-start gap-3"
+                  className="p-3.5 rounded-xl bg-surface-page border border-gray-200/80 flex items-start gap-3 min-w-0"
                 >
                   <div className="w-9 h-9 rounded-lg bg-brand-green-light flex items-center justify-center shrink-0">
                     {renderTrustIcon(item.iconName)}
                   </div>
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-900">
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-gray-900 break-words">
                       {item.title}
                     </h3>
-                    <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-gray-600 mt-0.5 leading-relaxed break-words">
                       {item.description}
                     </p>
                   </div>
@@ -350,22 +351,21 @@ export const HomePage: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Delivery Rules Box */}
-            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-brand-green" />
-                  <h3 className="text-sm font-bold text-gray-900">
-                    {t('home.regionalTariffs')}
-                  </h3>
-                </div>
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3 min-w-0">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-brand-green shrink-0" />
+                <h3 className="text-sm font-bold text-gray-900">
+                  {t('home.regionalTariffs')}
+                </h3>
               </div>
 
               {storeSettings.delivery.isDeliveryEnabled && (
                 <>
                   <p className="text-xs text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-200 flex items-start gap-2">
                     <Info className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                    <span>{storeSettings.delivery.generalDeliveryNote}</span>
+                    <span className="break-words">
+                      {storeSettings.delivery.generalDeliveryNote}
+                    </span>
                   </p>
                   <div className="divide-y divide-gray-100 text-xs">
                     {enabledRegions.map((reg) => (
@@ -373,17 +373,13 @@ export const HomePage: React.FC = () => {
                         key={reg.id}
                         className="py-2 flex items-start justify-between gap-3"
                       >
-                        <div>
-                          <p className="font-bold text-gray-900 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-brand-gold-dark shrink-0" />
-                            <span>{reg.regionName}</span>
-                          </p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-extrabold text-brand-green">
-                            {formatUZS(reg.fee)}
-                          </span>
-                        </div>
+                        <p className="font-bold text-gray-900 flex items-center gap-1 min-w-0">
+                          <MapPin className="w-3 h-3 text-brand-gold-dark shrink-0" />
+                          <span className="break-words">{reg.regionName}</span>
+                        </p>
+                        <span className="font-extrabold text-brand-green shrink-0">
+                          {formatUZS(reg.fee)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -391,11 +387,10 @@ export const HomePage: React.FC = () => {
               )}
             </div>
 
-            {/* Payment Options Box */}
-            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3 min-w-0">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-brand-green" />
+                  <CreditCard className="w-4 h-4 text-brand-green shrink-0" />
                   <h3 className="text-sm font-bold text-gray-900">
                     {t('home.acceptedPayments')}
                   </h3>
@@ -409,12 +404,12 @@ export const HomePage: React.FC = () => {
                 {enabledPayments.map((pm) => (
                   <div
                     key={pm.id}
-                    className="p-2.5 rounded-lg border border-gray-200 bg-surface-page"
+                    className="p-2.5 rounded-lg border border-gray-200 bg-surface-page min-w-0"
                   >
-                    <span className="text-xs font-bold text-gray-900 block">
+                    <span className="text-xs font-bold text-gray-900 block break-words">
                       {pm.name}
                     </span>
-                    <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2">
+                    <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2 break-words">
                       {pm.description}
                     </p>
                   </div>
@@ -425,18 +420,18 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 7. Compact Instagram Community Banner */}
+      {/* 7. Compact Instagram Banner */}
       <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="bg-[#09261C] rounded-2xl p-5 sm:p-6 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
+        <div className="bg-[#09261C] rounded-2xl p-4 sm:p-6 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
             <div className="w-11 h-11 rounded-xl bg-[#C89D54] text-[#09261C] flex items-center justify-center shrink-0 shadow-sm">
               <Instagram className="w-6 h-6" />
             </div>
-            <div>
-              <h3 className="text-sm sm:text-base font-extrabold text-white">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-extrabold text-white break-words">
                 {t('home.instagramTitle')}
               </h3>
-              <p className="text-xs text-emerald-100 mt-0.5">
+              <p className="text-xs text-emerald-100 mt-0.5 break-words">
                 {t('home.instagramDesc')}{' '}
                 <strong className="text-[#C89D54]">
                   {storeSettings.instagramHandle}

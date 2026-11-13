@@ -42,7 +42,10 @@ const RouteEffectsManager: React.FC = () => {
 
     if (location.pathname === '/catalog') {
       pageTitle = `${t('catalog.titleAll')} — ${baseName}`;
-    } else if (location.pathname === '/cart') {
+    } else if (
+      location.pathname === '/cart' ||
+      location.pathname.startsWith('/checkout')
+    ) {
       pageTitle = `${t('cart.title')} — ${baseName}`;
     } else if (location.pathname === '/account') {
       pageTitle = `${t('header.account')} — ${baseName}`;
@@ -126,7 +129,7 @@ export function App() {
                   <StoreLayout>
                     <CatalogPage />
                   </StoreLayout>
-                }
+                  }
               />
               <Route
                 path="/product/:slug"
@@ -138,6 +141,14 @@ export function App() {
               />
               <Route
                 path="/cart"
+                element={
+                  <StoreLayout>
+                    <CartCheckoutPage />
+                  </StoreLayout>
+                }
+              />
+              <Route
+                path="/checkout"
                 element={
                   <StoreLayout>
                     <CartCheckoutPage />

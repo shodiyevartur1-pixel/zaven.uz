@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   SlidersHorizontal,
   X,
@@ -6,6 +6,8 @@ import {
   Sparkles,
   CheckCircle2,
   ArrowUpDown,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { Category } from '../../types';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -65,6 +67,8 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   onOpenMobileFilters,
 }) => {
   const { t, getCategoryText } = useThemeLanguage();
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedCategory = categories.find(
     (c) => c.slug === selectedCategorySlug || c.id === selectedCategorySlug
@@ -75,21 +79,53 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
 
   const hasPriceFilter = Boolean(minPrice.trim() || maxPrice.trim());
 
+  const sortOptions: { value: SortOption; label: string }[] = [
+    { value: 'popular', label: t('catalog.sortPopular') },
+    { value: 'newest', label: t('catalog.sortNewest') },
+    { value: 'price_asc', label: t('catalog.sortPriceAsc') },
+    { value: 'price_desc', label: t('catalog.sortPriceDesc') },
+    { value: 'discount', label: t('catalog.sortDiscount') },
+  ];
+
+  const activeSortLabel =
+    sortOptions.find((o) => o.value === sortBy)?.label ||
+    t('catalog.sortPopular');
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        sortMenuRef.current &&
+        !sortMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsSortMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSortMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card space-y-3.5">
-      {/* Top Row: Filter Drawer Trigger (<xl), Quick Toggle Pills & Sort Dropdown */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card space-y-3">
+      {/* Top Row: Filter Drawer Trigger (<xl), Quick Toggle Pills & Custom Themed Sort Dropdown */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-thin pb-0.5">
           <Button
             variant="secondary"
             size="sm"
             onClick={onOpenMobileFilters}
-            leftIcon={<SlidersHorizontal className="w-4 h-4 text-brand-green" />}
+            leftIcon={<SlidersHorizontal className="w-3.5 h-3.5 text-brand-green" />}
             className="xl:hidden shrink-0"
           >
             {t('catalog.filtersAndPrice')}
             {activeFilterCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-brand-green text-white text-[11px] font-bold leading-none">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-[#0F3D2E] text-white text-[10px] font-extrabold leading-none">
                 {activeFilterCount}
               </span>
             )}
@@ -99,13 +135,13 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleDiscounted}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
               onlyDiscounted
-                ? 'bg-brand-gold-light text-brand-gold-dark border-brand-gold font-bold shadow-sm'
-                : 'bg-surface-page text-gray-700 border-gray-200 hover:border-brand-gold'
+                ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
+                : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-gold'
             }`}
           >
-            <Tag className="w-3.5 h-3.5 text-brand-gold-dark" />
+            <Tag className="w-3.5 h-3.5 shrink-0" />
             <span>{t('nav.discounts')}</span>
           </button>
 
@@ -113,13 +149,13 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleNew}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
               onlyNew
-                ? 'bg-brand-green text-white border-brand-green shadow-sm'
-                : 'bg-surface-page text-gray-700 border-gray-200 hover:border-brand-green'
+                ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
+                : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-green'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-brand-gold" />
+            <Sparkles className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
             <span>{t('nav.newArrivals')}</span>
           </button>
 
@@ -127,134 +163,124 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleInStock}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
               onlyInStock
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold shadow-sm'
-                : 'bg-surface-page text-gray-700 border-gray-200 hover:border-emerald-300'
+                ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
+                : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-emerald-400'
             }`}
           >
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span>{t('product.inStock')}</span>
           </button>
         </div>
 
-        {/* Right Side: Total Count & Sort Select */}
-        <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-gray-100">
-          <span className="text-xs font-medium text-gray-500">
+        {/* Right Side: Total Count & Custom Accessible Sort Menu */}
+        <div className="flex items-center justify-between md:justify-end gap-2.5 shrink-0 border-t md:border-t-0 pt-2.5 md:pt-0 border-gray-100 dark:border-[#28453B]">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
             {t('catalog.foundCount')}{' '}
-            <strong className="text-gray-900 font-bold">
-              {totalFilteredCount} {t('home.productsCount')}
+            <strong className="text-gray-900 dark:text-gray-100 font-bold">
+              {totalFilteredCount}
             </strong>
           </span>
 
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-4 h-4 text-gray-400 hidden sm:inline" />
-            <label htmlFor="catalog-sort" className="sr-only">
-              Sort
-            </label>
-            <select
-              id="catalog-sort"
-              value={sortBy}
-              onChange={(e) => onChangeSort(e.target.value as SortOption)}
-              className="h-9 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 focus:border-brand-green focus:outline-none focus:ring-1 focus:ring-brand-green"
+          <div ref={sortMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsSortMenuOpen((prev) => !prev)}
+              aria-haspopup="listbox"
+              aria-expanded={isSortMenuOpen}
+              className="h-9 px-3 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] hover:border-brand-green dark:hover:border-brand-gold text-xs font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-2 transition-colors shadow-sm"
             >
-              <option value="popular">{t('catalog.sortPopular')}</option>
-              <option value="newest">{t('catalog.sortNewest')}</option>
-              <option value="price_asc">{t('catalog.sortPriceAsc')}</option>
-              <option value="price_desc">{t('catalog.sortPriceDesc')}</option>
-              <option value="discount">{t('catalog.sortDiscount')}</option>
-            </select>
+              <ArrowUpDown className="w-3.5 h-3.5 text-brand-green shrink-0" />
+              <span className="truncate max-w-[165px]">{activeSortLabel}</span>
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
+                  isSortMenuOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {isSortMenuOpen && (
+              <ul
+                role="listbox"
+                aria-label={t('catalog.filtersAndSort')}
+                className="absolute right-0 mt-1.5 w-56 rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-2xl py-1.5 z-40 divide-y divide-gray-100 dark:divide-[#28453B]"
+              >
+                {sortOptions.map((opt) => {
+                  const isSelected = sortBy === opt.value;
+                  return (
+                    <li key={opt.value} role="option" aria-selected={isSelected}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChangeSort(opt.value);
+                          setIsSortMenuOpen(false);
+                        }}
+                        className={`w-full px-3.5 py-2.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors ${
+                          isSelected
+                            ? 'bg-brand-green-light dark:bg-[#1D352D] text-brand-green font-extrabold'
+                            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#162923]'
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-brand-green shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
       </div>
 
       {/* Bottom Row: Active Filter Chips & Clear All Action */}
       {activeFilterCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
-          <span className="text-xs font-semibold text-gray-500 mr-1">
+        <div className="flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-gray-100 dark:border-[#28453B]">
+          <span className="text-[11px] font-semibold text-gray-500 mr-1">
             {t('catalog.activeFilters')}
           </span>
 
           {localizedSelectedCategory && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-green-light text-brand-green">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-green-light text-brand-green">
               <span>{localizedSelectedCategory.name}</span>
               <button
                 type="button"
                 onClick={() => onSelectCategory('')}
-                className="hover:text-brand-green-dark"
                 aria-label="Clear category"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </span>
           )}
 
           {searchQuery.trim() && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-green-light text-brand-green">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-green-light text-brand-green">
               <span>«{searchQuery.trim()}»</span>
               <button
                 type="button"
                 onClick={onClearSearch}
-                className="hover:text-brand-green-dark"
                 aria-label="Clear search"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </span>
           )}
 
           {hasPriceFilter && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-[#1D352D] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-[#2F5246]">
               <span>
-                {minPrice ? formatUZS(Number(minPrice)) : '0 soʻm'} —{' '}
+                {minPrice ? formatUZS(Number(minPrice)) : '0'} —{' '}
                 {maxPrice ? formatUZS(Number(maxPrice)) : '∞'}
               </span>
               <button
                 type="button"
                 onClick={onClearPrice}
-                className="hover:text-red-600"
                 aria-label="Clear price"
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </span>
-          )}
-
-          {onlyDiscounted && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-gold-light text-brand-gold-dark border border-brand-gold-border">
-              <span>{t('catalog.onlyDiscounted')}</span>
-              <button
-                type="button"
-                onClick={onToggleDiscounted}
-                aria-label="Clear discount filter"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </span>
-          )}
-
-          {onlyNew && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-green-light text-brand-green">
-              <span>{t('catalog.onlyNew')}</span>
-              <button
-                type="button"
-                onClick={onToggleNew}
-                aria-label="Clear new filter"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </span>
-          )}
-
-          {onlyInStock && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <span>{t('catalog.onlyInStock')}</span>
-              <button
-                type="button"
-                onClick={onToggleInStock}
-                aria-label="Clear stock filter"
-              >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </span>
           )}

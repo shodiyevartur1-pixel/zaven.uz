@@ -18,10 +18,13 @@ import {
   History,
   X,
   Globe,
+  Loader2,
+  Star,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { PRODUCT_DEFAULT_TRANSLATIONS } from '../../i18n/translations';
+import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import {
   Category,
   Language,
@@ -45,6 +48,9 @@ export type AdminProductsSection = 'products' | 'inventory' | 'categories';
 interface AdminProductsProps {
   initialSection?: AdminProductsSection;
 }
+
+const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 const PRODUCT_STATUS_META: Record<
   ProductStatus,
@@ -90,16 +96,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'out'>('all');
 
-  // Product Add / Edit Form Modal State + Multi-Language Translation Tab
   const [isProductModalOpen, setIsProductModalOpen] = useState<boolean>(false);
   const [isCreatingNewProduct, setIsCreatingNewProduct] =
     useState<boolean>(true);
   const [formProduct, setFormProduct] = useState<Product | null>(null);
   const [activeTransLang, setActiveTransLang] = useState<Language>('uz');
   const [newImageUrl, setNewImageUrl] = useState<string>('');
-  const [newFeatureText, setNewFeatureText] = useState<string>('');
-  const [newSpecLabel, setNewSpecLabel] = useState<string>('');
-  const [newSpecValue, setNewSpecValue] = useState<string>('');
+  const [isUploadingImages, setIsUploadingImages] = useState<boolean>(false);
+  const [imageUploadError, setImageUploadError] = useState<string>('');
   const [productFormError, setProductFormError] = useState<string>('');
 
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -178,18 +182,17 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
   const handleOpenCreateProduct = () => {
     setProductFormError('');
+    setImageUploadError('');
     setIsCreatingNewProduct(true);
     setActiveTransLang('uz');
     setFormProduct(createBlankProduct());
     setNewImageUrl('');
-    setNewFeatureText('');
-    setNewSpecLabel('');
-    setNewSpecValue('');
     setIsProductModalOpen(true);
   };
 
   const handleOpenEditProduct = (product: Product) => {
     setProductFormError('');
+    setImageUploadError('');
     setIsCreatingNewProduct(false);
     setActiveTransLang('uz');
 
@@ -228,9 +231,6 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       },
     });
     setNewImageUrl('');
-    setNewFeatureText('');
-    setNewSpecLabel('');
-    setNewSpecValue('');
     setIsProductModalOpen(true);
   };
 
@@ -266,7 +266,12 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   };
 
   const handleAddImageByUrl = () => {
+    setImageUploadError('');
     if (!formProduct || !newImageUrl.trim()) return;
+    if (!newImageUrl.trim().startsWith('http')) {
+      setImageUploadError('Toʻgʻri rasm URL manzilini kiriting (https://...)');
+      return;
+    }
     setFormProduct({
       ...formProduct,
       images: [...formProduct.images, newImageUrl.trim()],
@@ -274,30 +279,94 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     setNewImageUrl('');
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !formProduct) return;
+  // Requirement 4: Multi-file upload with validation, Supabase Storage upload (never large base64 in DB), and progress state
+  const handleMultiFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setImageUploadError('');
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0 || !formProduct) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
+    const files = Array.from(fileList);
+
+    for (const file of files) {
+      if (!ALLOWED_IMAGE_MIMES.includes(file.type)) {
+        setImageUploadError(
+          `Notoʻgʻri fayl formati (${file.name}). Faqat JPG, PNG yoki WEBP rasm yuklang.`
+        );
+        e.target.value = '';
+        return;
+      }
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        setImageUploadError(
+          `${file.name} hajmi 4 MB dan katta. Iltimos, kichikroq rasm tanlang.`
+        );
+        e.target.value = '';
+        return;
+      }
+    }
+
+    setIsUploadingImages(true);
+    const uploadedUrls: string[] = [];
+
+    try {
+      for (const file of files) {
+        if (isSupabaseConfigured && supabase) {
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${formProduct.id}/${Date.now()}_${safeName}`;
+          const { error: uploadError } = await supabase.storage
+            .from('product-images')
+            .upload(storagePath, file, {
+              contentType: file.type,
+              upsert: false,
+            });
+
+          if (!uploadError) {
+            const { data: pubData } = supabase.storage
+              .from('product-images')
+              .getPublicUrl(storagePath);
+            if (pubData?.publicUrl) {
+              uploadedUrls.push(pubData.publicUrl);
+              continue;
+            }
+          }
+        }
+
+        // Local dev preview fallback using lightweight object URL
+        const localObjectUrl = URL.createObjectURL(file);
+        uploadedUrls.push(localObjectUrl);
+      }
+
+      if (uploadedUrls.length > 0) {
         setFormProduct((prev) =>
           prev
             ? {
                 ...prev,
-                images: [...prev.images, reader.result as string],
+                images: [...prev.images, ...uploadedUrls],
               }
             : prev
         );
         addToast({
           type: 'success',
-          title: 'Rasm yuklandi',
-          description: file.name,
+          title: `${uploadedUrls.length} ta rasm qoʻshildi`,
         });
       }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err) {
+      setImageUploadError(
+        err instanceof Error ? err.message : 'Rasm yuklashda xatolik yuz berdi'
+      );
+    } finally {
+      setIsUploadingImages(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSetPrimaryImage = (index: number) => {
+    if (!formProduct || index === 0) return;
+    const nextImages = [...formProduct.images];
+    const [chosen] = nextImages.splice(index, 1);
+    nextImages.unshift(chosen);
+    setFormProduct({ ...formProduct, images: nextImages });
   };
 
   const handleMoveImage = (index: number, direction: 'up' | 'down') => {
@@ -524,14 +593,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Workspace Header & Sub-Navigation Switcher */}
+      {/* Top Workspace Header */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">
-            Mahsulotlar, Toifalar va Ombor Zaxirasi (UZ / RU / EN)
+            Mahsulotlar, Koʻp Rasmli Galereya va Ombor Zaxirasi
           </h1>
           <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Katalogdagi mahsulotlarni 3 tilda tahrirlash, narx va tannarxni nazorat qilish hamda ombor harakatlari tarixi
+            Mahsulotlarni 3 tilda tahrirlash, koʻp rasmli galereya va asosiy muqovani belgilash
           </p>
         </div>
 
@@ -542,7 +611,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               onClick={() => setActiveSection('products')}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
                 activeSection === 'products'
-                  ? 'bg-brand-green text-white shadow-sm'
+                  ? 'bg-[#0F3D2E] text-white shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
               }`}
             >
@@ -555,7 +624,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               onClick={() => setActiveSection('inventory')}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
                 activeSection === 'inventory'
-                  ? 'bg-brand-green text-white shadow-sm'
+                  ? 'bg-[#0F3D2E] text-white shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
               }`}
             >
@@ -568,7 +637,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               onClick={() => setActiveSection('categories')}
               className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
                 activeSection === 'categories'
-                  ? 'bg-brand-green text-white shadow-sm'
+                  ? 'bg-[#0F3D2E] text-white shadow-sm'
                   : 'text-gray-700 hover:text-gray-900'
               }`}
             >
@@ -599,9 +668,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         </div>
       </div>
 
-      {/* ===================================================================== */}
-      {/* SECTION 1: PRODUCTS MANAGEMENT TABLE                                  */}
-      {/* ===================================================================== */}
+      {/* SECTION 1: PRODUCTS MANAGEMENT TABLE */}
       {activeSection === 'products' && (
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -666,7 +733,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                      <th className="py-3.5 px-4">Mahsulot va SKU</th>
+                      <th className="py-3.5 px-4">Mahsulot va Rasmlar</th>
                       <th className="py-3.5 px-4">Toifa</th>
                       <th className="py-3.5 px-4">Sotuv narxi</th>
                       {showCostMetrics && (
@@ -715,7 +782,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                                     {product.sku}
                                   </span>
                                   <span>•</span>
-                                  <span>UZ / RU / EN</span>
+                                  <span>{product.images.length} ta rasm</span>
                                 </div>
                               </div>
                             </div>
@@ -775,7 +842,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                                     'Yangi partiya qabul qilindi'
                                   );
                                 }}
-                                className="px-2 py-0.5 rounded bg-brand-green-light text-brand-green text-[11px] font-bold hover:bg-brand-green hover:text-white transition-colors"
+                                className="px-2 py-0.5 rounded bg-brand-green-light text-brand-green text-[11px] font-bold hover:bg-[#0F3D2E] hover:text-white transition-colors"
                               >
                                 +/- Zaxira
                               </button>
@@ -794,7 +861,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                                 type="button"
                                 onClick={() => handleOpenEditProduct(product)}
                                 className="p-1.5 rounded-lg text-gray-700 hover:bg-brand-green-light hover:text-brand-green transition-colors"
-                                title="Tahrirlash (UZ/RU/EN)"
+                                title="Tahrirlash (UZ/RU/EN va Rasmlar)"
                               >
                                 <Edit3 className="w-4 h-4" />
                               </button>
@@ -874,9 +941,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* SECTION 2: INVENTORY & STOCK CHANGE HISTORY                           */}
-      {/* ===================================================================== */}
+      {/* SECTION 2: INVENTORY & STOCK CHANGE HISTORY */}
       {activeSection === 'inventory' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1024,9 +1089,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* SECTION 3: CATEGORIES MANAGEMENT                                      */}
-      {/* ===================================================================== */}
+      {/* SECTION 3: CATEGORIES MANAGEMENT */}
       {activeSection === 'categories' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {categories
@@ -1079,14 +1142,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL 1: ADD / EDIT PRODUCT WITH UZ / RU / EN TRANSLATION TABS        */}
+      {/* MODAL 1: ADD / EDIT PRODUCT WITH MULTI-IMAGE GALLERY & ORDERING       */}
       {/* ===================================================================== */}
       <Modal
         isOpen={isProductModalOpen}
         onClose={() => setIsProductModalOpen(false)}
         title={
           isCreatingNewProduct
-            ? 'Yangi mahsulot qoʻshish (UZ / RU / EN)'
+            ? 'Yangi mahsulot qoʻshish (Koʻp rasmli galereya va 3 til)'
             : `Mahsulotni tahrirlash: ${formProduct?.sku}`
         }
         maxWidth="2xl"
@@ -1104,6 +1167,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               form="admin-product-form"
               variant="primary"
               size="sm"
+              disabled={isUploadingImages}
             >
               Saqlash
             </Button>
@@ -1122,7 +1186,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               </div>
             )}
 
-            {/* Multi-Language Content Switcher Tabs (Oʻzbekcha, Русский, English) */}
+            {/* Multi-Language Content Switcher Tabs */}
             <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-2 font-bold text-gray-900">
@@ -1144,7 +1208,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                       onClick={() => setActiveTransLang(langTab.code)}
                       className={`px-3 py-1 rounded-md text-xs font-bold transition-colors ${
                         activeTransLang === langTab.code
-                          ? 'bg-brand-green text-white'
+                          ? 'bg-[#0F3D2E] text-white'
                           : 'text-gray-600 hover:text-gray-900'
                       }`}
                     >
@@ -1173,7 +1237,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   />
 
                   <Input
-                    label="Qisqacha tavsif (Oʻzbekcha)"
+                    label="Qisqacha tavsif (Tezkor koʻrish oynasida chiqadi)"
                     required
                     value={formProduct.shortDescription}
                     onChange={(e) =>
@@ -1186,7 +1250,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1.5">
-                      Batafsil tavsif (Oʻzbekcha)
+                      Batafsil tavsif (Mahsulot sahifasida chiqadi)
                     </label>
                     <textarea
                       rows={3}
@@ -1205,9 +1269,6 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
               {activeTransLang === 'ru' && (
                 <div className="space-y-3">
-                  <p className="text-[11px] text-gray-500">
-                    Agar ruscha maydon boʻsh qoldirilsa, tizim avtomatik ravishda oʻzbekcha matnni koʻrsatadi (Fallback).
-                  </p>
                   <Input
                     label="Название товара (Русский)"
                     value={formProduct.translations?.ru?.name || ''}
@@ -1223,7 +1284,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                         },
                       })
                     }
-                    placeholder={formProduct.name || 'Настольная LED лампа...'}
+                    placeholder={formProduct.name}
                   />
                   <Input
                     label="Краткое описание (Русский)"
@@ -1268,9 +1329,6 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
               {activeTransLang === 'en' && (
                 <div className="space-y-3">
-                  <p className="text-[11px] text-gray-500">
-                    If English translation fields are left blank, the store automatically falls back to the primary Uzbek text.
-                  </p>
                   <Input
                     label="Product Name (English)"
                     value={formProduct.translations?.en?.name || ''}
@@ -1286,7 +1344,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                         },
                       })
                     }
-                    placeholder={formProduct.name || 'Touch LED Desk Lamp...'}
+                    placeholder={formProduct.name}
                   />
                   <Input
                     label="Short Description (English)"
@@ -1442,31 +1500,53 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               />
             </div>
 
-            {/* Product Images Upload & Reordering */}
-            <div className="space-y-3 pt-2 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-gray-900">
-                  Rasmlar ({formProduct.images.length})
-                </h4>
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-green-light text-brand-green text-xs font-bold cursor-pointer">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Rasm yuklash</span>
+            {/* Requirement 4: Multi-Image Upload, Primary Cover Badge, Reordering & Removal */}
+            <div className="space-y-3.5 pt-3 border-t border-gray-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-extrabold text-gray-900">
+                    Mahsulot rasmlari galereyasi ({formProduct.images.length} ta)
+                  </h4>
+                  <p className="text-[11px] text-gray-500">
+                    1-rasm katalog va bosh sahifada asosiy muqova sifatida koʻrinadi. Format: JPG, PNG, WEBP (≤ 4 MB).
+                  </p>
+                </div>
+
+                <label className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#16533F] text-white text-xs font-bold cursor-pointer shadow-sm">
+                  {isUploadingImages ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#C89D54]" />
+                  ) : (
+                    <Upload className="w-4 h-4 text-[#C89D54]" />
+                  )}
+                  <span>
+                    {isUploadingImages
+                      ? 'Yuklanmoqda...'
+                      : 'Bir nechta rasm yuklash'}
+                  </span>
                   <input
                     type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    disabled={isUploadingImages}
+                    onChange={handleMultiFileUpload}
                     className="hidden"
                   />
                 </label>
               </div>
+
+              {imageUploadError && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-600">
+                  {imageUploadError}
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <input
                   type="url"
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs"
+                  placeholder="Yoki rasm URL manzilini kiriting (https://...)"
+                  className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs"
                 />
                 <Button
                   type="button"
@@ -1474,53 +1554,85 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   size="sm"
                   onClick={handleAddImageByUrl}
                 >
-                  Qoʻshish
+                  URL qoʻshish
                 </Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {formProduct.images.map((img, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2 rounded-xl border border-gray-200 bg-white flex items-center justify-between gap-2.5"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <img
-                        src={img}
-                        alt=""
-                        className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0"
-                      />
-                      <span className="text-xs font-bold text-gray-900">
-                        #{idx + 1}
-                      </span>
+                {formProduct.images.map((img, idx) => {
+                  const isPrimary = idx === 0;
+                  return (
+                    <div
+                      key={`${img}-${idx}`}
+                      className={`p-2.5 rounded-xl border-2 flex items-center justify-between gap-2.5 ${
+                        isPrimary
+                          ? 'border-[#C89D54] bg-brand-gold-light/30'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={img}
+                          alt={`Rasm ${idx + 1}`}
+                          className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0 bg-gray-50"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-extrabold text-gray-900">
+                              #{idx + 1}
+                            </span>
+                            {isPrimary ? (
+                              <Badge variant="gold" size="sm">
+                                Asosiy muqova
+                              </Badge>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSetPrimaryImage(idx)}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-green hover:underline"
+                              >
+                                <Star className="w-3 h-3" />
+                                <span>Asosiy qilish</span>
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-gray-400 truncate max-w-[140px]">
+                            {img}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => handleMoveImage(idx, 'up')}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30"
+                          title="Yuqoriga surish"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === formProduct.images.length - 1}
+                          onClick={() => handleMoveImage(idx, 'down')}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30"
+                          title="Pastga surish"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(idx)}
+                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                          title="Rasmni oʻchirish"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={idx === 0}
-                        onClick={() => handleMoveImage(idx, 'up')}
-                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={idx === formProduct.images.length - 1}
-                        onClick={() => handleMoveImage(idx, 'down')}
-                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveImage(idx)}
-                        className="p-1 rounded text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </form>
@@ -1573,7 +1685,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   }
                   className={`py-2 px-3 rounded-lg text-xs font-bold border ${
                     stockAdjustMode === m.id
-                      ? 'bg-brand-green text-white border-brand-green'
+                      ? 'bg-[#0F3D2E] text-white border-[#0F3D2E]'
                       : 'bg-white text-gray-700 border-gray-200'
                   }`}
                 >

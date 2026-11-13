@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
   html {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     scroll-behavior: smooth;
@@ -12,7 +19,6 @@
   body {
     background-color: #F8F9FA;
     color: #111827;
-    overflow-x: hidden;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
@@ -27,9 +33,41 @@
   }
 }
 
+/* Strict responsive product grid that never overflows 360px-414px viewports */
+.zaven-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.625rem;
+  width: 100%;
+}
+
+@media (max-width: 335px) {
+  .zaven-product-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 640px) {
+  .zaven-product-grid {
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .zaven-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .zaven-product-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 /* ============================================================================
-   High-Contrast Dark Mode Token Overrides (Scoped safely so solid brand buttons
-   and badges never lose contrast)
+   High-Contrast Dark Mode Token Overrides
    ============================================================================ */
 html.dark .bg-surface-page {
   background-color: #0B1512 !important;
@@ -54,7 +92,6 @@ html.dark .bg-gray-200 {
   background-color: #26443A !important;
 }
 
-/* Tinted Brand & Status Surfaces in Dark Mode */
 html.dark .bg-brand-green-light,
 html.dark .bg-brand-green-light\/30,
 html.dark .bg-brand-green-light\/40,
@@ -91,7 +128,6 @@ html.dark .bg-sky-50 {
   background-color: rgba(14, 165, 233, 0.18) !important;
 }
 
-/* Readable Text Contrast in Dark Mode */
 html.dark .text-gray-900 {
   color: #F9FAFB !important;
 }
@@ -147,7 +183,6 @@ html.dark .text-sky-700 {
   color: #7DD3FC !important;
 }
 
-/* Borders & Dividers in Dark Mode */
 html.dark .border-gray-100,
 html.dark .border-gray-200,
 html.dark .border-gray-200\/80,
@@ -178,7 +213,6 @@ html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
   border-color: #28453B !important;
 }
 
-/* Form Controls */
 html.dark input:not([type="checkbox"]):not([type="radio"]),
 html.dark select,
 html.dark textarea {

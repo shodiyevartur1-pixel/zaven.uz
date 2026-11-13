@@ -291,10 +291,12 @@ export const CatalogPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Requirement 5: Compact, scannable filter controls grouped cleanly
   const renderFilterSidebarContent = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 1. Search by Name */}
       <div>
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 mb-2.5">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">
           {t('catalog.searchByName')}
         </h3>
         <Input
@@ -323,27 +325,28 @@ export const CatalogPage: React.FC = () => {
         />
       </div>
 
-      <div className="pt-5 border-t border-gray-200">
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500 mb-2.5">
+      {/* 2. Categories */}
+      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">
           {t('nav.categoriesTitle')}
         </h3>
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           <li>
             <button
               type="button"
               onClick={() => handleSelectCategory('')}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm text-left transition-colors ${
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
                 !selectedCategorySlug
                   ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
-                  : 'text-gray-700 hover:bg-gray-100 font-medium'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
               }`}
             >
               <span>{t('nav.allCategories')}</span>
               <span
-                className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
                   !selectedCategorySlug
-                    ? 'bg-[#C89D54] text-[#09261C] font-bold'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-[#C89D54] text-[#09261C] font-extrabold'
+                    : 'bg-gray-100 dark:bg-[#162923] text-gray-600 dark:text-gray-300'
                 }`}
               >
                 {catalogProducts.length}
@@ -365,18 +368,18 @@ export const CatalogPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSelectCategory(cat.slug)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm text-left transition-colors ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
                     isSelected
                       ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-100 font-medium'
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
                   }`}
                 >
-                  <span className="leading-snug">{locCat.name}</span>
+                  <span className="leading-snug truncate">{locCat.name}</span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                    className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
                       isSelected
-                        ? 'bg-[#C89D54] text-[#09261C] font-bold'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-[#C89D54] text-[#09261C] font-extrabold'
+                        : 'bg-gray-100 dark:bg-[#162923] text-gray-600 dark:text-gray-300'
                     }`}
                   >
                     {count}
@@ -388,9 +391,10 @@ export const CatalogPage: React.FC = () => {
         </ul>
       </div>
 
-      <div className="pt-5 border-t border-gray-200">
-        <div className="flex items-center justify-between mb-2.5">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
+      {/* 3. Price Range (UZS) + Compact Presets */}
+      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
             {t('catalog.priceRange')}
           </h3>
           {(minPrice || maxPrice) && (
@@ -407,38 +411,30 @@ export const CatalogPage: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 mb-3">
-          <div>
-            <label className="block text-[11px] font-medium text-gray-500 mb-1">
-              {t('catalog.minFrom')}
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={5000}
-              value={minPrice}
-              onChange={(e) => setMinPrice(e.target.value)}
-              placeholder="0"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-brand-green focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-medium text-gray-500 mb-1">
-              {t('catalog.maxTo')}
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={5000}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              placeholder="500 000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-brand-green focus:outline-none"
-            />
-          </div>
+        <div className="grid grid-cols-2 gap-2 mb-2.5">
+          <input
+            type="number"
+            min={0}
+            step={5000}
+            value={minPrice}
+            onChange={(e) => setMinPrice(e.target.value)}
+            placeholder={t('catalog.minFrom')}
+            aria-label={t('catalog.minFrom')}
+            className="w-full h-9 rounded-lg border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+          />
+          <input
+            type="number"
+            min={0}
+            step={5000}
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)}
+            placeholder={t('catalog.maxTo')}
+            aria-label={t('catalog.maxTo')}
+            className="w-full h-9 rounded-lg border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+          />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
           {PRICE_PRESETS.map((preset, idx) => {
             const isPresetActive =
               minPrice === preset.min && maxPrice === preset.max;
@@ -455,27 +451,28 @@ export const CatalogPage: React.FC = () => {
                     setMaxPrice(preset.max);
                   }
                 }}
-                className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium border transition-colors flex items-center justify-between ${
+                className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors flex items-center justify-between gap-1 ${
                   isPresetActive
                     ? 'bg-brand-green-light border-brand-green text-brand-green font-bold'
-                    : 'bg-surface-page border-gray-200 text-gray-700 hover:border-gray-300'
+                    : 'bg-surface-page dark:bg-[#162923] border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200'
                 }`}
               >
-                <span>{preset.label}</span>
-                {isPresetActive && <Check className="w-3.5 h-3.5 shrink-0" />}
+                <span className="truncate">{preset.label}</span>
+                {isPresetActive && <Check className="w-3 h-3 shrink-0" />}
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="pt-5 border-t border-gray-200 space-y-2.5">
-        <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
+      {/* 4. Discounts, Stock Availability & New Arrivals */}
+      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B] space-y-2">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
           {t('catalog.discountAndStock')}
         </h3>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-          <span className="text-xs font-semibold text-gray-800">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyDiscounted')}
           </span>
           <input
@@ -486,24 +483,24 @@ export const CatalogPage: React.FC = () => {
               setOnlyDiscounted(checked);
               syncUrlParams({ filter: checked ? 'discounted' : '' });
             }}
-            className="w-4 h-4 rounded text-brand-green focus:ring-brand-green border-gray-300 shrink-0"
+            className="w-4 h-4 rounded text-brand-green border-gray-300 shrink-0"
           />
         </label>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-          <span className="text-xs font-semibold text-gray-800">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyInStock')}
           </span>
           <input
             type="checkbox"
             checked={onlyInStock}
             onChange={(e) => setOnlyInStock(e.target.checked)}
-            className="w-4 h-4 rounded text-brand-green focus:ring-brand-green border-gray-300 shrink-0"
+            className="w-4 h-4 rounded text-brand-green border-gray-300 shrink-0"
           />
         </label>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors">
-          <span className="text-xs font-semibold text-gray-800">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+          <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyNew')}
           </span>
           <input
@@ -514,31 +511,17 @@ export const CatalogPage: React.FC = () => {
               setOnlyNew(checked);
               syncUrlParams({ filter: checked ? 'new' : '' });
             }}
-            className="w-4 h-4 rounded text-brand-green focus:ring-brand-green border-gray-300 shrink-0"
+            className="w-4 h-4 rounded text-brand-green border-gray-300 shrink-0"
           />
         </label>
       </div>
-
-      {activeFilterCount > 0 && (
-        <div className="pt-4 border-t border-gray-200">
-          <Button
-            variant="outline"
-            size="sm"
-            fullWidth
-            leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-            onClick={handleResetAllFilters}
-          >
-            {t('catalog.clearAllFilters')}
-          </Button>
-        </div>
-      )}
     </div>
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
       {/* Compact Catalog Header */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card space-y-3">
+      <div className="bg-white rounded-2xl border border-gray-200 p-4 sm:p-5 shadow-card space-y-2">
         <nav
           aria-label="Breadcrumb"
           className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
@@ -567,8 +550,8 @@ export const CatalogPage: React.FC = () => {
         </nav>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 break-words">
               {localizedSelectedCategory
                 ? localizedSelectedCategory.name
                 : searchQuery.trim()
@@ -584,8 +567,8 @@ export const CatalogPage: React.FC = () => {
 
       {/* Main Catalog Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        <aside className="hidden xl:block xl:col-span-3 bg-white rounded-2xl border border-gray-200 p-5 shadow-card sticky top-28">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
+        <aside className="hidden xl:block xl:col-span-3 bg-white rounded-2xl border border-gray-200 p-4 shadow-card sticky top-28">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
             <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
               <SlidersHorizontal className="w-4 h-4 text-brand-green" />
               <span>{t('catalog.filtersAndSort')}</span>
@@ -597,9 +580,22 @@ export const CatalogPage: React.FC = () => {
             )}
           </div>
           {renderFilterSidebarContent()}
+          {activeFilterCount > 0 && (
+            <div className="pt-3 mt-3 border-t border-gray-200">
+              <Button
+                variant="outline"
+                size="sm"
+                fullWidth
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                onClick={handleResetAllFilters}
+              >
+                {t('catalog.clearAllFilters')}
+              </Button>
+            </div>
+          )}
         </aside>
 
-        <div className="xl:col-span-9 space-y-4">
+        <div className="xl:col-span-9 space-y-4 min-w-0">
           <QuickFilterBar
             categories={activeCategories}
             selectedCategorySlug={selectedCategorySlug}
@@ -642,8 +638,7 @@ export const CatalogPage: React.FC = () => {
 
           {displayedProducts.length > 0 ? (
             <>
-              {/* 2-Column Mobile Grid, 3-Column Tablet/Desktop Grid */}
-              <div className="grid grid-cols-2 max-[330px]:grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-5">
+              <div className="zaven-product-grid">
                 {displayedProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
@@ -726,53 +721,64 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Accessible Slide-Over Filter Drawer */}
+      {/* Requirement 5: Compact Slide-Over Filter Drawer at z-[70] with Sticky Header & Footer */}
       {isMobileFilterOpen && (
         <div
-          className="fixed inset-0 z-50 xl:hidden flex justify-end"
+          className="fixed inset-0 z-[70] xl:hidden flex justify-end"
           role="dialog"
           aria-modal="true"
+          aria-label={t('catalog.filtersAndSort')}
         >
           <div
-            className="fixed inset-0 bg-gray-900/70"
+            className="fixed inset-0 bg-gray-900/75"
             onClick={() => setIsMobileFilterOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-sm bg-white h-full flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
-            <div className="px-5 py-4 bg-[#0F3D2E] text-white flex items-center justify-between">
-              <div className="flex items-center gap-2 font-bold text-base">
+          <div className="relative w-full max-w-xs sm:max-w-sm bg-white dark:bg-[#12211C] h-full flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
+            {/* Sticky Drawer Header */}
+            <div className="px-4 py-3.5 bg-[#0F3D2E] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 font-bold text-sm">
                 <SlidersHorizontal className="w-4 h-4 text-[#C89D54]" />
                 <span>{t('catalog.filtersAndSort')}</span>
+                {activeFilterCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[11px] font-extrabold">
+                    {activeFilterCount}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => setIsMobileFilterOpen(false)}
                 className="p-1.5 rounded-lg text-emerald-100 hover:text-white"
+                aria-label={t('product.close')}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-5 flex-1 overflow-y-auto scrollbar-thin">
+            {/* Scrollable Filter Groups */}
+            <div className="p-4 flex-1 overflow-y-auto scrollbar-thin">
               {renderFilterSidebarContent()}
             </div>
 
-            <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center gap-2.5">
+            {/* Sticky Drawer Footer with Safe-Area Clearance */}
+            <div className="p-3.5 pb-6 sm:pb-4 bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
               <Button
                 variant="outline"
-                size="md"
+                size="sm"
                 fullWidth
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
                 onClick={handleResetAllFilters}
               >
                 {t('catalog.clear')}
               </Button>
               <Button
                 variant="primary"
-                size="md"
+                size="sm"
                 fullWidth
                 onClick={() => setIsMobileFilterOpen(false)}
               >
-                OK ({filteredProducts.length})
+                Koʻrsatish ({filteredProducts.length})
               </Button>
             </div>
           </div>

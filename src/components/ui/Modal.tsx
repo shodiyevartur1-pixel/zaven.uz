@@ -10,6 +10,10 @@ export interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
+/**
+ * Elevated to `z-[70]` with mobile safe-area clearance so modal footers and
+ * close buttons are never covered by bottom navigation or Netlify preview badges.
+ */
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
   onClose,
@@ -24,8 +28,16 @@ export const Modal: React.FC<ModalProps> = ({
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -40,30 +52,48 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
+      {/* Backdrop */}
       <div
-        className={`relative w-full ${maxWidthClass} bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden my-8`}
+        className="fixed inset-0 bg-gray-900/75 backdrop-blur-[1px] transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Dialog Box */}
+      <div
+        className={`relative w-full ${maxWidthClass} bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#2F5246] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[86vh] sm:max-h-[88vh] my-auto`}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <h3 id="modal-title" className="text-base font-bold text-gray-900">
+        {/* Sticky Header */}
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-gray-50 dark:bg-[#162923] border-b border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-3 shrink-0">
+          <h3
+            id="modal-title"
+            className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100 truncate"
+          >
             {title}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition-colors"
-            aria-label="Yopish"
+            className="w-8 h-8 rounded-lg bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center justify-center shrink-0 transition-colors"
+            aria-label="Yopish / Close"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-6 max-h-[75vh] overflow-y-auto scrollbar-thin">{children}</div>
+
+        {/* Scrollable Content */}
+        <div className="p-4 sm:p-6 overflow-y-auto scrollbar-thin flex-1">
+          {children}
+        </div>
+
+        {/* Sticky Footer */}
         {footer && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-3">
+          <div className="px-4 py-3 sm:px-6 sm:py-3.5 bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] flex items-center justify-end gap-2.5 shrink-0 pb-safe">
             {footer}
           </div>
         )}
