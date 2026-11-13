@@ -20,11 +20,11 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Requirement 5: Render full informational StoreFooter ONLY on the homepage ('/')
+  // Full informational footer is rendered strictly on the homepage ('/')
   const isHomePage = location.pathname === '/';
 
   return (
-    <div className="min-h-screen flex flex-col bg-surface-page text-gray-900 dark:text-gray-100 pb-20 md:pb-8 transition-colors">
+    <div className="min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 pb-20 md:pb-8 transition-colors">
       <StoreHeader onOpenMobileMenu={() => setIsMobileMenuOpen(true)} />
 
       <MobileDrawer
@@ -32,14 +32,14 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
         onClose={() => setIsMobileMenuOpen(false)}
       />
 
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 bg-transparent">{children}</main>
 
       {isHomePage && <StoreFooter />}
 
       {/* Mobile Sticky Bottom Tab Bar */}
       <nav
         aria-label="Mobile bottom navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] shadow-lg flex items-center justify-around h-16 px-2"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] shadow-lg flex items-center justify-around h-16 px-2 pb-safe transition-opacity duration-150"
       >
         <Link
           to="/"
@@ -68,7 +68,8 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
         <Link
           to="/cart"
           className={`relative flex flex-col items-center justify-center py-1 px-3 rounded-lg text-[11px] font-semibold ${
-            location.pathname === '/cart'
+            location.pathname === '/cart' ||
+            location.pathname.startsWith('/checkout')
               ? 'text-brand-green font-bold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}

@@ -112,16 +112,16 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   }, []);
 
   return (
-    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3.5 sm:p-4 shadow-card space-y-3">
-      {/* Row 1: Touch-Friendly Filter Trigger + Sort Menu */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
+    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card space-y-2.5">
+      {/* Row 1: Compact Filter Trigger + Compact Anchored Sort Menu */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={onOpenMobileFilters}
-            className="xl:hidden min-h-[40px] px-3.5 py-2 rounded-xl bg-[#0F3D2E] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center gap-2 shadow-sm active:scale-[0.99]"
+            className="xl:hidden h-9 px-3 rounded-xl bg-[#0F3D2E] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm shrink-0"
           >
-            <SlidersHorizontal className="w-4 h-4 text-[#C89D54] shrink-0" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
             <span>{t('catalog.filtersAndPrice')}</span>
             {activeFilterCount > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold leading-none">
@@ -130,7 +130,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             )}
           </button>
 
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
             {t('catalog.foundCount')}{' '}
             <strong className="text-gray-900 dark:text-gray-100 font-extrabold">
               {totalFilteredCount}
@@ -138,21 +138,21 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           </span>
         </div>
 
-        {/* Custom Accessible Sort Dropdown */}
-        <div ref={sortMenuRef} className="relative">
+        {/* Requirement 3: Compact, Viewport-Bounded Sort Popover Next to Trigger */}
+        <div ref={sortMenuRef} className="relative shrink-0">
           <button
             type="button"
             onClick={() => setIsSortMenuOpen((prev) => !prev)}
             aria-haspopup="listbox"
             aria-expanded={isSortMenuOpen}
-            className="min-h-[40px] px-3.5 py-2 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] hover:border-brand-green dark:hover:border-brand-gold text-xs font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-2 transition-colors shadow-sm"
+            className="h-9 px-3 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] hover:border-brand-green dark:hover:border-brand-gold text-xs font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-1.5 transition-colors shadow-sm"
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-brand-green shrink-0" />
-            <span className="truncate max-w-[170px] sm:max-w-[220px]">
+            <span className="truncate max-w-[135px] sm:max-w-[190px]">
               {activeSortLabel}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ${
+              className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${
                 isSortMenuOpen ? 'rotate-180' : ''
               }`}
             />
@@ -162,7 +162,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             <ul
               role="listbox"
               aria-label={t('catalog.filtersAndSort')}
-              className="absolute right-0 mt-1.5 w-60 rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-2xl py-1.5 z-40 divide-y divide-gray-100 dark:divide-[#28453B]"
+              className="absolute right-0 top-full mt-1.5 w-52 max-w-[calc(100vw-2rem)] rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-xl py-1 z-30 divide-y divide-gray-100 dark:divide-[#28453B]"
             >
               {sortOptions.map((opt) => {
                 const isSelected = sortBy === opt.value;
@@ -174,15 +174,15 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
                         onChangeSort(opt.value);
                         setIsSortMenuOpen(false);
                       }}
-                      className={`w-full px-3.5 py-2.5 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors ${
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors ${
                         isSelected
                           ? 'bg-brand-green-light dark:bg-[#1D352D] text-brand-green font-extrabold'
                           : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#162923]'
                       }`}
                     >
-                      <span>{opt.label}</span>
+                      <span className="truncate">{opt.label}</span>
                       {isSelected && (
-                        <Check className="w-4 h-4 text-brand-green shrink-0" />
+                        <Check className="w-3.5 h-3.5 text-brand-green shrink-0" />
                       )}
                     </button>
                   </li>
@@ -193,86 +193,80 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Touch-Friendly Quick Filter Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-0.5">
+      {/* Row 2: Quick Filter Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin pb-0.5">
         <button
           type="button"
           onClick={onToggleDiscounted}
-          className={`min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
             onlyDiscounted
               ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-gold'
           }`}
         >
-          <Tag className="w-3.5 h-3.5 shrink-0" />
+          <Tag className="w-3 h-3 shrink-0" />
           <span>{t('nav.discounts')}</span>
         </button>
 
         <button
           type="button"
           onClick={onToggleNew}
-          className={`min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
             onlyNew
               ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-green'
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+          <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
           <span>{t('nav.newArrivals')}</span>
         </button>
 
         <button
           type="button"
           onClick={onToggleInStock}
-          className={`min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors shrink-0 ${
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
             onlyInStock
               ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-emerald-400'
           }`}
         >
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
           <span>{t('product.inStock')}</span>
         </button>
       </div>
 
-      {/* Row 3: Active Filter Summary & Obvious "Clear All Filters" Button */}
+      {/* Row 3: Active Filters & Clear All */}
       {activeFilterCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-gray-100 dark:border-[#28453B]">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-[#28453B]">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-bold text-gray-500 mr-1">
-              {t('catalog.activeFilters')}
-            </span>
-
             {localizedSelectedCategory && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-green-light text-brand-green">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-brand-green-light text-brand-green">
                 <span>{localizedSelectedCategory.name}</span>
                 <button
                   type="button"
                   onClick={() => onSelectCategory('')}
-                  className="p-0.5 hover:opacity-75"
                   aria-label="Clear category"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             )}
 
             {searchQuery.trim() && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-green-light text-brand-green">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-brand-green-light text-brand-green">
                 <span>«{searchQuery.trim()}»</span>
                 <button
                   type="button"
                   onClick={onClearSearch}
-                  className="p-0.5 hover:opacity-75"
                   aria-label="Clear search"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             )}
 
             {hasPriceFilter && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gray-100 dark:bg-[#1D352D] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-[#2F5246]">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-gray-100 dark:bg-[#1D352D] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-[#2F5246]">
                 <span>
                   {minPrice ? formatUZS(Number(minPrice)) : '0'} —{' '}
                   {maxPrice ? formatUZS(Number(maxPrice)) : '∞'}
@@ -280,10 +274,9 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
                 <button
                   type="button"
                   onClick={onClearPrice}
-                  className="p-0.5 hover:opacity-75"
                   aria-label="Clear price"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             )}
@@ -292,9 +285,9 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onResetAll}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold transition-colors"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3 h-3" />
             <span>{t('catalog.clearAllFilters')}</span>
           </button>
         </div>

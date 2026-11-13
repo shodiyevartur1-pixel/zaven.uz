@@ -29,8 +29,10 @@
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  html.dark body {
-    background-color: #0B1512;
+  html.dark,
+  html.dark body,
+  html.dark #root {
+    background-color: #0B1512 !important;
     color: #F3F4F6;
   }
 
@@ -38,6 +40,13 @@
     outline: 2px solid #C89D54;
     outline-offset: 2px;
   }
+}
+
+/* Prevent mobile bottom navigation from covering or intercepting modals/drawers */
+body.zaven-modal-open nav[aria-label="Mobile bottom navigation"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 /* ============================================================================
@@ -79,10 +88,6 @@
 
 /* ============================================================================
    Responsive Product Card Grid
-   - 1 column on very narrow phones (< 350px) so cards are never squeezed
-   - 2 columns with a clear 14px (0.875rem) gap on standard phones (350px+)
-   - 3 columns with 18px gap on tablets (768px+)
-   - 4 columns with 20px gap on desktop when .zaven-product-grid-4 is applied
    ============================================================================ */
 .zaven-product-grid {
   display: grid;
@@ -119,16 +124,12 @@
 }
 
 /* ============================================================================
-   High-Contrast Dark Mode Token Overrides (Fixes gray trust-card backgrounds)
+   High-Contrast Dark Mode Token Overrides (Eliminates pale gray outer bands)
    ============================================================================ */
 html.dark .bg-surface-page,
 html.dark .bg-surface-page\/70,
 html.dark .bg-surface-page\/80,
 html.dark .bg-surface-page\/90 {
-  background-color: #0D1915 !important;
-}
-
-html.dark main > .bg-surface-page {
   background-color: #0B1512 !important;
 }
 
@@ -167,7 +168,7 @@ html.dark .bg-brand-gold-light\/30,
 html.dark .bg-brand-gold-light\/40,
 html.dark .bg-brand-gold-light\/60,
 html.dark .bg-brand-gold-light\/70 {
-  background-color: rgba(200, 157, 84, 0.18) !important;
+  background-color: rgba(200, 157, 84, 0.16) !important;
 }
 
 html.dark .bg-amber-50,

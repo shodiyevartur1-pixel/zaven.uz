@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   X,
   ChevronRight,
-  ChevronLeft,
   Sparkles,
   Tag,
   ArrowLeft,
@@ -50,16 +49,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
-  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Simplified task-focused header on /cart and /checkout routes
   const isCompactCheckoutRoute =
     location.pathname === '/cart' ||
     location.pathname.startsWith('/cart/') ||
@@ -93,29 +88,6 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
           })
           .slice(0, 5)
       : [];
-
-  const updateScrollIndicators = () => {
-    const el = categoryScrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 6);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 6);
-  };
-
-  useEffect(() => {
-    if (isCompactCheckoutRoute) return;
-    updateScrollIndicators();
-    window.addEventListener('resize', updateScrollIndicators);
-    return () => window.removeEventListener('resize', updateScrollIndicators);
-  }, [activeCategories.length, isCompactCheckoutRoute]);
-
-  const scrollCategoryBar = (direction: 'left' | 'right') => {
-    const el = categoryScrollRef.current;
-    if (!el) return;
-    el.scrollBy({
-      left: direction === 'left' ? -220 : 220,
-      behavior: 'smooth',
-    });
-  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -226,10 +198,10 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   }
 
   // ============================================================================
-  // STANDARD STOREFRONT HEADER (Consistent 16px/20px Mobile Gutters)
+  // STOREFRONT HEADER (Redundant mobile category ribbon removed below search bar)
   // ============================================================================
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] shadow-sm">
+    <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
       {/* Desktop Top Utility Bar */}
       <div className="hidden md:block bg-[#09261C] text-emerald-50 text-xs">
         <div className="zaven-page-container h-8 flex items-center justify-between gap-3">
@@ -255,12 +227,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       </div>
 
-      {/* Main Header Row */}
+      {/* Main Header Row + Search Bar */}
       <div ref={searchContainerRef} className="bg-[#0F3D2E] text-white">
-        <div className="zaven-page-container py-2.5">
+        <div className="zaven-page-container py-2 sm:py-2.5">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Menu Button + Brand Identity */}
-            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={onOpenMobileMenu}
@@ -289,7 +261,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               </Link>
             </div>
 
-            {/* Desktop & Tablet Search Bar */}
+            {/* Desktop & Tablet Inline Search Bar */}
             <div className="hidden md:block flex-1 max-w-2xl relative">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
@@ -500,28 +472,13 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
         </div>
       </div>
 
-      {/* Category Navigation Bar (Contained inside zaven-page-container) */}
+      {/* Requirement 2: Desktop-Only Category Navigation Strip (Removed from mobile header) */}
       <nav
         aria-label={t('nav.categoriesTitle')}
-        className="bg-white dark:bg-[#12211C] border-b border-gray-200 dark:border-[#28453B] relative"
+        className="hidden lg:block bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] text-gray-900 dark:text-gray-100"
       >
-        <div className="zaven-page-container py-1.5 flex items-center justify-between gap-2">
-          {canScrollLeft && (
-            <button
-              type="button"
-              onClick={() => scrollCategoryBar('left')}
-              className="xl:hidden shrink-0 w-7 h-7 rounded-full bg-white dark:bg-[#162923] border border-gray-300 dark:border-[#2F5246] shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-200"
-              aria-label="Scroll left"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          <div
-            ref={categoryScrollRef}
-            onScroll={updateScrollIndicators}
-            className="flex-1 flex items-center gap-1.5 overflow-x-auto xl:overflow-visible xl:flex-wrap scrollbar-thin py-0.5 scroll-smooth min-w-0"
-          >
+        <div className="zaven-page-container py-1.5 flex items-center justify-between gap-3">
+          <div className="flex-1 flex items-center gap-1.5 flex-wrap py-0.5 min-w-0">
             <Link
               to="/catalog"
               className={`shrink-0 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
@@ -554,18 +511,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             })}
           </div>
 
-          {canScrollRight && (
-            <button
-              type="button"
-              onClick={() => scrollCategoryBar('right')}
-              className="xl:hidden shrink-0 w-7 h-7 rounded-full bg-white dark:bg-[#162923] border border-gray-300 dark:border-[#2F5246] shadow-sm flex items-center justify-center text-gray-700 dark:text-gray-200"
-              aria-label="Scroll right"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-
-          <div className="hidden lg:flex items-center gap-2 shrink-0 pl-2 border-l border-gray-200 dark:border-[#28453B]">
+          <div className="flex items-center gap-2 shrink-0 pl-2 border-l border-gray-200 dark:border-[#28453B]">
             <Link
               to="/catalog?filter=discounted"
               className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border transition-colors ${

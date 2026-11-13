@@ -37,7 +37,7 @@ export const HomePage: React.FC = () => {
     storeSettings,
     addToast,
   } = useStore();
-  const { t, getCategoryText, getBannerText } = useThemeLanguage();
+  const { t, language, getCategoryText, getBannerText } = useThemeLanguage();
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -64,7 +64,9 @@ export const HomePage: React.FC = () => {
     .filter((p) => p.salePrice && p.salePrice < p.price)
     .slice(0, 4);
 
-  const activeCoupon = coupons.find((c) => c.isActive);
+  const activeCoupon = coupons.find(
+    (c) => c.isActive && c.usedCount < c.usageLimit
+  );
   const enabledTrustItems = storeSettings.trustItems.filter(
     (item) => item.isEnabled
   );
@@ -74,6 +76,14 @@ export const HomePage: React.FC = () => {
   const enabledPayments = storeSettings.paymentMethods.filter(
     (pm) => pm.isEnabled
   );
+
+  // Concise mobile hero copy so text wraps cleanly in 2 lines without awkward ellipses
+  const compactHeroDescription =
+    language === 'ru'
+      ? 'Товары для дома, гаджеты и аксессуары с проверкой качества на складе ZAVEN.'
+      : language === 'en'
+      ? 'Quality-checked home essentials, everyday gadgets, and phone accessories.'
+      : 'Sifat nazoratidan oʻtgan uy-roʻzgʻor buyumlari, gadjetlar va aksessuarlar.';
 
   const handleCopyCoupon = (code: string) => {
     navigator.clipboard?.writeText(code).catch(() => {});
@@ -114,63 +124,59 @@ export const HomePage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-full overflow-x-clip space-y-8 sm:space-y-12 py-4 sm:py-6">
-      {/* 1. Compact Hero Banner inside zaven-page-container */}
+    <div className="w-full max-w-full overflow-x-clip bg-[#F8F9FA] dark:bg-[#0B1512] space-y-6 sm:space-y-10 py-3 sm:py-6">
+      {/* 1. Requirement 1: Compact Marketplace Hero (~190-220px tall on phones, clean 2-line wrap, restrained gold accent) */}
       {activeBanner && localizedBanner && (
         <section className="zaven-page-container">
-          <div className="bg-[#0F3D2E] rounded-2xl overflow-hidden border border-[#09261C] shadow-card">
+          <div className="bg-[#0F3D2E] rounded-2xl overflow-hidden border border-[#1D4D3C] shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-12 items-center">
-              <div className="min-w-0 p-4 sm:p-7 lg:p-8 lg:col-span-8 space-y-2.5 sm:space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="gold" size="sm">
+              <div className="min-w-0 px-4 py-3.5 sm:p-6 lg:p-7 lg:col-span-8 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#C89D54] text-[#09261C]">
                     {localizedBanner.badgeText}
-                  </Badge>
-                  <span className="text-[11px] sm:text-xs text-emerald-100 font-medium">
+                  </span>
+                  <span className="text-[11px] sm:text-xs text-emerald-100/90 font-medium">
                     • {t('delivery.estimateValue')}
                   </span>
                 </div>
 
-                <h1 className="text-base sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug break-words">
+                <h1 className="text-[15px] sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug break-words">
                   {localizedBanner.headline}
                 </h1>
 
-                <p className="text-xs sm:text-sm text-emerald-100/90 line-clamp-2 max-w-2xl break-words">
-                  {localizedBanner.subheadline}
+                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed max-w-2xl break-words">
+                  {compactHeroDescription}
                 </p>
 
                 <div className="pt-1 flex flex-wrap items-center gap-2">
-                  <Link to={activeBanner.ctaLink || '/catalog'}>
-                    <Button
-                      variant="gold"
-                      size="sm"
-                      rightIcon={<ArrowRight className="w-4 h-4" />}
-                    >
-                      {localizedBanner.ctaText}
-                    </Button>
+                  <Link
+                    to={activeBanner.ctaLink || '/catalog'}
+                    className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-3.5 rounded-lg bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs shadow-sm transition-colors"
+                  >
+                    <span>{localizedBanner.ctaText}</span>
+                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                   </Link>
 
                   {activeCoupon && (
                     <button
                       type="button"
                       onClick={() => handleCopyCoupon(activeCoupon.code)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#09261C]/90 hover:bg-[#09261C] border border-[#C89D54]/50 text-xs font-bold text-[#E5C992] transition-colors max-w-full"
+                      className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-2.5 rounded-lg bg-[#09261C]/90 hover:bg-[#09261C] border border-[#C89D54]/45 text-[11px] font-bold text-[#E5C992] transition-colors"
                       title={activeCoupon.description}
                     >
-                      <Tag className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
-                      <span className="truncate">
-                        Promokod: {activeCoupon.code}
-                      </span>
+                      <Tag className="w-3 h-3 text-[#C89D54] shrink-0" />
+                      <span>{activeCoupon.code}</span>
                       {copiedCode === activeCoupon.code ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+                        <Copy className="w-3 h-3 text-[#C89D54] shrink-0" />
                       )}
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="hidden lg:block lg:col-span-4 h-full max-h-[240px] bg-[#09261C] relative overflow-hidden">
+              <div className="hidden lg:block lg:col-span-4 h-full max-h-[210px] bg-[#09261C] relative overflow-hidden">
                 <img
                   src={activeBanner.image}
                   alt={localizedBanner.headline}
@@ -182,12 +188,12 @@ export const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* 2. Popular Products (Comfortable 16px/20px Mobile Gutters & 14px Grid Gap) */}
-      <section className="zaven-page-container space-y-3.5">
+      {/* 2. Popular Products — Immediately Visible Above the Fold on Mobile */}
+      <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <Flame className="w-5 h-5 text-[#C89D54] shrink-0" />
-            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
+            <Flame className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] shrink-0" />
+            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
               {t('home.popularTitle')}
             </h2>
           </div>
@@ -207,10 +213,10 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 3. Categories Strip (Contained cleanly inside zaven-page-container) */}
-      <section className="zaven-page-container space-y-3.5">
+      {/* 3. Categories Strip */}
+      <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
-          <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
+          <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
             {t('home.shopByCategory')}
           </h2>
           <Link
@@ -260,11 +266,11 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 4. New Arrivals Section */}
-      <section className="zaven-page-container space-y-3.5">
+      <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <Sparkles className="w-5 h-5 text-[#C89D54] shrink-0" />
-            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] shrink-0" />
+            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
               {t('home.newArrivalsTitle')}
             </h2>
           </div>
@@ -285,11 +291,11 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 5. Discounted Products Section */}
-      <section className="zaven-page-container space-y-3.5">
+      <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <Tag className="w-5 h-5 text-[#C89D54] shrink-0" />
-            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 truncate">
+            <Tag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] shrink-0" />
+            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
               {t('home.specialOffersTitle')}
             </h2>
           </div>
@@ -309,10 +315,10 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. Configurable Ordering, Delivery & Payment Transparency Section (Dark-Mode Fixed) */}
-      <section className="zaven-page-container">
-        <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-7 shadow-card space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-[#28453B] pb-4">
+      {/* 6. Requirement 5: Trust & Information Section (Blends into deep forest dark background with zero pale gray outer band) */}
+      <section className="zaven-page-container bg-transparent">
+        <div className="bg-white dark:bg-[#0F1D18] rounded-2xl border border-gray-200 dark:border-[#243E35] p-4 sm:p-6 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-[#243E35] pb-3.5">
             <div className="min-w-0">
               <Badge variant="green" size="sm">
                 {t('home.transparentRulesBadge')}
@@ -328,11 +334,11 @@ export const HomePage: React.FC = () => {
           </div>
 
           {enabledTrustItems.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {enabledTrustItems.map((item) => (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-xl bg-gray-50 dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex items-start gap-3 min-w-0"
+                  className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#142620] border border-gray-200 dark:border-[#28453B] flex items-start gap-3 min-w-0"
                 >
                   <div className="w-9 h-9 rounded-lg bg-brand-green-light flex items-center justify-center shrink-0">
                     {renderTrustIcon(item.iconName)}
@@ -350,8 +356,8 @@ export const HomePage: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#0D1915] p-4 space-y-3 min-w-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#142620] p-4 space-y-3 min-w-0">
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-brand-green shrink-0" />
                 <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
@@ -361,13 +367,13 @@ export const HomePage: React.FC = () => {
 
               {storeSettings.delivery.isDeliveryEnabled && (
                 <>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-[#162923] p-2.5 rounded-lg border border-gray-200 dark:border-[#28453B] flex items-start gap-2">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-[#0D1915] p-2.5 rounded-lg border border-gray-200 dark:border-[#28453B] flex items-start gap-2">
                     <Info className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
                     <span className="break-words">
                       {storeSettings.delivery.generalDeliveryNote}
                     </span>
                   </p>
-                  <div className="divide-y divide-gray-100 dark:divide-[#28453B] text-xs">
+                  <div className="divide-y divide-gray-200 dark:divide-[#28453B] text-xs">
                     {enabledRegions.map((reg) => (
                       <div
                         key={reg.id}
@@ -387,7 +393,7 @@ export const HomePage: React.FC = () => {
               )}
             </div>
 
-            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#0D1915] p-4 space-y-3 min-w-0">
+            <div className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#142620] p-4 space-y-3 min-w-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-brand-green shrink-0" />
@@ -404,7 +410,7 @@ export const HomePage: React.FC = () => {
                 {enabledPayments.map((pm) => (
                   <div
                     key={pm.id}
-                    className="p-3 rounded-lg border border-gray-200 dark:border-[#28453B] bg-gray-50 dark:bg-[#162923] min-w-0"
+                    className="p-3 rounded-lg border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#0D1915] min-w-0"
                   >
                     <span className="text-xs font-bold text-gray-900 dark:text-gray-100 block break-words">
                       {pm.name}
@@ -420,12 +426,12 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 7. Compact Instagram Community Banner */}
+      {/* 7. Compact Instagram Banner */}
       <section className="zaven-page-container">
-        <div className="bg-[#09261C] rounded-2xl p-4 sm:p-6 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-[#09261C] rounded-2xl p-4 sm:p-5 text-white border border-[#C89D54]/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-[#C89D54] text-[#09261C] flex items-center justify-center shrink-0 shadow-sm">
-              <Instagram className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-[#C89D54] text-[#09261C] flex items-center justify-center shrink-0 shadow-sm">
+              <Instagram className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-extrabold text-white break-words">

@@ -59,6 +59,21 @@ export const CatalogPage: React.FC = () => {
   const [visibleMultiplier, setVisibleMultiplier] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState<boolean>(false);
 
+  // Lock background scroll & hide bottom nav while the mobile filter drawer is open
+  useEffect(() => {
+    if (isMobileFilterOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.classList.add('zaven-modal-open');
+    } else {
+      document.body.style.overflow = '';
+      document.body.classList.remove('zaven-modal-open');
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.classList.remove('zaven-modal-open');
+    };
+  }, [isMobileFilterOpen]);
+
   useEffect(() => {
     const catParam = searchParams.get('category') || '';
     const qParam = searchParams.get('q') || '';
@@ -291,6 +306,7 @@ export const CatalogPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Requirement 3: Compact, touch-friendly filter controls
   const renderFilterSidebarContent = () => (
     <div className="space-y-4">
       <div>
@@ -323,8 +339,8 @@ export const CatalogPage: React.FC = () => {
         />
       </div>
 
-      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
-        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">
+      <div className="pt-3 border-t border-gray-200 dark:border-[#28453B]">
+        <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">
           {t('nav.categoriesTitle')}
         </h3>
         <ul className="space-y-1">
@@ -332,7 +348,7 @@ export const CatalogPage: React.FC = () => {
             <button
               type="button"
               onClick={() => handleSelectCategory('')}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs text-left transition-colors ${
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
                 !selectedCategorySlug
                   ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                   : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
@@ -365,7 +381,7 @@ export const CatalogPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSelectCategory(cat.slug)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs text-left transition-colors ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs text-left transition-colors ${
                     isSelected
                       ? 'bg-[#0F3D2E] text-white font-bold shadow-sm'
                       : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1D352D] font-medium'
@@ -388,8 +404,8 @@ export const CatalogPage: React.FC = () => {
         </ul>
       </div>
 
-      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B]">
-        <div className="flex items-center justify-between mb-2">
+      <div className="pt-3 border-t border-gray-200 dark:border-[#28453B]">
+        <div className="flex items-center justify-between mb-1.5">
           <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
             {t('catalog.priceRange')}
           </h3>
@@ -407,7 +423,7 @@ export const CatalogPage: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mb-2.5">
+        <div className="grid grid-cols-2 gap-2 mb-2">
           <input
             type="number"
             min={0}
@@ -416,7 +432,7 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => setMinPrice(e.target.value)}
             placeholder={t('catalog.minFrom')}
             aria-label={t('catalog.minFrom')}
-            className="w-full h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+            className="w-full h-9 rounded-xl border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
           />
           <input
             type="number"
@@ -426,7 +442,7 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => setMaxPrice(e.target.value)}
             placeholder={t('catalog.maxTo')}
             aria-label={t('catalog.maxTo')}
-            className="w-full h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+            className="w-full h-9 rounded-xl border border-gray-300 dark:border-[#2F5246] px-2.5 text-xs text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
           />
         </div>
 
@@ -447,7 +463,7 @@ export const CatalogPage: React.FC = () => {
                     setMaxPrice(preset.max);
                   }
                 }}
-                className={`text-left px-2.5 py-2 rounded-xl text-[11px] font-semibold border transition-colors flex items-center justify-between gap-1 ${
+                className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors flex items-center justify-between gap-1 ${
                   isPresetActive
                     ? 'bg-brand-green-light border-brand-green text-brand-green font-bold'
                     : 'bg-surface-page dark:bg-[#162923] border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200'
@@ -461,12 +477,12 @@ export const CatalogPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="pt-3.5 border-t border-gray-200 dark:border-[#28453B] space-y-2">
+      <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] space-y-1.5">
         <h3 className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
           {t('catalog.discountAndStock')}
         </h3>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyDiscounted')}
           </span>
@@ -482,7 +498,7 @@ export const CatalogPage: React.FC = () => {
           />
         </label>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyInStock')}
           </span>
@@ -494,7 +510,7 @@ export const CatalogPage: React.FC = () => {
           />
         </label>
 
-        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
+        <label className="flex items-center justify-between gap-2 cursor-pointer px-3 py-2 rounded-xl border border-gray-200 dark:border-[#2F5246] hover:bg-gray-50 dark:hover:bg-[#1D352D] transition-colors">
           <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
             {t('catalog.onlyNew')}
           </span>
@@ -514,169 +530,172 @@ export const CatalogPage: React.FC = () => {
   );
 
   return (
-    <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-6">
-      {/* Compact Catalog Header */}
-      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-5 shadow-card space-y-2">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
-        >
-          <Link to="/" className="hover:text-brand-green font-medium">
-            {t('nav.home')}
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <Link
-            to="/catalog"
-            onClick={() => handleSelectCategory('')}
-            className={`hover:text-brand-green ${
-              !selectedCategoryObj ? 'font-bold text-gray-900' : 'font-medium'
-            }`}
+    <>
+      <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-6">
+        {/* Compact Catalog Header */}
+        <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3.5 sm:p-5 shadow-card space-y-1.5">
+          <nav
+            aria-label="Breadcrumb"
+            className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
           >
-            {t('nav.catalog')}
-          </Link>
-          {localizedSelectedCategory && (
-            <>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <span className="font-bold text-brand-green">
-                {localizedSelectedCategory.name}
-              </span>
-            </>
-          )}
-        </nav>
+            <Link to="/" className="hover:text-brand-green font-medium">
+              {t('nav.home')}
+            </Link>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <Link
+              to="/catalog"
+              onClick={() => handleSelectCategory('')}
+              className={`hover:text-brand-green ${
+                !selectedCategoryObj ? 'font-bold text-gray-900' : 'font-medium'
+              }`}
+            >
+              {t('nav.catalog')}
+            </Link>
+            {localizedSelectedCategory && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="font-bold text-brand-green">
+                  {localizedSelectedCategory.name}
+                </span>
+              </>
+            )}
+          </nav>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 break-words">
-              {localizedSelectedCategory
-                ? localizedSelectedCategory.name
-                : searchQuery.trim()
-                ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
-                : t('catalog.titleAll')}
-            </h1>
-            <Badge variant="gold" size="sm">
-              {filteredProducts.length} {t('home.productsCount')}
-            </Badge>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 break-words">
+                {localizedSelectedCategory
+                  ? localizedSelectedCategory.name
+                  : searchQuery.trim()
+                  ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
+                  : t('catalog.titleAll')}
+              </h1>
+              <Badge variant="gold" size="sm">
+                {filteredProducts.length} {t('home.productsCount')}
+              </Badge>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Catalog Layout */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-28">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
-            <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
-              <SlidersHorizontal className="w-4 h-4 text-brand-green" />
-              <span>{t('catalog.filtersAndSort')}</span>
-            </div>
-            {activeFilterCount > 0 && (
-              <Badge variant="green" size="sm">
-                {activeFilterCount} {t('catalog.activeCount')}
-              </Badge>
-            )}
-          </div>
-          {renderFilterSidebarContent()}
-          {activeFilterCount > 0 && (
-            <div className="pt-3 mt-3 border-t border-gray-200 dark:border-[#28453B]">
-              <Button
-                variant="outline"
-                size="sm"
-                fullWidth
-                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-                onClick={handleResetAllFilters}
-              >
-                {t('catalog.clearAllFilters')}
-              </Button>
-            </div>
-          )}
-        </aside>
-
-        <div className="xl:col-span-9 space-y-4 min-w-0">
-          <QuickFilterBar
-            categories={activeCategories}
-            selectedCategorySlug={selectedCategorySlug}
-            onSelectCategory={handleSelectCategory}
-            searchQuery={searchQuery}
-            onClearSearch={() => {
-              setSearchQuery('');
-              syncUrlParams({ q: '' });
-            }}
-            minPrice={minPrice}
-            maxPrice={maxPrice}
-            onClearPrice={() => {
-              setMinPrice('');
-              setMaxPrice('');
-            }}
-            onlyDiscounted={onlyDiscounted}
-            onToggleDiscounted={() => {
-              const next = !onlyDiscounted;
-              setOnlyDiscounted(next);
-              syncUrlParams({ filter: next ? 'discounted' : '' });
-            }}
-            onlyInStock={onlyInStock}
-            onToggleInStock={() => setOnlyInStock((prev) => !prev)}
-            onlyNew={onlyNew}
-            onToggleNew={() => {
-              const next = !onlyNew;
-              setOnlyNew(next);
-              syncUrlParams({ filter: next ? 'new' : '' });
-            }}
-            sortBy={sortBy}
-            onChangeSort={(nextSort) => {
-              setSortBy(nextSort);
-              syncUrlParams({ sort: nextSort });
-            }}
-            totalFilteredCount={filteredProducts.length}
-            activeFilterCount={activeFilterCount}
-            onResetAll={handleResetAllFilters}
-            onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
-          />
-
-          {displayedProducts.length > 0 ? (
-            <>
-              <div className="zaven-product-grid">
-                {displayedProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
+        {/* Main Catalog Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+          <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-28">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
+              <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
+                <SlidersHorizontal className="w-4 h-4 text-brand-green" />
+                <span>{t('catalog.filtersAndSort')}</span>
               </div>
+              {activeFilterCount > 0 && (
+                <Badge variant="green" size="sm">
+                  {activeFilterCount} {t('catalog.activeCount')}
+                </Badge>
+              )}
+            </div>
+            {renderFilterSidebarContent()}
+            {activeFilterCount > 0 && (
+              <div className="pt-3 mt-3 border-t border-gray-200 dark:border-[#28453B]">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  fullWidth
+                  leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                  onClick={handleResetAllFilters}
+                >
+                  {t('catalog.clearAllFilters')}
+                </Button>
+              </div>
+            )}
+          </aside>
 
-              <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="text-xs text-gray-600">
-                  <strong className="text-brand-green">
-                    {startIndex + 1}–
-                    {Math.min(endIndex, filteredProducts.length)}
-                  </strong>{' '}
-                  / {filteredProducts.length} {t('catalog.showingCount')}
+          <div className="xl:col-span-9 space-y-4 min-w-0">
+            <QuickFilterBar
+              categories={activeCategories}
+              selectedCategorySlug={selectedCategorySlug}
+              onSelectCategory={handleSelectCategory}
+              searchQuery={searchQuery}
+              onClearSearch={() => {
+                setSearchQuery('');
+                syncUrlParams({ q: '' });
+              }}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              onClearPrice={() => {
+                setMinPrice('');
+                setMaxPrice('');
+              }}
+              onlyDiscounted={onlyDiscounted}
+              onToggleDiscounted={() => {
+                const next = !onlyDiscounted;
+                setOnlyDiscounted(next);
+                syncUrlParams({ filter: next ? 'discounted' : '' });
+              }}
+              onlyInStock={onlyInStock}
+              onToggleInStock={() => setOnlyInStock((prev) => !prev)}
+              onlyNew={onlyNew}
+              onToggleNew={() => {
+                const next = !onlyNew;
+                setOnlyNew(next);
+                syncUrlParams({ filter: next ? 'new' : '' });
+              }}
+              sortBy={sortBy}
+              onChangeSort={(nextSort) => {
+                setSortBy(nextSort);
+                syncUrlParams({ sort: nextSort });
+              }}
+              totalFilteredCount={filteredProducts.length}
+              activeFilterCount={activeFilterCount}
+              onResetAll={handleResetAllFilters}
+              onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
+            />
+
+            {displayedProducts.length > 0 ? (
+              <>
+                <div className="zaven-product-grid">
+                  {displayedProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
                 </div>
 
-                {hasMoreToLoad && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    rightIcon={<ChevronDown className="w-4 h-4" />}
-                    onClick={handleShowMore}
-                  >
-                    {t('catalog.showMore')} (
-                    {Math.min(
-                      ITEMS_PER_PAGE,
-                      filteredProducts.length - endIndex
-                    )}
-                    )
-                  </Button>
-                )}
+                <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="text-xs text-gray-600">
+                    <strong className="text-brand-green">
+                      {startIndex + 1}–
+                      {Math.min(endIndex, filteredProducts.length)}
+                    </strong>{' '}
+                    / {filteredProducts.length} {t('catalog.showingCount')}
+                  </div>
 
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={currentPage <= 1}
-                      onClick={() => handlePageSelect(currentPage - 1)}
-                      className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                  {hasMoreToLoad && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      rightIcon={<ChevronDown className="w-4 h-4" />}
+                      onClick={handleShowMore}
                     >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
+                      {t('catalog.showMore')} (
+                      {Math.min(
+                        ITEMS_PER_PAGE,
+                        filteredProducts.length - endIndex
+                      )}
+                      )
+                    </Button>
+                  )}
 
-                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(
-                      (page) => (
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={currentPage <= 1}
+                        onClick={() => handlePageSelect(currentPage - 1)}
+                        className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      {Array.from(
+                        { length: totalPages },
+                        (_, idx) => idx + 1
+                      ).map((page) => (
                         <button
                           key={page}
                           type="button"
@@ -689,49 +708,49 @@ export const CatalogPage: React.FC = () => {
                         >
                           {page}
                         </button>
-                      )
-                    )}
+                      ))}
 
-                    <button
-                      type="button"
-                      disabled={currentPage >= totalPages}
-                      onClick={() => handlePageSelect(currentPage + 1)}
-                      className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <EmptyState
-              icon={<PackageSearch className="w-7 h-7" />}
-              title={t('catalog.emptyTitle')}
-              description={t('catalog.emptyDesc')}
-              actionLabel={t('catalog.clearAllFilters')}
-              onAction={handleResetAllFilters}
-            />
-          )}
+                      <button
+                        type="button"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => handlePageSelect(currentPage + 1)}
+                        className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <EmptyState
+                icon={<PackageSearch className="w-7 h-7" />}
+                title={t('catalog.emptyTitle')}
+                description={t('catalog.emptyDesc')}
+                actionLabel={t('catalog.clearAllFilters')}
+                onAction={handleResetAllFilters}
+              />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Mobile Slide-Over Filter Drawer at z-[70] */}
+      {/* Requirement 3: Filter Drawer Rendered Outside space-y Container so it starts directly at top-0 with zero blank band */}
       {isMobileFilterOpen && (
         <div
-          className="fixed inset-0 z-[70] xl:hidden flex justify-end"
+          className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[100] xl:hidden flex justify-end"
           role="dialog"
           aria-modal="true"
           aria-label={t('catalog.filtersAndSort')}
         >
           <div
-            className="fixed inset-0 bg-gray-900/75"
+            className="fixed inset-0 bg-gray-950/80"
             onClick={() => setIsMobileFilterOpen(false)}
             aria-hidden="true"
           />
-          <div className="relative w-full max-w-xs sm:max-w-sm bg-white dark:bg-[#12211C] h-full flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
-            {/* Sticky Drawer Header */}
-            <div className="px-4 py-3.5 bg-[#0F3D2E] text-white flex items-center justify-between shrink-0">
+          <div className="relative w-full max-w-xs sm:max-w-sm bg-white dark:bg-[#12211C] h-full max-h-[100dvh] flex flex-col justify-between z-10 shadow-2xl overflow-hidden">
+            {/* Sticky Drawer Header Flush at Top Safe Area */}
+            <div className="px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] bg-[#0F3D2E] text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 font-bold text-sm">
                 <SlidersHorizontal className="w-4 h-4 text-[#C89D54]" />
                 <span>{t('catalog.filtersAndSort')}</span>
@@ -744,20 +763,20 @@ export const CatalogPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsMobileFilterOpen(false)}
-                className="p-1.5 rounded-lg text-emerald-100 hover:text-white"
+                className="w-8 h-8 rounded-lg bg-[#09261C]/70 text-emerald-100 hover:text-white flex items-center justify-center"
                 aria-label={t('product.close')}
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Scrollable Filter Groups */}
-            <div className="p-4 flex-1 overflow-y-auto scrollbar-thin">
+            <div className="p-4 flex-1 overflow-y-auto scrollbar-thin min-h-0">
               {renderFilterSidebarContent()}
             </div>
 
             {/* Sticky Drawer Footer with Safe-Area Clearance */}
-            <div className="p-4 pb-6 sm:pb-4 bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
+            <div className="p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-gray-50 dark:bg-[#162923] border-t border-gray-200 dark:border-[#28453B] grid grid-cols-2 gap-2.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -779,6 +798,6 @@ export const CatalogPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
