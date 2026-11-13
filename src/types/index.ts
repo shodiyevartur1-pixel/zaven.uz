@@ -132,6 +132,7 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerTelegram?: string;
   region: string;
   district?: string;
   address: string;
@@ -176,6 +177,9 @@ export interface Customer {
   fullName: string;
   phone: string;
   email?: string;
+  authUserId?: string;
+  emailVerified?: boolean;
+  telegramUsername?: string;
   addresses: CustomerAddress[];
   orderCount: number;
   totalSpent: number;

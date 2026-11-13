@@ -7,25 +7,25 @@ import {
   Search,
   Eye,
   Phone,
-  Copy,
-  Check,
-  XCircle,
-  CheckCircle2,
-  FileText,
-  ShieldCheck,
-  X,
-  Download,
-  RefreshCw,
-  Clock,
   MapPin,
+  CreditCard,
+  Send,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  RefreshCw,
+  ExternalLink,
+  X,
+  Mail,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
-import { Customer, CustomerInquiry, Order, OrderStatus } from '../../types';
+import { Customer, Order, OrderStatus } from '../../types';
 import { formatUZS, formatDateUz } from '../../utils/format';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Input } from '../../components/ui/Input';
+import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 
@@ -35,19 +35,19 @@ interface AdminOrdersProps {
   initialSection?: AdminOrdersSection;
 }
 
-const ORDER_STATUS_CONFIG: Record<
+const ORDER_STATUS_META: Record<
   OrderStatus,
   {
     label: string;
     variant: 'info' | 'gold' | 'warning' | 'success' | 'danger' | 'neutral';
   }
 > = {
-  new: { label: 'Yangi buyurtma', variant: 'gold' },
-  confirmed: { label: 'Tasdiqlangan', variant: 'info' },
+  new: { label: 'Yangi buyurtma', variant: 'info' },
+  confirmed: { label: 'Tasdiqlangan', variant: 'gold' },
   preparing: { label: 'Tayyorlanmoqda', variant: 'warning' },
-  shipped: { label: 'Yoʻlda (Kuryerda)', variant: 'info' },
+  shipped: { label: 'Yoʻlda (Yetkazilmoqda)', variant: 'info' },
   delivered: { label: 'Yetkazib berildi', variant: 'success' },
-  cancelled: { label: 'Bekor qilindi', variant: 'danger' },
+  cancelled: { label: 'Bekor qilingan', variant: 'danger' },
 };
 
 export const AdminOrders: React.FC<AdminOrdersProps> = ({
@@ -63,7 +63,6 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     reviewOrderReceipt,
     retryOrderTelegramNotification,
     updateInquiryStatus,
-    addToast,
   } = useStore();
   const { ownerEmail } = useOwnerAuth();
 
@@ -74,52 +73,25 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     setActiveSection(initialSection);
   }, [initialSection]);
 
-  const [orderSearchQuery, setOrderSearchQuery] = useState<string>(
+  const [searchQuery, setSearchQuery] = useState<string>(
     searchParams.get('q') || ''
   );
-  const [orderStatusFilter, setOrderStatusFilter] = useState<string>(
-    searchParams.get('status') || 'all'
-  );
-  const [dateFrom, setDateFrom] = useState<string>('');
-  const [dateTo, setDateTo] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [verificationFilter, setVerificationFilter] = useState<string>('all');
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [newInternalNote, setNewInternalNote] = useState<string>('');
   const [receiptReviewNote, setReceiptReviewNote] = useState<string>('');
-  const [copiedPhoneId, setCopiedPhoneId] = useState<string | null>(null);
   const [isRetryingTelegram, setIsRetryingTelegram] = useState<boolean>(false);
 
-  const [orderToCancel, setOrderToCancel] = useState<Order | null>(null);
-  const [cancelReason, setCancelReason] = useState<string>(
-    'Mijoz soʻroviga binoan bekor qilindi'
-  );
-
-  const [customerSearchQuery, setCustomerSearchQuery] = useState<string>(
-    searchParams.get('q') || ''
-  );
-  const [customerSortBy] = useState<'spent_desc' | 'orders_desc' | 'recent'>(
-    'spent_desc'
-  );
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null
   );
 
-  const [inquiryFilter] = useState<'all' | 'unread' | 'read' | 'replied'>(
-    'all'
-  );
-  const [selectedInquiry, setSelectedInquiry] =
-    useState<CustomerInquiry | null>(null);
-  const [replyDraft, setReplyDraft] = useState<string>('');
-
   useEffect(() => {
     const qParam = searchParams.get('q');
-    const statusParam = searchParams.get('status');
     if (qParam !== null) {
-      setOrderSearchQuery(qParam);
-      setCustomerSearchQuery(qParam);
-    }
-    if (statusParam !== null) {
-      setOrderStatusFilter(statusParam);
+      setSearchQuery(qParam);
     }
   }, [searchParams]);
 
@@ -128,151 +100,57 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     [orders, selectedOrderId]
   );
 
+  const pendingReceiptsCount = useMemo(
+    () =>
+      orders.filter(
+        (o) => o.paymentVerificationStatus === 'pending_verification'
+      ).length,
+    [orders]
+  );
+
   const filteredOrders = useMemo(() => {
-    const q = orderSearchQuery.trim().toLowerCase();
-    const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
-    const toTime = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
-
-    return orders
-      .filter((ord) => {
-        if (orderStatusFilter === 'pending_receipt') {
-          if (ord.paymentVerificationStatus !== 'pending_verification') {
-            return false;
-          }
-        } else if (
-          orderStatusFilter !== 'all' &&
-          ord.status !== orderStatusFilter
-        ) {
+    const q = searchQuery.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+      if (
+        verificationFilter !== 'all' &&
+        o.paymentVerificationStatus !== verificationFilter
+      ) {
+        return false;
+      }
+      if (q) {
+        const matchNum = o.orderNumber.toLowerCase().includes(q);
+        const matchName = o.customerName.toLowerCase().includes(q);
+        const matchPhone = o.customerPhone.toLowerCase().includes(q);
+        const matchTg =
+          o.customerTelegram && o.customerTelegram.toLowerCase().includes(q);
+        const matchEmail =
+          o.customerEmail && o.customerEmail.toLowerCase().includes(q);
+        if (!matchNum && !matchName && !matchPhone && !matchTg && !matchEmail) {
           return false;
         }
-
-        const createdTime = new Date(ord.createdAt).getTime();
-        if (fromTime && !Number.isNaN(fromTime) && createdTime < fromTime) {
-          return false;
-        }
-        if (toTime && !Number.isNaN(toTime) && createdTime > toTime) {
-          return false;
-        }
-
-        if (q) {
-          const matchNumber = ord.orderNumber.toLowerCase().includes(q);
-          const matchName = ord.customerName.toLowerCase().includes(q);
-          const matchPhone = ord.customerPhone.toLowerCase().includes(q);
-          if (!matchNumber && !matchName && !matchPhone) {
-            return false;
-          }
-        }
-        return true;
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  }, [orders, orderSearchQuery, orderStatusFilter, dateFrom, dateTo]);
-
-  const enrichedCustomers = useMemo(() => {
-    const q = customerSearchQuery.trim().toLowerCase();
-    const list = customers.map((cust) => {
-      const cleanPhone = cust.phone.replace(/\D/g, '');
-      const matchingOrders = orders.filter(
-        (o) =>
-          o.customerId === cust.id ||
-          o.customerPhone.replace(/\D/g, '') === cleanPhone
-      );
-      const validOrders = matchingOrders.filter(
-        (o) => o.status !== 'cancelled'
-      );
-
-      return {
-        ...cust,
-        orderCount: Math.max(cust.orderCount, matchingOrders.length),
-        totalSpent: Math.max(
-          cust.totalSpent,
-          validOrders.reduce((s, o) => s + o.totalAmount, 0)
-        ),
-        lastOrderDate:
-          matchingOrders.length > 0
-            ? matchingOrders[0].createdAt
-            : cust.lastOrderDate,
-      };
+      }
+      return true;
     });
+  }, [orders, searchQuery, statusFilter, verificationFilter]);
 
-    return list
-      .filter((c) => {
-        if (!q) return true;
-        return (
-          c.fullName.toLowerCase().includes(q) ||
-          c.phone.toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => {
-        if (customerSortBy === 'orders_desc')
-          return b.orderCount - a.orderCount;
-        return b.totalSpent - a.totalSpent;
-      });
-  }, [customers, orders, customerSearchQuery, customerSortBy]);
-
-  const filteredInquiries = useMemo(() => {
-    return inquiries.filter((inq) => {
-      if (inquiryFilter === 'all') return true;
-      return inq.status === inquiryFilter;
-    });
-  }, [inquiries, inquiryFilter]);
-
-  const pendingReceiptsCount = orders.filter(
-    (o) => o.paymentVerificationStatus === 'pending_verification'
-  ).length;
-  const unreadInquiriesCount = inquiries.filter(
-    (i) => i.status === 'unread'
-  ).length;
-
-  const handleStatusChangeRequest = (
-    order: Order,
-    nextStatus: OrderStatus
-  ) => {
-    if (nextStatus === 'cancelled') {
-      setOrderToCancel(order);
-      setCancelReason('Mijoz soʻroviga binoan bekor qilindi');
-      return;
-    }
-    updateOrderStatus(
-      order.id,
-      nextStatus,
-      `Holat «${ORDER_STATUS_CONFIG[nextStatus].label}» ga oʻzgartirildi`
+  const filteredCustomers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter(
+      (c) =>
+        c.fullName.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        (c.email && c.email.toLowerCase().includes(q)) ||
+        (c.telegramUsername && c.telegramUsername.toLowerCase().includes(q))
     );
-  };
+  }, [customers, searchQuery]);
 
-  const handleConfirmCancelOrder = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orderToCancel) return;
-    updateOrderStatus(
-      orderToCancel.id,
-      'cancelled',
-      `Buyurtma bekor qilindi. Sabab: ${cancelReason.trim()}`
-    );
-    setOrderToCancel(null);
-  };
-
-  const handleAddNoteSubmit = (e: React.FormEvent) => {
+  const handleAddInternalNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder || !newInternalNote.trim()) return;
     addOrderInternalNote(selectedOrder.id, newInternalNote.trim());
     setNewInternalNote('');
-  };
-
-  const handleCopyPhone = (phone: string, id: string) => {
-    navigator.clipboard?.writeText(phone).catch(() => {});
-    setCopiedPhoneId(id);
-    addToast({ type: 'info', title: phone });
-    setTimeout(() => setCopiedPhoneId(null), 2500);
-  };
-
-  const handleSendInquiryReply = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedInquiry) return;
-    updateInquiryStatus(selectedInquiry.id, 'replied');
-    setReplyDraft('');
-    setSelectedInquiry(null);
   };
 
   const handleReceiptDecision = (decision: 'verified' | 'rejected') => {
@@ -281,15 +159,16 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
       selectedOrder.id,
       decision,
       ownerEmail || 'owner@zaven.uz',
-      receiptReviewNote
+      receiptReviewNote.trim() || undefined
     );
     setReceiptReviewNote('');
   };
 
-  const handleRetryTelegram = async (orderId: string) => {
+  const handleRetryTelegram = async () => {
+    if (!selectedOrder) return;
     setIsRetryingTelegram(true);
     try {
-      await retryOrderTelegramNotification(orderId);
+      await retryOrderTelegramNotification(selectedOrder.id);
     } finally {
       setIsRetryingTelegram(false);
     }
@@ -297,25 +176,18 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Workspace Header */}
+      {/* Workspace Header */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">
-              Buyurtmalar, Toʻlov Cheklari va Mijozlar Boshqaruvi
-            </h1>
-            {pendingReceiptsCount > 0 && (
-              <Badge variant="warning" size="md">
-                {pendingReceiptsCount} ta chek tekshirishni kutmoqda
-              </Badge>
-            )}
-          </div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">
+            Buyurtmalar, Toʻlov Cheklari, Mijozlar va Murojaatlar
+          </h1>
           <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Humo / Uzcard toʻlov cheklarini koʻrish va tasdiqlash, yetkazib berish manzili va Telegram holati
+            Humo / Uzcard toʻlov cheklarini tekshirish, Telegram bildirishnomalar va mijozlar bazasi
           </p>
         </div>
 
-        <div className="inline-flex rounded-xl bg-surface-page p-1 border border-gray-200 self-start lg:self-auto">
+        <div className="inline-flex rounded-xl bg-surface-page p-1 border border-gray-200 self-start">
           <Link
             to="/admin/orders"
             onClick={() => setActiveSection('orders')}
@@ -327,6 +199,11 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
           >
             <ShoppingCart className="w-4 h-4" />
             <span>Buyurtmalar ({orders.length})</span>
+            {pendingReceiptsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold">
+                {pendingReceiptsCount} chek
+              </span>
+            )}
           </Link>
 
           <Link
@@ -352,97 +229,25 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>
-              Murojaatlar ({inquiries.length}
-              {unreadInquiriesCount > 0 ? ` / ${unreadInquiriesCount}` : ''})
-            </span>
+            <span>Murojaatlar ({inquiries.length})</span>
           </Link>
         </div>
       </div>
 
-      {/* SECTION 1: ORDERS & RECEIPT VERIFICATION */}
+      {/* SECTION 1: ORDERS LIST & RECEIPT VERIFICATION */}
       {activeSection === 'orders' && (
         <div className="space-y-5">
-          {/* Status & Pending Receipt Quick Pills */}
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1">
-            {[
-              { id: 'all', label: 'Barcha buyurtmalar', count: orders.length },
-              {
-                id: 'pending_receipt',
-                label: '⏳ Toʻlov tekshirilmoqda (Cheklar)',
-                count: pendingReceiptsCount,
-              },
-              {
-                id: 'new',
-                label: 'Yangi',
-                count: orders.filter((o) => o.status === 'new').length,
-              },
-              {
-                id: 'confirmed',
-                label: 'Tasdiqlangan',
-                count: orders.filter((o) => o.status === 'confirmed').length,
-              },
-              {
-                id: 'preparing',
-                label: 'Tayyorlanmoqda',
-                count: orders.filter((o) => o.status === 'preparing').length,
-              },
-              {
-                id: 'shipped',
-                label: 'Yoʻlda',
-                count: orders.filter((o) => o.status === 'shipped').length,
-              },
-              {
-                id: 'delivered',
-                label: 'Yetkazilgan',
-                count: orders.filter((o) => o.status === 'delivered').length,
-              },
-              {
-                id: 'cancelled',
-                label: 'Bekor qilingan',
-                count: orders.filter((o) => o.status === 'cancelled').length,
-              },
-            ].map((pill) => {
-              const isSelected = orderStatusFilter === pill.id;
-              return (
-                <button
-                  key={pill.id}
-                  type="button"
-                  onClick={() => setOrderStatusFilter(pill.id)}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border shrink-0 transition-colors ${
-                    isSelected
-                      ? 'bg-[#0F3D2E] text-white border-[#0F3D2E] shadow-sm'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-brand-green'
-                  }`}
-                >
-                  <span>{pill.label}</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[11px] font-extrabold ${
-                      isSelected
-                        ? 'bg-[#C89D54] text-[#09261C]'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {pill.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Search & Date Filter Bar */}
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-card grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
-              label="Buyurtma #, mijoz ismi yoki telefon"
-              value={orderSearchQuery}
-              onChange={(e) => setOrderSearchQuery(e.target.value)}
-              placeholder="ZVN-2026-1040..."
+              placeholder="Buyurtma #, mijoz ismi, tel yoki @telegram..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search className="w-4 h-4" />}
               rightElement={
-                orderSearchQuery ? (
+                searchQuery ? (
                   <button
                     type="button"
-                    onClick={() => setOrderSearchQuery('')}
+                    onClick={() => setSearchQuery('')}
                     className="text-gray-400 hover:text-gray-700"
                   >
                     <X className="w-4 h-4" />
@@ -451,192 +256,147 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               }
             />
 
-            <Input
-              label="Dan"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: 'all', label: 'Barcha buyurtma holatlari' },
+                { value: 'new', label: 'Yangi buyurtmalar' },
+                { value: 'confirmed', label: 'Tasdiqlangan' },
+                { value: 'preparing', label: 'Tayyorlanmoqda' },
+                { value: 'shipped', label: 'Yoʻlda' },
+                { value: 'delivered', label: 'Yetkazib berildi' },
+                { value: 'cancelled', label: 'Bekor qilingan' },
+              ]}
             />
 
-            <Input
-              label="Gacha"
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+            <Select
+              value={verificationFilter}
+              onChange={(e) => setVerificationFilter(e.target.value)}
+              options={[
+                { value: 'all', label: 'Toʻlov cheki: Barchasi' },
+                {
+                  value: 'pending_verification',
+                  label: `Toʻlov tekshirilmoqda (${pendingReceiptsCount})`,
+                },
+                { value: 'verified', label: 'Toʻlov tasdiqlangan' },
+                { value: 'rejected', label: 'Toʻlov cheki rad etilgan' },
+                { value: 'not_required', label: 'Qabul qilganda toʻlov' },
+              ]}
             />
-
-            <Button
-              variant="outline"
-              size="md"
-              fullWidth
-              onClick={() => {
-                setOrderSearchQuery('');
-                setOrderStatusFilter('all');
-                setDateFrom('');
-                setDateTo('');
-              }}
-            >
-              Filtrlarni tozalash
-            </Button>
           </div>
 
-          {/* Orders Data Table */}
           {filteredOrders.length > 0 ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                      <th className="py-3.5 px-4">Buyurtma # va Sana</th>
-                      <th className="py-3.5 px-4">Xaridor va Aloqa</th>
-                      <th className="py-3.5 px-4">Hudud va Manzil</th>
+                      <th className="py-3.5 px-4">Buyurtma # / Sana</th>
+                      <th className="py-3.5 px-4">Mijoz va Aloqa</th>
+                      <th className="py-3.5 px-4">Hudud</th>
                       <th className="py-3.5 px-4">Toʻlov va Chek holati</th>
                       <th className="py-3.5 px-4">Jami summa</th>
-                      <th className="py-3.5 px-4">Buyurtma holati</th>
-                      <th className="py-3.5 px-4 text-right">Boshqarish</th>
+                      <th className="py-3.5 px-4">Holati</th>
+                      <th className="py-3.5 px-4 text-right">Boshqaruv</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 text-xs sm:text-sm">
                     {filteredOrders.map((order) => {
-                      const isNewOrder = order.status === 'new';
-                      const statusMeta = ORDER_STATUS_CONFIG[order.status];
-
+                      const statusMeta = ORDER_STATUS_META[order.status];
                       return (
                         <tr
                           key={order.id}
-                          className={`transition-colors ${
-                            isNewOrder
-                              ? 'bg-brand-gold-light/40 hover:bg-brand-gold-light/70'
-                              : 'hover:bg-surface-page/70'
-                          }`}
+                          className="hover:bg-surface-page/70 transition-colors"
                         >
-                          <td className="py-4 px-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {isNewOrder && (
-                                <span className="px-1.5 py-0.5 rounded bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold">
-                                  YANGI
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOrderId(order.id)}
-                                className="font-mono font-extrabold text-brand-green hover:underline"
-                              >
-                                #{order.orderNumber}
-                              </button>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <span className="font-mono font-extrabold text-brand-green block">
+                              #{order.orderNumber}
+                            </span>
+                            <span className="text-xs text-gray-500">
                               {formatDateUz(order.createdAt, true)}
-                            </p>
+                            </span>
                           </td>
 
-                          <td className="py-4 px-4">
+                          <td className="py-3.5 px-4">
                             <p className="font-bold text-gray-900">
                               {order.customerName}
                             </p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <p className="text-xs text-gray-600">
+                              {order.customerPhone}
+                            </p>
+                            {/* Shown ONLY when customer supplied a Telegram username */}
+                            {order.customerTelegram && (
                               <a
-                                href={`tel:${order.customerPhone.replace(/\s+/g, '')}`}
-                                className="text-xs font-semibold text-brand-green hover:underline flex items-center gap-1"
+                                href={`https://t.me/${order.customerTelegram.replace(
+                                  /^@/,
+                                  ''
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-green hover:underline mt-0.5"
                               >
-                                <Phone className="w-3 h-3" />
-                                <span>{order.customerPhone}</span>
+                                <Send className="w-3 h-3" />
+                                <span>{order.customerTelegram}</span>
                               </a>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleCopyPhone(order.customerPhone, order.id)
-                                }
-                                className="text-gray-400 hover:text-gray-700"
-                              >
-                                {copiedPhoneId === order.id ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </div>
+                            )}
                           </td>
 
-                          {/* Saved Region, District & Detailed Address */}
-                          <td className="py-4 px-4 max-w-[230px]">
-                            <p className="text-xs font-bold text-gray-900 truncate">
+                          <td className="py-3.5 px-4">
+                            <p className="font-semibold text-gray-900">
                               {order.region}
-                              {order.district ? `, ${order.district}` : ''}
                             </p>
-                            <p
-                              className="text-xs text-gray-500 line-clamp-1 mt-0.5"
-                              title={order.address}
-                            >
-                              {order.address}
-                            </p>
+                            {order.district && (
+                              <p className="text-xs text-gray-500">
+                                {order.district}
+                              </p>
+                            )}
                           </td>
 
-                          {/* Payment & Receipt Verification Column */}
-                          <td className="py-4 px-4">
-                            <p className="text-xs font-semibold text-gray-800 truncate max-w-[180px]">
+                          <td className="py-3.5 px-4">
+                            <p className="text-xs font-semibold text-gray-800 mb-1">
                               {order.paymentMethodLabel}
                             </p>
-                            <div className="mt-1">
-                              {order.paymentVerificationStatus ===
-                                'pending_verification' && (
-                                <Badge variant="warning" size="sm">
-                                  <Clock className="w-3 h-3 mr-1" />
-                                  Toʻlov tekshirilmoqda
-                                </Badge>
-                              )}
-                              {order.paymentVerificationStatus ===
-                                'verified' && (
-                                <Badge variant="success" size="sm">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Chek tasdiqlangan
-                                </Badge>
-                              )}
-                              {order.paymentVerificationStatus ===
-                                'rejected' && (
-                                <Badge variant="danger" size="sm">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Chek rad etilgan
-                                </Badge>
-                              )}
-                              {order.paymentVerificationStatus ===
-                                'not_required' && (
-                                <Badge variant="neutral" size="sm">
-                                  Joyida toʻlov
-                                </Badge>
-                              )}
-                            </div>
+                            {order.paymentVerificationStatus ===
+                              'pending_verification' && (
+                              <Badge variant="warning" size="sm">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Toʻlov tekshirilmoqda
+                              </Badge>
+                            )}
+                            {order.paymentVerificationStatus === 'verified' && (
+                              <Badge variant="success" size="sm">
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Chek tasdiqlangan
+                              </Badge>
+                            )}
+                            {order.paymentVerificationStatus === 'rejected' && (
+                              <Badge variant="danger" size="sm">
+                                <XCircle className="w-3 h-3 mr-1" />
+                                Chek rad etilgan
+                              </Badge>
+                            )}
                           </td>
 
-                          <td className="py-4 px-4 whitespace-nowrap font-extrabold text-gray-900">
+                          <td className="py-3.5 px-4 whitespace-nowrap font-extrabold text-brand-green">
                             {formatUZS(order.totalAmount)}
                           </td>
 
-                          <td className="py-4 px-4 whitespace-nowrap">
+                          <td className="py-3.5 px-4 whitespace-nowrap">
                             <Badge variant={statusMeta.variant} size="sm">
                               {statusMeta.label}
                             </Badge>
                           </td>
 
-                          <td className="py-4 px-4 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-2">
-                              <Button
-                                variant={
-                                  order.paymentVerificationStatus ===
-                                  'pending_verification'
-                                    ? 'gold'
-                                    : 'secondary'
-                                }
-                                size="sm"
-                                leftIcon={<Eye className="w-3.5 h-3.5" />}
-                                onClick={() => setSelectedOrderId(order.id)}
-                              >
-                                {order.paymentVerificationStatus ===
-                                'pending_verification'
-                                  ? 'Chekni tekshirish'
-                                  : 'Koʻrish'}
-                              </Button>
-                            </div>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              leftIcon={<Eye className="w-3.5 h-3.5" />}
+                              onClick={() => setSelectedOrderId(order.id)}
+                            >
+                              Koʻrish
+                            </Button>
                           </td>
                         </tr>
                       );
@@ -648,90 +408,77 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
           ) : (
             <EmptyState
               title="Buyurtmalar topilmadi"
-              description="Tanlangan holat yoki qidiruv soʻroviga mos buyurtmalar mavjud emas."
+              description="Qidiruv yoki filtr shartlariga mos buyurtmalar yoʻq."
               actionLabel="Filtrlarni tozalash"
               onAction={() => {
-                setOrderSearchQuery('');
-                setOrderStatusFilter('all');
-                setDateFrom('');
-                setDateTo('');
+                setSearchQuery('');
+                setStatusFilter('all');
+                setVerificationFilter('all');
               }}
             />
           )}
         </div>
       )}
 
-      {/* SECTION 2: CUSTOMERS */}
+      {/* SECTION 2: CUSTOMERS TABLE */}
       {activeSection === 'customers' && (
-        <div className="space-y-5">
-          <div className="bg-brand-green-light/70 border border-brand-green/20 rounded-xl p-4 flex items-center gap-2.5 text-xs text-brand-green">
-            <ShieldCheck className="w-5 h-5 shrink-0" />
-            <span>
-              <strong>Maxfiylik nazorati:</strong> Mijozlar shaxsiy maʼlumotlari faqat tasdiqlangan doʻkon egasi (Owner) uchun ochiq.
-            </span>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex-1 max-w-md">
-              <Input
-                placeholder="Mijoz ismi yoki telefon raqami..."
-                value={customerSearchQuery}
-                onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                leftIcon={<Search className="w-4 h-4" />}
-              />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                    <th className="py-3.5 px-4">Mijoz F.I.Sh.</th>
-                    <th className="py-3.5 px-4">Telefon va Email</th>
-                    <th className="py-3.5 px-4">Buyurtmalar soni</th>
-                    <th className="py-3.5 px-4">Jami xarid summasi</th>
-                    <th className="py-3.5 px-4 text-right">Profil</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 text-xs sm:text-sm">
-                  {enrichedCustomers.map((cust) => (
-                    <tr key={cust.id} className="hover:bg-surface-page/70">
-                      <td className="py-4 px-4 font-bold text-gray-900">
-                        {cust.fullName}
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="font-semibold text-brand-green block">
-                          {cust.phone}
-                        </span>
-                        {cust.email && (
-                          <span className="text-xs text-gray-500">
-                            {cust.email}
-                          </span>
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
+                  <th className="py-3.5 px-4">Mijoz</th>
+                  <th className="py-3.5 px-4">Telefon / Email / Telegram</th>
+                  <th className="py-3.5 px-4">Buyurtmalar</th>
+                  <th className="py-3.5 px-4">Jami xarid</th>
+                  <th className="py-3.5 px-4 text-right">Amal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 text-xs sm:text-sm">
+                {filteredCustomers.map((cust) => (
+                  <tr key={cust.id} className="hover:bg-surface-page/70">
+                    <td className="py-3.5 px-4 font-bold text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <span>{cust.fullName}</span>
+                        {cust.emailVerified && (
+                          <Badge variant="success" size="sm">
+                            Tasdiqlangan
+                          </Badge>
                         )}
-                      </td>
-                      <td className="py-4 px-4">
-                        <Badge variant="green" size="sm">
-                          {cust.orderCount} ta
-                        </Badge>
-                      </td>
-                      <td className="py-4 px-4 font-extrabold text-brand-green">
-                        {formatUZS(cust.totalSpent)}
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedCustomer(cust)}
-                        >
-                          Tarixni koʻrish
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 space-y-0.5">
+                      <p className="text-gray-800 font-semibold">
+                        {cust.phone}
+                      </p>
+                      {cust.email && (
+                        <p className="text-xs text-gray-500">{cust.email}</p>
+                      )}
+                      {cust.telegramUsername && (
+                        <p className="text-xs text-brand-green font-semibold">
+                          {cust.telegramUsername}
+                        </p>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 font-bold">
+                      {cust.orderCount} ta
+                    </td>
+                    <td className="py-3.5 px-4 font-extrabold text-brand-green">
+                      {formatUZS(cust.totalSpent)}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedCustomer(cust)}
+                      >
+                        Profil
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -739,42 +486,46 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
       {/* SECTION 3: INQUIRIES */}
       {activeSection === 'inquiries' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredInquiries.map((inq) => (
+          {inquiries.map((inq) => (
             <div
               key={inq.id}
-              className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between gap-4"
+              className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card space-y-3"
             >
-              <div className="space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-gray-900">
-                      {inq.subject}
-                    </h3>
-                    <p className="text-xs text-gray-600">
-                      {inq.customerName} • {inq.phone}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={inq.status === 'unread' ? 'gold' : 'success'}
-                    size="sm"
-                  >
-                    {inq.status}
-                  </Badge>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-extrabold text-gray-900">
+                    {inq.customerName} ({inq.phone})
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    {formatDateUz(inq.createdAt, true)}
+                  </p>
                 </div>
-                <p className="text-xs sm:text-sm text-gray-700 bg-surface-page p-3.5 rounded-xl border border-gray-200">
-                  «{inq.message}»
-                </p>
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  variant="primary"
+                <Badge
+                  variant={
+                    inq.status === 'unread'
+                      ? 'warning'
+                      : inq.status === 'replied'
+                      ? 'success'
+                      : 'neutral'
+                  }
                   size="sm"
-                  onClick={() => {
-                    setSelectedInquiry(inq);
-                    setReplyDraft('');
-                  }}
                 >
-                  Javob yozish
+                  {inq.status}
+                </Badge>
+              </div>
+              <p className="text-xs font-bold text-brand-green">
+                {inq.subject}
+              </p>
+              <p className="text-xs text-gray-700 leading-relaxed">
+                {inq.message}
+              </p>
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => updateInquiryStatus(inq.id, 'replied')}
+                >
+                  Javob berildi deb belgilash
                 </Button>
               </div>
             </div>
@@ -782,314 +533,236 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         </div>
       )}
 
-      {/* MODAL 1: OWNER ORDER & BANK RECEIPT VERIFICATION MODAL */}
+      {/* ===================================================================== */}
+      {/* ADMIN ORDER DETAILS MODAL (Shows customerTelegram only when supplied) */}
+      {/* ===================================================================== */}
       <Modal
         isOpen={Boolean(selectedOrder)}
         onClose={() => setSelectedOrderId(null)}
         title={
           selectedOrder
-            ? `Buyurtma #${selectedOrder.orderNumber} va Toʻlov Cheki Tekshiruvi`
-            : 'Buyurtma'
+            ? `Buyurtma #${selectedOrder.orderNumber} tafsilotlari`
+            : ''
         }
         maxWidth="2xl"
         footer={
-          selectedOrder && (
-            <div className="w-full flex flex-wrap items-center justify-between gap-3">
-              {selectedOrder.status !== 'cancelled' ? (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  leftIcon={<XCircle className="w-4 h-4" />}
-                  onClick={() => {
-                    setOrderToCancel(selectedOrder);
-                    setCancelReason('Mijoz soʻroviga binoan bekor qilindi');
-                  }}
-                >
-                  Buyurtmani bekor qilish
-                </Button>
-              ) : (
-                <span className="text-xs font-bold text-red-600">
-                  Buyurtma bekor qilingan
-                </span>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedOrderId(null)}
-              >
-                Yopish
-              </Button>
-            </div>
-          )
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedOrderId(null)}
+          >
+            Yopish
+          </Button>
         }
       >
         {selectedOrder && (
-          <div className="space-y-6 text-xs sm:text-sm">
-            {/* Top Order Status & Telegram Status Bar */}
-            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-gray-500">
-                    Buyurtma holati:
-                  </span>
-                  <Badge
-                    variant={
-                      ORDER_STATUS_CONFIG[selectedOrder.status].variant
-                    }
-                    size="md"
-                  >
-                    {ORDER_STATUS_CONFIG[selectedOrder.status].label}
-                  </Badge>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Sana: {formatDateUz(selectedOrder.createdAt, true)}
+          <div className="space-y-5 text-xs sm:text-sm">
+            {/* Customer Contact & Delivery Address Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+                  Mijoz va Aloqa
+                </span>
+                <p className="font-bold text-gray-900 text-sm">
+                  {selectedOrder.customerName}
                 </p>
+                <a
+                  href={`tel:${selectedOrder.customerPhone.replace(/\s+/g, '')}`}
+                  className="inline-flex items-center gap-1.5 font-semibold text-brand-green hover:underline"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>{selectedOrder.customerPhone}</span>
+                </a>
+                {selectedOrder.customerEmail && (
+                  <p className="flex items-center gap-1.5 text-xs text-gray-600">
+                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{selectedOrder.customerEmail}</span>
+                  </p>
+                )}
+                {/* Displayed ONLY when supplied at checkout */}
+                {selectedOrder.customerTelegram && (
+                  <div className="pt-0.5">
+                    <a
+                      href={`https://t.me/${selectedOrder.customerTelegram.replace(
+                        /^@/,
+                        ''
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-green-light text-brand-green font-bold text-xs hover:underline"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Telegram: {selectedOrder.customerTelegram}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <select
+              <div className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400">
+                  Yetkazib berish manzili
+                </span>
+                <p className="font-bold text-gray-900">
+                  {selectedOrder.region}
+                  {selectedOrder.district ? `, ${selectedOrder.district}` : ''}
+                </p>
+                <p className="text-xs text-gray-700 break-words">
+                  {selectedOrder.address}
+                </p>
+                {selectedOrder.locationCoordinates && (
+                  <a
+                    href={`https://www.google.com/maps?q=${selectedOrder.locationCoordinates.lat},${selectedOrder.locationCoordinates.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-mono font-bold text-brand-green hover:underline pt-0.5"
+                  >
+                    <MapPin className="w-3.5 h-3.5" />
+                    <span>
+                      GPS: {selectedOrder.locationCoordinates.lat},{' '}
+                      {selectedOrder.locationCoordinates.lng}
+                    </span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Order Status Selector & Telegram Notification Status */}
+            <div className="p-4 rounded-xl bg-surface-page border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex-1 max-w-xs">
+                <Select
+                  label="Buyurtma holatini oʻzgartirish"
                   value={selectedOrder.status}
                   onChange={(e) =>
-                    handleStatusChangeRequest(
-                      selectedOrder,
-                      e.target.value as OrderStatus
+                    updateOrderStatus(
+                      selectedOrder.id,
+                      e.target.value as OrderStatus,
+                      `Holat oʻzgartirildi: ${e.target.value}`
                     )
                   }
-                  className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-xs font-extrabold text-gray-900"
-                >
-                  <option value="new">Yangi buyurtma</option>
-                  <option value="confirmed">Tasdiqlandi</option>
-                  <option value="preparing">Tayyorlanmoqda</option>
-                  <option value="shipped">Yoʻlda (Kuryerda)</option>
-                  <option value="delivered">Yetkazib berildi</option>
-                  <option value="cancelled">Bekor qilish</option>
-                </select>
+                  options={[
+                    { value: 'new', label: 'Yangi' },
+                    { value: 'confirmed', label: 'Tasdiqlangan' },
+                    { value: 'preparing', label: 'Tayyorlanmoqda' },
+                    { value: 'shipped', label: 'Yoʻlda' },
+                    { value: 'delivered', label: 'Yetkazib berildi' },
+                    { value: 'cancelled', label: 'Bekor qilingan' },
+                  ]}
+                />
+              </div>
 
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="outline"
+                  type="button"
+                  variant="secondary"
                   size="sm"
                   isLoading={isRetryingTelegram}
                   leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-                  onClick={() => handleRetryTelegram(selectedOrder.id)}
+                  onClick={handleRetryTelegram}
                 >
                   Telegramga qayta yuborish
                 </Button>
               </div>
             </div>
 
-            {/* BANK TRANSFER RECEIPT PREVIEW, DOWNLOAD & OWNER CONFIRM/REJECT */}
-            {(selectedOrder.paymentReceipt ||
-              selectedOrder.paymentVerificationStatus !== 'not_required') && (
-              <div className="p-5 rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/30 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold-border pb-3">
-                  <div>
-                    <h4 className="text-sm font-extrabold text-gray-900">
-                      Humo / Uzcard Toʻlov Cheki Tekshiruvi
-                    </h4>
-                    <p className="text-xs text-gray-600">
-                      Toʻlanishi lozim boʻlgan summa:{' '}
-                      <strong className="text-brand-green">
-                        {formatUZS(selectedOrder.totalAmount)}
-                      </strong>
-                    </p>
+            {/* Payment Receipt Verification Panel */}
+            {selectedOrder.paymentReceipt && (
+              <div className="p-4 rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-brand-green" />
+                    <span className="font-extrabold text-gray-900">
+                      Yuklangan toʻlov cheki ({selectedOrder.paymentReceipt.fileName})
+                    </span>
                   </div>
-
-                  <div>
-                    {selectedOrder.paymentVerificationStatus ===
-                      'pending_verification' && (
-                      <Badge variant="warning" size="md">
-                        Toʻlov tekshirilmoqda
-                      </Badge>
-                    )}
-                    {selectedOrder.paymentVerificationStatus === 'verified' && (
-                      <Badge variant="success" size="md">
-                        Tasdiqlangan
-                      </Badge>
-                    )}
-                    {selectedOrder.paymentVerificationStatus === 'rejected' && (
-                      <Badge variant="danger" size="md">
-                        Rad etilgan
-                      </Badge>
-                    )}
-                  </div>
+                  <Badge
+                    variant={
+                      selectedOrder.paymentVerificationStatus === 'verified'
+                        ? 'success'
+                        : selectedOrder.paymentVerificationStatus === 'rejected'
+                        ? 'danger'
+                        : 'warning'
+                    }
+                    size="sm"
+                  >
+                    {selectedOrder.paymentVerificationStatus}
+                  </Badge>
                 </div>
 
-                {selectedOrder.paymentReceipt ? (
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                    <div className="md:col-span-5 rounded-xl overflow-hidden bg-white border border-gray-200 p-2 flex flex-col items-center">
-                      {selectedOrder.paymentReceipt.mimeType.startsWith(
-                        'image/'
-                      ) ? (
-                        <img
-                          src={selectedOrder.paymentReceipt.dataUrl}
-                          alt="Payment Receipt"
-                          className="max-h-56 w-auto object-contain rounded-lg"
-                        />
-                      ) : (
-                        <div className="py-10 px-4 text-center space-y-2">
-                          <FileText className="w-10 h-10 text-red-600 mx-auto" />
-                          <p className="text-xs font-bold text-gray-800">
-                            PDF Toʻlov Cheki
-                          </p>
-                        </div>
-                      )}
-
+                {selectedOrder.paymentReceipt.dataUrl && (
+                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-white max-h-64 flex items-center justify-center p-2">
+                    {selectedOrder.paymentReceipt.mimeType.startsWith(
+                      'image/'
+                    ) ? (
+                      <img
+                        src={selectedOrder.paymentReceipt.dataUrl}
+                        alt="Receipt"
+                        className="max-h-56 w-auto object-contain"
+                      />
+                    ) : (
                       <a
                         href={selectedOrder.paymentReceipt.dataUrl}
-                        download={selectedOrder.paymentReceipt.fileName}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-2 w-full py-2 px-3 rounded-lg bg-[#0F3D2E] text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-[#16533F]"
+                        className="inline-flex items-center gap-2 text-brand-green font-bold hover:underline py-4"
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>
-                          Chekni yuklab olish (
-                          {selectedOrder.paymentReceipt.fileName})
-                        </span>
+                        <FileText className="w-5 h-5" />
+                        <span>PDF chekni ochish</span>
                       </a>
-                    </div>
-
-                    <div className="md:col-span-7 space-y-3">
-                      {selectedOrder.paymentReviewedBy && (
-                        <div className="p-3 rounded-xl bg-white border border-gray-200 text-xs space-y-1">
-                          <p className="font-bold text-gray-900">
-                            Tekshiruv tarixi (Audit Log):
-                          </p>
-                          <p className="text-gray-600">
-                            Tekshirdi:{' '}
-                            <strong>{selectedOrder.paymentReviewedBy}</strong>
-                          </p>
-                          <p className="text-gray-600">
-                            Vaqt:{' '}
-                            <strong>
-                              {selectedOrder.paymentReviewedAt
-                                ? formatDateUz(
-                                    selectedOrder.paymentReviewedAt,
-                                    true
-                                  )
-                                : '—'}
-                            </strong>
-                          </p>
-                          {selectedOrder.paymentReviewNote && (
-                            <p className="text-gray-700 italic">
-                              Izoh: «{selectedOrder.paymentReviewNote}»
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      <Input
-                        label="Tekshiruv izohi (ixtiyoriy)"
-                        value={receiptReviewNote}
-                        onChange={(e) => setReceiptReviewNote(e.target.value)}
-                        placeholder="Masalan: Humo kartaga 224 000 soʻm tushgani tasdiqlandi"
-                      />
-
-                      <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          leftIcon={<CheckCircle2 className="w-4 h-4" />}
-                          onClick={() => handleReceiptDecision('verified')}
-                        >
-                          Chekni tasdiqlash (Toʻlov qabul qilindi)
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          leftIcon={<XCircle className="w-4 h-4" />}
-                          onClick={() => handleReceiptDecision('rejected')}
-                        >
-                          Chekni rad etish
-                        </Button>
-                      </div>
-                    </div>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-600">
-                    Chek fayli biriktirilmagan.
-                  </p>
                 )}
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={receiptReviewNote}
+                    onChange={(e) => setReceiptReviewNote(e.target.value)}
+                    placeholder="Tekshiruv izohi (ixtiyoriy)..."
+                    className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                    onClick={() => handleReceiptDecision('verified')}
+                  >
+                    Tasdiqlash
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    leftIcon={<XCircle className="w-4 h-4" />}
+                    onClick={() => handleReceiptDecision('rejected')}
+                  >
+                    Rad etish
+                  </Button>
+                </div>
               </div>
             )}
 
-            {/* Customer Contact & Complete Saved Delivery Location */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border border-gray-200 space-y-2">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-400">
-                  Xaridor
-                </h4>
-                <p className="text-sm font-extrabold text-gray-900">
-                  {selectedOrder.customerName}
-                </p>
-                <p className="text-xs font-bold text-brand-green">
-                  {selectedOrder.customerPhone}
-                </p>
-                {selectedOrder.customerEmail && (
-                  <p className="text-xs text-gray-500">
-                    {selectedOrder.customerEmail}
-                  </p>
-                )}
-                <p className="text-xs text-gray-600 pt-1">
-                  Toʻlov usuli:{' '}
-                  <strong className="text-gray-900">
-                    {selectedOrder.paymentMethodLabel}
-                  </strong>
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-gray-200 space-y-2">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-400">
-                  Yetkazib berish hududi va manzili
-                </h4>
-                <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-brand-green shrink-0" />
-                  <span>
-                    {selectedOrder.region}
-                    {selectedOrder.district
-                      ? ` — ${selectedOrder.district}`
-                      : ''}
-                  </span>
-                </p>
-                <p className="text-xs text-gray-700 leading-relaxed">
-                  {selectedOrder.address}
-                </p>
-                {selectedOrder.locationCoordinates && (
-                  <p className="text-[11px] font-mono text-brand-green">
-                    GPS: {selectedOrder.locationCoordinates.lat},{' '}
-                    {selectedOrder.locationCoordinates.lng}
-                  </p>
-                )}
-                {selectedOrder.customerNote && (
-                  <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                    Izoh: «{selectedOrder.customerNote}»
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Ordered Items */}
+            {/* Order Items */}
             <div className="border border-gray-200 rounded-xl divide-y divide-gray-200 overflow-hidden">
               {selectedOrder.items.map((item) => (
                 <div
                   key={item.productId}
-                  className="p-3.5 flex items-center justify-between gap-4 bg-white"
+                  className="p-3 flex items-center justify-between gap-3 bg-white"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <img
                       src={item.image}
                       alt={item.productName}
-                      className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0"
+                      className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0"
                     />
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 truncate">
                         {item.productName}
                       </p>
                       <p className="text-xs text-gray-500">
-                        SKU: {item.sku} • {item.quantity} ×{' '}
+                        {item.sku} • {item.quantity} ×{' '}
                         {formatUZS(item.unitPrice)}
                       </p>
                     </div>
@@ -1101,87 +774,29 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               ))}
             </div>
 
-            {/* Internal Admin Notes */}
-            <div className="space-y-3 pt-2 border-t border-gray-200">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-gray-500">
-                Ichki maʼmuriy va audit izohlari
-              </h4>
-              <ul className="space-y-2">
-                {selectedOrder.internalNotes.map((note, idx) => (
-                  <li
-                    key={idx}
-                    className="p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-xs text-gray-700 flex items-start gap-2"
-                  >
-                    <FileText className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-                    <span>{note}</span>
-                  </li>
-                ))}
-              </ul>
-              <form onSubmit={handleAddNoteSubmit} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newInternalNote}
-                  onChange={(e) => setNewInternalNote(e.target.value)}
-                  placeholder="Yangi ichki izoh yozing..."
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-xs"
-                />
-                <Button type="submit" variant="secondary" size="sm">
-                  Qoʻshish
-                </Button>
-              </form>
-            </div>
+            {/* Internal Notes */}
+            <form onSubmit={handleAddInternalNote} className="flex gap-2">
+              <input
+                type="text"
+                value={newInternalNote}
+                onChange={(e) => setNewInternalNote(e.target.value)}
+                placeholder="Ichki admin izohi qoʻshish..."
+                className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs"
+              />
+              <Button type="submit" variant="secondary" size="sm">
+                Qoʻshish
+              </Button>
+            </form>
           </div>
         )}
       </Modal>
 
-      {/* Cancel Order Modal */}
-      <Modal
-        isOpen={Boolean(orderToCancel)}
-        onClose={() => setOrderToCancel(null)}
-        title="Buyurtmani bekor qilish"
-        maxWidth="sm"
-        footer={
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOrderToCancel(null)}
-            >
-              Orqaga
-            </Button>
-            <Button
-              type="submit"
-              form="cancel-order-form"
-              variant="danger"
-              size="sm"
-            >
-              Bekor qilish
-            </Button>
-          </>
-        }
-      >
-        {orderToCancel && (
-          <form
-            id="cancel-order-form"
-            onSubmit={handleConfirmCancelOrder}
-            className="space-y-4 text-xs sm:text-sm"
-          >
-            <Input
-              label="Sabab"
-              required
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-            />
-          </form>
-        )}
-      </Modal>
-
-      {/* Customer History Modal */}
+      {/* Customer Profile Modal */}
       <Modal
         isOpen={Boolean(selectedCustomer)}
         onClose={() => setSelectedCustomer(null)}
         title={selectedCustomer ? selectedCustomer.fullName : ''}
-        maxWidth="xl"
+        maxWidth="md"
         footer={
           <Button
             variant="outline"
@@ -1193,48 +808,29 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         }
       >
         {selectedCustomer && (
-          <div className="space-y-4 text-xs sm:text-sm">
-            <p className="font-bold text-gray-900">
-              {selectedCustomer.phone} — Jami:{' '}
-              {formatUZS(selectedCustomer.totalSpent)}
+          <div className="space-y-3 text-xs sm:text-sm">
+            <p>
+              <strong>Telefon:</strong> {selectedCustomer.phone}
+            </p>
+            {selectedCustomer.email && (
+              <p>
+                <strong>Email:</strong> {selectedCustomer.email}{' '}
+                {selectedCustomer.emailVerified ? '(Tasdiqlangan)' : ''}
+              </p>
+            )}
+            {selectedCustomer.telegramUsername && (
+              <p>
+                <strong>Telegram:</strong> {selectedCustomer.telegramUsername}
+              </p>
+            )}
+            <p>
+              <strong>Buyurtmalar soni:</strong> {selectedCustomer.orderCount}{' '}
+              ta ({formatUZS(selectedCustomer.totalSpent)})
             </p>
           </div>
-        )}
-      </Modal>
-
-      {/* Reply Inquiry Modal */}
-      <Modal
-        isOpen={Boolean(selectedInquiry)}
-        onClose={() => setSelectedInquiry(null)}
-        title="Murojaatga javob"
-        maxWidth="md"
-        footer={
-          <Button
-            type="submit"
-            form="inquiry-reply-form"
-            variant="primary"
-            size="sm"
-          >
-            Saqlash
-          </Button>
-        }
-      >
-        {selectedInquiry && (
-          <form
-            id="inquiry-reply-form"
-            onSubmit={handleSendInquiryReply}
-            className="space-y-4 text-xs sm:text-sm"
-          >
-            <textarea
-              rows={3}
-              required
-              value={replyDraft}
-              onChange={(e) => setReplyDraft(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 p-3 text-xs"
-            />
-          </form>
         )}
       </Modal>
     </div>
   );
 };
+

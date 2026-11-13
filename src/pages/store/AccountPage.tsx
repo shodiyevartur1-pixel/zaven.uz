@@ -18,15 +18,21 @@ import {
   ChevronRight,
   Clock,
   CreditCard,
+  Send,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { CustomerAddress, Order, OrderStatus } from '../../types';
 import {
   formatUZS,
   formatUzbekPhone,
   isValidUzbekPhone,
   formatDateUz,
+  normalizeTelegramUsername,
+  isValidTelegramUsername,
 } from '../../utils/format';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -35,6 +41,7 @@ import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
 
 type AccountTab = 'orders' | 'addresses' | 'profile';
+type AuthMode = 'signin' | 'signup' | 'reset' | 'verify_pending' | 'update_password';
 
 const ORDER_STATUS_META: Record<
   OrderStatus,
@@ -82,28 +89,40 @@ export const AccountPage: React.FC = () => {
   const navigate = useNavigate();
   const {
     currentCustomer,
-    customers,
     orders,
     products,
     storeSettings,
-    signInCustomerDemo,
+    syncVerifiedCustomerFromAuthUser,
     signOutCustomer,
     updateCustomerProfile,
     addToCart,
+    addToast,
   } = useStore();
   const { t } = useThemeLanguage();
 
   const [activeTab, setActiveTab] = useState<AccountTab>('orders');
+  const [authMode, setAuthMode] = useState<AuthMode>('signin');
 
-  const [authPhone, setAuthPhone] = useState<string>('+998 90 912-34-56');
+  // Email Auth Form State
+  const [authEmail, setAuthEmail] = useState<string>('');
+  const [authPassword, setAuthPassword] = useState<string>('');
+  const [authNewPassword, setAuthNewPassword] = useState<string>('');
   const [authFullName, setAuthFullName] = useState<string>('');
-  const [authStep, setAuthStep] = useState<'phone' | 'otp'>('phone');
-  const [otpCode, setOtpCode] = useState<string>('1234');
+  const [authPhone, setAuthPhone] = useState<string>('+998 ');
+  const [authTelegram, setAuthTelegram] = useState<string>('');
+  const [pendingEmail, setPendingEmail] = useState<string>('');
+
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string>('');
+  const [authFeedback, setAuthFeedback] = useState<string>('');
 
+  // Profile Edit State
   const [profileName, setProfileName] = useState<string>('');
-  const [profileEmail, setProfileEmail] = useState<string>('');
+  const [profilePhone, setProfilePhone] = useState<string>('');
+  const [profileTelegram, setProfileTelegram] = useState<string>('');
+  const [profileError, setProfileError] = useState<string>('');
 
+  // Saved Addresses Modal State
   const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addrTitle, setAddrTitle] = useState<string>('');
@@ -118,61 +137,376 @@ export const AccountPage: React.FC = () => {
     [storeSettings.delivery.regions]
   );
 
+  // Detect PASSWORD_RECOVERY event or unconfirmed session on mount
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        if (session.user.email_confirmed_at) {
+          syncVerifiedCustomerFromAuthUser(session.user);
+        } else {
+          setPendingEmail(session.user.email || '');
+          setAuthMode('verify_pending');
+        }
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthError('');
+        setAuthFeedback('');
+        setAuthMode('update_password');
+      } else if (
+        (event === 'SIGNED_IN' || event === 'USER_UPDATED') &&
+        session?.user
+      ) {
+        if (session.user.email_confirmed_at) {
+          syncVerifiedCustomerFromAuthUser(session.user);
+        } else {
+          setPendingEmail(session.user.email || '');
+          setAuthMode('verify_pending');
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [syncVerifiedCustomerFromAuthUser]);
+
   useEffect(() => {
     if (currentCustomer) {
       setProfileName(currentCustomer.fullName);
-      setProfileEmail(currentCustomer.email || '');
+      setProfilePhone(currentCustomer.phone || '+998 ');
+      setProfileTelegram(currentCustomer.telegramUsername || '');
     }
   }, [currentCustomer]);
 
-  const matchedExistingCustomer = useMemo(() => {
-    const cleanInput = authPhone.replace(/\D/g, '');
-    return customers.find((c) => c.phone.replace(/\D/g, '') === cleanInput);
-  }, [authPhone, customers]);
-
+  // Match orders by customerId, verified email, or phone so existing orders are never detached
   const customerOrders = useMemo(() => {
     if (!currentCustomer) return [];
     const cleanCustomerPhone = currentCustomer.phone.replace(/\D/g, '');
+    const cleanCustomerEmail = currentCustomer.email?.trim().toLowerCase();
+
     return orders
-      .filter(
-        (o) =>
-          o.customerId === currentCustomer.id ||
+      .filter((o) => {
+        if (o.customerId && o.customerId === currentCustomer.id) return true;
+        if (
+          cleanCustomerEmail &&
+          o.customerEmail &&
+          o.customerEmail.trim().toLowerCase() === cleanCustomerEmail
+        ) {
+          return true;
+        }
+        if (
+          cleanCustomerPhone.length >= 9 &&
           o.customerPhone.replace(/\D/g, '') === cleanCustomerPhone
-      )
+        ) {
+          return true;
+        }
+        return false;
+      })
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
   }, [currentCustomer, orders]);
 
-  const handleRequestDemoOtp = (e: React.FormEvent) => {
+  // ===========================================================================
+  // 1. EMAIL SIGN-IN HANDLER (Requires email_confirmed_at before treating as verified)
+  // ===========================================================================
+  const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
+    setAuthFeedback('');
+
+    const cleanEmail = authEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setAuthError(t('account.emailLabel'));
+      return;
+    }
+    if (authPassword.length < 6) {
+      setAuthError(t('account.passwordLabel'));
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthError(t('account.unconfiguredNoticeDesc'));
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: authPassword,
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          setPendingEmail(cleanEmail);
+          setAuthMode('verify_pending');
+          setAuthFeedback(t('account.notVerifiedYet'));
+          return;
+        }
+        setAuthError(error.message);
+        return;
+      }
+
+      if (data.user) {
+        if (!data.user.email_confirmed_at) {
+          setPendingEmail(cleanEmail);
+          setAuthMode('verify_pending');
+          setAuthFeedback(t('account.notVerifiedYet'));
+          return;
+        }
+        await syncVerifiedCustomerFromAuthUser(data.user);
+        addToast({
+          type: 'success',
+          title: t('header.welcome'),
+          description: data.user.email,
+        });
+      }
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  // ===========================================================================
+  // 2. EMAIL SIGN-UP HANDLER (Sends confirmation link; requires verification)
+  // ===========================================================================
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthFeedback('');
+
+    const cleanEmail = authEmail.trim().toLowerCase();
+    if (authFullName.trim().length < 2) {
+      setAuthError(t('cart.fullName'));
+      return;
+    }
     if (!isValidUzbekPhone(authPhone)) {
       setAuthError('+998 XX XXX-XX-XX');
       return;
     }
-    setOtpCode('1234');
-    setAuthStep('otp');
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setAuthError(t('account.emailLabel'));
+      return;
+    }
+    if (authPassword.length < 6) {
+      setAuthError(t('account.passwordLabel'));
+      return;
+    }
+    if (!isValidTelegramUsername(authTelegram)) {
+      setAuthError(t('cart.telegramInvalidError'));
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthError(t('account.unconfiguredNoticeDesc'));
+      return;
+    }
+
+    const normalizedTg = normalizeTelegramUsername(authTelegram);
+
+    setIsAuthSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: authPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/account`,
+          data: {
+            full_name: authFullName.trim(),
+            phone: authPhone.trim(),
+            telegram_username: normalizedTg || null,
+          },
+        },
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      // Always require email confirmation before treating the account as verified
+      if (data.user && data.user.email_confirmed_at) {
+        await syncVerifiedCustomerFromAuthUser(data.user);
+      } else {
+        setPendingEmail(cleanEmail);
+        setAuthMode('verify_pending');
+      }
+    } finally {
+      setIsAuthSubmitting(false);
+    }
   };
 
-  const handleVerifyDemoOtp = (e: React.FormEvent) => {
+  // ===========================================================================
+  // 3. RESEND CONFIRMATION EMAIL & CHECK VERIFICATION STATUS
+  // ===========================================================================
+  const handleResendConfirmationEmail = async () => {
+    setAuthError('');
+    setAuthFeedback('');
+
+    const targetEmail = (pendingEmail || authEmail).trim().toLowerCase();
+    if (!targetEmail || !isSupabaseConfigured || !supabase) return;
+
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/account`,
+        },
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      setAuthFeedback(t('account.resendSuccess'));
+      addToast({
+        type: 'success',
+        title: t('account.resendSuccess'),
+      });
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleCheckVerificationStatus = async () => {
+    setAuthError('');
+    setAuthFeedback('');
+    if (!isSupabaseConfigured || !supabase) return;
+
+    setIsAuthSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error || !data.user) {
+        setAuthMode('signin');
+        setAuthFeedback(
+          'Email tasdiqlangan boʻlsa, parolingiz bilan tizimga kiring.'
+        );
+        return;
+      }
+
+      if (data.user.email_confirmed_at) {
+        await syncVerifiedCustomerFromAuthUser(data.user);
+        addToast({
+          type: 'success',
+          title: t('account.verifiedBadge'),
+          description: data.user.email,
+        });
+      } else {
+        setAuthError(t('account.notVerifiedYet'));
+      }
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  // ===========================================================================
+  // 4. PASSWORD RESET REQUEST & PASSWORD UPDATE
+  // ===========================================================================
+  const handleSendPasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    signInCustomerDemo(
-      authPhone,
-      matchedExistingCustomer
-        ? matchedExistingCustomer.fullName
-        : authFullName || 'Xaridor'
-    );
-    setAuthStep('phone');
+    setAuthError('');
+    setAuthFeedback('');
+
+    const cleanEmail = authEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setAuthError(t('account.emailLabel'));
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) {
+      setAuthError(t('account.unconfiguredNoticeDesc'));
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: `${window.location.origin}/account`,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      setAuthFeedback(t('account.resetSentSuccess'));
+      addToast({
+        type: 'info',
+        title: t('account.resetSentSuccess'),
+      });
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthFeedback('');
+
+    if (authNewPassword.length < 6) {
+      setAuthError(t('account.newPasswordLabel'));
+      return;
+    }
+
+    if (!isSupabaseConfigured || !supabase) return;
+
+    setIsAuthSubmitting(true);
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        password: authNewPassword,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+        return;
+      }
+
+      if (data.user && data.user.email_confirmed_at) {
+        await syncVerifiedCustomerFromAuthUser(data.user);
+      }
+
+      addToast({
+        type: 'success',
+        title: t('account.passwordUpdatedSuccess'),
+      });
+      setAuthNewPassword('');
+      setAuthMode('signin');
+    } finally {
+      setIsAuthSubmitting(false);
+    }
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    if (profileName.trim().length < 2) return;
+    setProfileError('');
+
+    if (profileName.trim().length < 2) {
+      setProfileError(t('cart.fullName'));
+      return;
+    }
+    if (!isValidUzbekPhone(profilePhone)) {
+      setProfileError('+998 XX XXX-XX-XX');
+      return;
+    }
+    if (!isValidTelegramUsername(profileTelegram)) {
+      setProfileError(t('cart.telegramInvalidError'));
+      return;
+    }
+
     updateCustomerProfile({
       fullName: profileName.trim(),
-      email: profileEmail.trim() || undefined,
+      phone: profilePhone.trim(),
+      telegramUsername: normalizeTelegramUsername(profileTelegram),
     });
   };
 
@@ -259,35 +593,184 @@ export const AccountPage: React.FC = () => {
     navigate('/cart');
   };
 
-  if (!currentCustomer) {
+  // ===========================================================================
+  // UNAUTHENTICATED OR UNVERIFIED VIEW: EMAIL SIGN-IN / SIGN-UP / VERIFY / RESET
+  // ===========================================================================
+  if (!currentCustomer || !currentCustomer.emailVerified) {
     return (
       <div className="zaven-page-container py-6 sm:py-12">
-        <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-12 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
-          <div className="lg:col-span-7 p-5 sm:p-8 space-y-6">
-            <div>
-              <Badge variant="gold" size="sm">
-                {t('account.demoBadge')}
-              </Badge>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 mt-2">
-                {t('account.signInTitle')}
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                {t('account.signInSub')}
-              </p>
-            </div>
+        <div className="max-w-xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
+          {/* Top Header */}
+          <div className="bg-[#0F3D2E] text-white p-5 sm:p-6 space-y-2">
+            <Badge variant="gold" size="sm">
+              {t('account.emailAuthBadge')}
+            </Badge>
+            <h1 className="text-lg sm:text-2xl font-extrabold text-white">
+              {authMode === 'signup'
+                ? t('account.signUpTitle')
+                : authMode === 'reset'
+                ? t('account.resetTitle')
+                : authMode === 'verify_pending'
+                ? t('account.verifyPendingTitle')
+                : authMode === 'update_password'
+                ? t('account.updatePasswordTitle')
+                : t('account.signInTitle')}
+            </h1>
+            <p className="text-xs text-emerald-100/90 leading-relaxed">
+              {authMode === 'signup'
+                ? t('account.signUpSub')
+                : authMode === 'reset'
+                ? t('account.resetSub')
+                : authMode === 'verify_pending'
+                ? t('account.verifyPendingDesc')
+                : t('account.signInSub')}
+            </p>
+          </div>
 
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
-              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">{t('account.demoSmsNoticeTitle')}</p>
-                <p className="mt-0.5 text-amber-800">
-                  {t('account.demoSmsNoticeDesc')}
-                </p>
+          <div className="p-5 sm:p-6 space-y-5">
+            {/* Mode Switcher Tabs */}
+            {authMode !== 'verify_pending' &&
+              authMode !== 'update_password' && (
+                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('signin');
+                      setAuthError('');
+                      setAuthFeedback('');
+                    }}
+                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${
+                      authMode === 'signin'
+                        ? 'bg-[#0F3D2E] text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('account.signInTab')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('signup');
+                      setAuthError('');
+                      setAuthFeedback('');
+                    }}
+                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${
+                      authMode === 'signup'
+                        ? 'bg-[#0F3D2E] text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('account.signUpTab')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('reset');
+                      setAuthError('');
+                      setAuthFeedback('');
+                    }}
+                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${
+                      authMode === 'reset'
+                        ? 'bg-[#0F3D2E] text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('account.resetTab')}
+                  </button>
+                </div>
+              )}
+
+            {!isSupabaseConfigured && (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">
+                    {t('account.unconfiguredNoticeTitle')}
+                  </p>
+                  <p className="mt-0.5 text-amber-800 leading-relaxed">
+                    {t('account.unconfiguredNoticeDesc')}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
-            {authStep === 'phone' ? (
-              <form onSubmit={handleRequestDemoOtp} className="space-y-4">
+            {authError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs font-semibold text-red-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            {authFeedback && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5 text-xs font-semibold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{authFeedback}</span>
+              </div>
+            )}
+
+            {/* VIEW A: SIGN IN */}
+            {authMode === 'signin' && (
+              <form onSubmit={handleEmailSignIn} className="space-y-4">
+                <Input
+                  label={t('account.emailLabel')}
+                  required
+                  type="email"
+                  autoComplete="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="namuna@mail.uz"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                />
+
+                <Input
+                  label={t('account.passwordLabel')}
+                  required
+                  type="password"
+                  autoComplete="current-password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                />
+
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('reset');
+                      setAuthError('');
+                      setAuthFeedback('');
+                    }}
+                    className="text-xs font-bold text-brand-green hover:underline"
+                  >
+                    {t('account.forgotPasswordLink')}
+                  </button>
+                </div>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  isLoading={isAuthSubmitting}
+                  leftIcon={<ShieldCheck className="w-4 h-4 text-[#C89D54]" />}
+                >
+                  {t('account.signInBtn')}
+                </Button>
+              </form>
+            )}
+
+            {/* VIEW B: SIGN UP */}
+            {authMode === 'signup' && (
+              <form onSubmit={handleEmailSignUp} className="space-y-4">
+                <Input
+                  label={t('cart.fullName')}
+                  required
+                  value={authFullName}
+                  onChange={(e) => setAuthFullName(e.target.value)}
+                  leftIcon={<User className="w-4 h-4" />}
+                />
+
                 <Input
                   label={t('cart.phone')}
                   required
@@ -296,109 +779,212 @@ export const AccountPage: React.FC = () => {
                   onChange={(e) =>
                     setAuthPhone(formatUzbekPhone(e.target.value))
                   }
+                  placeholder="+998 90 123-45-67"
                   leftIcon={<Phone className="w-4 h-4" />}
-                  error={authError}
                 />
 
-                {!matchedExistingCustomer && (
-                  <Input
-                    label={t('cart.fullName')}
-                    required
-                    value={authFullName}
-                    onChange={(e) => setAuthFullName(e.target.value)}
-                    leftIcon={<User className="w-4 h-4" />}
-                  />
-                )}
+                <Input
+                  label={t('account.emailLabel')}
+                  required
+                  type="email"
+                  autoComplete="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="namuna@mail.uz"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                />
+
+                <Input
+                  label={t('cart.telegramOptional')}
+                  value={authTelegram}
+                  onChange={(e) => setAuthTelegram(e.target.value)}
+                  placeholder={t('cart.telegramPlaceholder')}
+                  leftIcon={<Send className="w-4 h-4" />}
+                />
+
+                <Input
+                  label={t('account.passwordLabel')}
+                  required
+                  type="password"
+                  autoComplete="new-password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                />
 
                 <Button
                   type="submit"
                   variant="primary"
                   size="lg"
                   fullWidth
-                  leftIcon={<KeyRound className="w-4 h-4" />}
+                  isLoading={isAuthSubmitting}
+                  leftIcon={<Mail className="w-4 h-4 text-[#C89D54]" />}
                 >
-                  {t('account.getOtpBtn')}
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyDemoOtp} className="space-y-4">
-                <Input
-                  label="SMS Code (Demo: 1234)"
-                  required
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) =>
-                    setOtpCode(e.target.value.replace(/\D/g, ''))
-                  }
-                  leftIcon={<KeyRound className="w-4 h-4" />}
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                  leftIcon={<CheckCircle2 className="w-4 h-4" />}
-                >
-                  {t('account.verifyAndSignIn')}
+                  {t('account.signUpBtn')}
                 </Button>
               </form>
             )}
-          </div>
 
-          <div className="lg:col-span-5 bg-[#0F3D2E] text-white p-5 sm:p-8 flex flex-col justify-between space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-[#C89D54] font-bold text-xs uppercase tracking-wider">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Demo Profiles</span>
-              </div>
-              <div className="space-y-2.5 pt-1">
-                {customers.slice(0, 3).map((demoCust) => (
-                  <button
-                    key={demoCust.id}
+            {/* VIEW C: PASSWORD RESET REQUEST */}
+            {authMode === 'reset' && (
+              <form onSubmit={handleSendPasswordReset} className="space-y-4">
+                <Input
+                  label={t('account.emailLabel')}
+                  required
+                  type="email"
+                  autoComplete="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder="namuna@mail.uz"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                />
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  isLoading={isAuthSubmitting}
+                  leftIcon={<Mail className="w-4 h-4 text-[#C89D54]" />}
+                >
+                  {t('account.sendResetBtn')}
+                </Button>
+              </form>
+            )}
+
+            {/* VIEW D: UPDATE PASSWORD AFTER CLICKING RECOVERY LINK */}
+            {authMode === 'update_password' && (
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <Input
+                  label={t('account.newPasswordLabel')}
+                  required
+                  type="password"
+                  autoComplete="new-password"
+                  value={authNewPassword}
+                  onChange={(e) => setAuthNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                />
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  isLoading={isAuthSubmitting}
+                  leftIcon={<CheckCircle2 className="w-4 h-4 text-[#C89D54]" />}
+                >
+                  {t('account.updatePasswordBtn')}
+                </Button>
+              </form>
+            )}
+
+            {/* VIEW E: EMAIL VERIFICATION PENDING SCREEN */}
+            {authMode === 'verify_pending' && (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2 text-xs sm:text-sm">
+                  <div className="flex items-center gap-2 font-bold text-brand-green">
+                    <Mail className="w-4 h-4 shrink-0" />
+                    <span className="truncate">
+                      {pendingEmail || authEmail}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                    {t('account.verifyPendingDesc')}
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <Button
                     type="button"
-                    onClick={() =>
-                      signInCustomerDemo(demoCust.phone, demoCust.fullName)
+                    variant="primary"
+                    size="md"
+                    fullWidth
+                    isLoading={isAuthSubmitting}
+                    leftIcon={
+                      <RefreshCw className="w-4 h-4 text-[#C89D54]" />
                     }
-                    className="w-full text-left p-3 rounded-xl bg-[#09261C]/80 hover:bg-[#C89D54] hover:text-[#09261C] border border-emerald-700/80 transition-colors flex items-center justify-between group"
+                    onClick={handleCheckVerificationStatus}
                   >
-                    <div>
-                      <p className="text-xs font-bold text-white group-hover:text-[#09261C]">
-                        {demoCust.fullName}
-                      </p>
-                      <p className="text-[11px] text-emerald-200 group-hover:text-[#09261C]/80">
-                        {demoCust.phone}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-[#C89D54] group-hover:text-[#09261C] shrink-0" />
+                    {t('account.checkVerificationBtn')}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    fullWidth
+                    isLoading={isAuthSubmitting}
+                    leftIcon={<Mail className="w-4 h-4" />}
+                    onClick={handleResendConfirmationEmail}
+                  >
+                    {t('account.resendConfirmationBtn')}
+                  </Button>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 dark:border-[#28453B] flex items-center justify-between text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('signin');
+                      setAuthError('');
+                      setAuthFeedback('');
+                    }}
+                    className="font-bold text-brand-green hover:underline"
+                  >
+                    ← {t('account.signInTab')}
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={signOutCustomer}
+                    className="text-gray-500 hover:underline"
+                  >
+                    {t('account.signOut')}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     );
   }
 
+  // ===========================================================================
+  // VERIFIED CUSTOMER DASHBOARD
+  // ===========================================================================
   const totalCustomerSpent = customerOrders
     .filter((o) => o.status !== 'cancelled')
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
   return (
     <div className="zaven-page-container py-5 sm:py-8 space-y-6 sm:space-y-8">
-      {/* Customer Header Card */}
+      {/* Verified Customer Header Card */}
       <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3.5 min-w-0">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#0F3D2E] text-[#C89D54] flex items-center justify-center font-extrabold text-xl shrink-0">
             {currentCustomer.fullName.charAt(0).toUpperCase()}
           </div>
-          <div>
-            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">
-              {currentCustomer.fullName}
-            </h1>
-            <p className="text-xs text-gray-600 mt-0.5">
-              {currentCustomer.phone}
-            </p>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
+                {currentCustomer.fullName}
+              </h1>
+              <Badge variant="success" size="sm">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                {t('account.verifiedBadge')}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+              {currentCustomer.email && <span>{currentCustomer.email}</span>}
+              {currentCustomer.phone && <span>• {currentCustomer.phone}</span>}
+              {currentCustomer.telegramUsername && (
+                <span className="text-brand-green font-semibold">
+                  • {currentCustomer.telegramUsername}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -477,7 +1063,7 @@ export const AccountPage: React.FC = () => {
           </button>
         </aside>
 
-        {/* Tappable Order Cards (No redundant count strip) */}
+        {/* Tappable Order Cards */}
         <div className="lg:col-span-9">
           {activeTab === 'orders' && (
             <div className="space-y-3.5">
@@ -629,6 +1215,21 @@ export const AccountPage: React.FC = () => {
                 onSubmit={handleSaveProfile}
                 className="max-w-lg space-y-4"
               >
+                {profileError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
+                    {profileError}
+                  </div>
+                )}
+
+                <Input
+                  label={t('account.emailLabel')}
+                  type="email"
+                  value={currentCustomer.email || ''}
+                  disabled
+                  leftIcon={<Mail className="w-4 h-4" />}
+                  helperText={t('account.verifiedBadge')}
+                />
+
                 <Input
                   label={t('cart.fullName')}
                   required
@@ -636,19 +1237,26 @@ export const AccountPage: React.FC = () => {
                   onChange={(e) => setProfileName(e.target.value)}
                   leftIcon={<User className="w-4 h-4" />}
                 />
+
                 <Input
                   label={t('cart.phone')}
-                  value={currentCustomer.phone}
-                  disabled
+                  required
+                  type="tel"
+                  value={profilePhone}
+                  onChange={(e) =>
+                    setProfilePhone(formatUzbekPhone(e.target.value))
+                  }
                   leftIcon={<Phone className="w-4 h-4" />}
                 />
+
                 <Input
-                  label="Email"
-                  type="email"
-                  value={profileEmail}
-                  onChange={(e) => setProfileEmail(e.target.value)}
-                  leftIcon={<Mail className="w-4 h-4" />}
+                  label={t('cart.telegramOptional')}
+                  value={profileTelegram}
+                  onChange={(e) => setProfileTelegram(e.target.value)}
+                  placeholder={t('cart.telegramPlaceholder')}
+                  leftIcon={<Send className="w-4 h-4" />}
                 />
+
                 <Button type="submit" variant="primary" size="md">
                   {t('account.saveChanges')}
                 </Button>
@@ -716,9 +1324,7 @@ export const AccountPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* ===================================================================== */}
-      {/* STRUCTURED ORDER DETAILS MODAL (Distinct Readable Sections)           */}
-      {/* ===================================================================== */}
+      {/* Structured Order Details Modal */}
       <Modal
         isOpen={Boolean(selectedOrder)}
         onClose={() => setSelectedOrder(null)}

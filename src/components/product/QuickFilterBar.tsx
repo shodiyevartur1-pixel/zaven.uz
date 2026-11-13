@@ -110,28 +110,29 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   }, []);
 
   return (
-    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card space-y-2.5">
-      {/* Row 1: Filter Trigger + Quick Filter Chips + Compact Anchored Sort Menu */}
+    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-3.5 shadow-card space-y-2.5">
+      {/* Row 1: Filters Button + Readable Sort Control (Never awkwardly truncated) */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin py-0.5 min-w-0">
-          <button
-            type="button"
-            onClick={onOpenMobileFilters}
-            className="xl:hidden h-9 px-3 rounded-xl bg-[#0F3D2E] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm shrink-0"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
-            <span>{t('catalog.filtersAndPrice')}</span>
-            {activeFilterCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold leading-none">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+        <button
+          type="button"
+          onClick={onOpenMobileFilters}
+          className="xl:hidden h-9 px-3 rounded-xl bg-[#0F3D2E] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm shrink-0"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+          <span>{t('catalog.filtersAndPrice')}</span>
+          {activeFilterCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold leading-none">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
 
+        {/* Desktop Quick Chips inline on xl+ */}
+        <div className="hidden xl:flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={onToggleDiscounted}
-            className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
+            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
               onlyDiscounted
                 ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-gold'
@@ -144,7 +145,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleNew}
-            className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
+            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
               onlyNew
                 ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-green'
@@ -157,7 +158,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleInStock}
-            className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors shrink-0 ${
+            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
               onlyInStock
                 ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-emerald-400'
@@ -168,8 +169,8 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           </button>
         </div>
 
-        {/* Compact Viewport-Bounded Sort Popover Next to Trigger */}
-        <div ref={sortMenuRef} className="relative shrink-0">
+        {/* Readable Sort Trigger + Compact Anchored Menu */}
+        <div ref={sortMenuRef} className="relative ml-auto">
           <button
             type="button"
             onClick={() => setIsSortMenuOpen((prev) => !prev)}
@@ -178,9 +179,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             className="h-9 px-3 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] hover:border-brand-green dark:hover:border-brand-gold text-xs font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-1.5 transition-colors shadow-sm"
           >
             <ArrowUpDown className="w-3.5 h-3.5 text-brand-green shrink-0" />
-            <span className="truncate max-w-[120px] sm:max-w-[180px]">
-              {activeSortLabel}
-            </span>
+            <span className="whitespace-nowrap">{activeSortLabel}</span>
             <ChevronDown
               className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${
                 isSortMenuOpen ? 'rotate-180' : ''
@@ -192,7 +191,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             <ul
               role="listbox"
               aria-label={t('catalog.filtersAndSort')}
-              className="absolute right-0 top-full mt-1.5 w-52 max-w-[calc(100vw-2rem)] rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-xl py-1 z-30 divide-y divide-gray-100 dark:divide-[#28453B]"
+              className="absolute right-0 top-full mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-xl py-1 z-30 divide-y divide-gray-100 dark:divide-[#28453B]"
             >
               {sortOptions.map((opt) => {
                 const isSelected = sortBy === opt.value;
@@ -210,7 +209,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
                           : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#162923]'
                       }`}
                     >
-                      <span className="truncate">{opt.label}</span>
+                      <span>{opt.label}</span>
                       {isSelected && (
                         <Check className="w-3.5 h-3.5 text-brand-green shrink-0" />
                       )}
@@ -223,7 +222,49 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
         </div>
       </div>
 
-      {/* Row 2: Active Filters & Clear All */}
+      {/* Row 2 on Mobile/Tablet (<xl): Neatly Wrapped Promotion & Stock Chips (Zero Clipping) */}
+      <div className="xl:hidden flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-100 dark:border-[#28453B]">
+        <button
+          type="button"
+          onClick={onToggleDiscounted}
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+            onlyDiscounted
+              ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
+              : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
+          }`}
+        >
+          <Tag className="w-3 h-3 shrink-0" />
+          <span>{t('nav.discounts')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleNew}
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+            onlyNew
+              ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
+              : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
+          }`}
+        >
+          <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
+          <span>{t('nav.newArrivals')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleInStock}
+          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+            onlyInStock
+              ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
+              : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
+          }`}
+        >
+          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+          <span>{t('product.inStock')}</span>
+        </button>
+      </div>
+
+      {/* Row 3: Active Filters & Clear All */}
       {activeFilterCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-[#28453B]">
           <div className="flex flex-wrap items-center gap-1.5">

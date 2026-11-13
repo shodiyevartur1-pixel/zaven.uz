@@ -12,6 +12,7 @@ import {
   Phone,
   User,
   Mail,
+  Send,
   ShieldCheck,
   Copy,
   Check,
@@ -35,6 +36,8 @@ import {
   formatUZS,
   formatUzbekPhone,
   isValidUzbekPhone,
+  normalizeTelegramUsername,
+  isValidTelegramUsername,
 } from '../../utils/format';
 import {
   UZBEKISTAN_REGIONS,
@@ -58,7 +61,6 @@ const MAX_RECEIPT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
 
-// Uzbekistan geographic bounds for the interactive map canvas
 const UZ_LAT_MIN = 37.0;
 const UZ_LAT_MAX = 45.6;
 const UZ_LNG_MIN = 55.8;
@@ -107,6 +109,7 @@ export const CartCheckoutPage: React.FC = () => {
     [storeSettings.paymentMethods]
   );
 
+  // Customer Contact Fields (Full Name -> Phone -> Email -> Optional Telegram Username)
   const [customerName, setCustomerName] = useState<string>(
     currentCustomer?.fullName || ''
   );
@@ -114,7 +117,12 @@ export const CartCheckoutPage: React.FC = () => {
     currentCustomer?.phone || '+998 '
   );
   const [customerEmail, setCustomerEmail] = useState<string>(
-    currentCustomer?.email || ''
+    currentCustomer?.emailVerified && currentCustomer?.email
+      ? currentCustomer.email
+      : ''
+  );
+  const [customerTelegram, setCustomerTelegram] = useState<string>(
+    currentCustomer?.telegramUsername || ''
   );
 
   const [selectedUzRegionId, setSelectedUzRegionId] = useState<string>(
@@ -128,7 +136,6 @@ export const CartCheckoutPage: React.FC = () => {
   );
   const [customerNote, setCustomerNote] = useState<string>('');
 
-  // Never automatically detect or save location; only set via explicit user action
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [geoStatusMessage, setGeoStatusMessage] = useState<{
     type: 'success' | 'warning';
@@ -140,7 +147,6 @@ export const CartCheckoutPage: React.FC = () => {
     accuracyMeters?: number;
   } | null>(null);
 
-  // Interactive Map Pin Picker Modal State
   const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
   const [draftPinCoords, setDraftPinCoords] = useState<{
     lat: number;
@@ -176,6 +182,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [errors, setErrors] = useState<{
     name?: string;
     phone?: string;
+    telegram?: string;
     region?: string;
     district?: string;
     address?: string;
@@ -188,13 +195,21 @@ export const CartCheckoutPage: React.FC = () => {
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
 
+  // Prefill from verified customer account when available
   useEffect(() => {
     if (currentCustomer) {
       setCustomerName((prev) => prev || currentCustomer.fullName);
       setCustomerPhone((prev) =>
         prev === '+998 ' || !prev ? currentCustomer.phone : prev
       );
-      setCustomerEmail((prev) => prev || currentCustomer.email || '');
+      if (currentCustomer.emailVerified && currentCustomer.email) {
+        setCustomerEmail((prev) => prev || currentCustomer.email || '');
+      }
+      if (currentCustomer.telegramUsername) {
+        setCustomerTelegram(
+          (prev) => prev || currentCustomer.telegramUsername || ''
+        );
+      }
       const defaultAddr =
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
@@ -243,7 +258,6 @@ export const CartCheckoutPage: React.FC = () => {
     }));
   };
 
-  // Open Interactive Map Pin Picker Modal
   const handleOpenMapPicker = () => {
     const startCoords = sharedCoordinates || currentUzRegionObj.approxCenter;
     setDraftPinCoords({
@@ -307,7 +321,6 @@ export const CartCheckoutPage: React.FC = () => {
     setIsMapModalOpen(false);
   };
 
-  // Optional Browser Geolocation — runs ONLY when customer explicitly taps the button
   const handleUseMyLocation = () => {
     setGeoStatusMessage(null);
 
@@ -430,7 +443,6 @@ export const CartCheckoutPage: React.FC = () => {
     return Math.min(productsSubtotal, appliedCoupon.discountValue);
   }, [appliedCoupon, productsSubtotal]);
 
-  // Read delivery fees from existing admin settings; never invent prices
   const selectedRegionRule = useMemo(() => {
     if (!storeSettings.delivery.isDeliveryEnabled) return null;
     return resolveRegionTariffRule(currentUzRegionObj.nameUz, enabledRegions);
@@ -481,7 +493,6 @@ export const CartCheckoutPage: React.FC = () => {
       selectedRegion: 'Tanlangan hudud:',
       pinCoords: 'Pin koordinatalari:',
       confirmPinBtn: 'Nuqtani tasdiqlash',
-      clearPinBtn: 'Koordinatani oʻchirish',
       clearCartWarn:
         'Savatchadagi barcha tanlangan mahsulotlarni olib tashlamoqchimisiz?',
     },
@@ -493,7 +504,6 @@ export const CartCheckoutPage: React.FC = () => {
       selectedRegion: 'Выбранный регион:',
       pinCoords: 'Координаты точки:',
       confirmPinBtn: 'Подтвердить точку',
-      clearPinBtn: 'Сбросить координаты',
       clearCartWarn: 'Вы действительно хотите удалить все товары из корзины?',
     },
     en: {
@@ -504,7 +514,6 @@ export const CartCheckoutPage: React.FC = () => {
       selectedRegion: 'Selected Region:',
       pinCoords: 'Pin Coordinates:',
       confirmPinBtn: 'Confirm Pin Location',
-      clearPinBtn: 'Clear Coordinates',
       clearCartWarn:
         'Are you sure you want to remove all items from your shopping cart?',
     },
@@ -639,6 +648,10 @@ export const CartCheckoutPage: React.FC = () => {
     if (!isValidUzbekPhone(customerPhone)) {
       nextErrors.phone = '+998 XX XXX-XX-XX';
     }
+    // Gentle validation for optional Telegram username (empty is always valid)
+    if (!isValidTelegramUsername(customerTelegram)) {
+      nextErrors.telegram = t('cart.telegramInvalidError');
+    }
     if (!currentUzRegionObj) {
       nextErrors.region = t('cart.region');
     }
@@ -653,7 +666,7 @@ export const CartCheckoutPage: React.FC = () => {
     if (Object.keys(nextErrors).length > 0) {
       addToast({
         type: 'error',
-        title: t('cart.step2Title'),
+        title: nextErrors.telegram || t('cart.step2Title'),
       });
       return;
     }
@@ -694,6 +707,8 @@ export const CartCheckoutPage: React.FC = () => {
       totalPrice: entry.lineTotal,
     }));
 
+    const normalizedTg = normalizeTelegramUsername(customerTelegram);
+
     setIsSubmittingOrder(true);
     try {
       const createdOrder = await placeOrder({
@@ -701,6 +716,7 @@ export const CartCheckoutPage: React.FC = () => {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         customerEmail: customerEmail.trim() || undefined,
+        customerTelegram: normalizedTg,
         region: currentUzRegionObj.nameUz,
         district: selectedDistrict.trim(),
         address: addressLine.trim(),
@@ -736,9 +752,7 @@ export const CartCheckoutPage: React.FC = () => {
     setTimeout(() => setCopiedOrderNumber(false), 3000);
   };
 
-  // ===========================================================================
-  // 1. ORDER CONFIRMATION SCREEN (Delivery Estimate strictly separated from Address)
-  // ===========================================================================
+  // 1. Order Confirmation Screen
   if (completedOrder) {
     const isPendingTransfer =
       completedOrder.paymentVerificationStatus === 'pending_verification';
@@ -797,7 +811,7 @@ export const CartCheckoutPage: React.FC = () => {
               </Badge>
             </div>
 
-            {/* Separate Section B: Delivery Address & Coordinates */}
+            {/* Separate Section B: Delivery Address & Contact Details */}
             <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1.5 text-xs sm:text-sm">
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
                 {t('cart.step2Title')}
@@ -809,6 +823,11 @@ export const CartCheckoutPage: React.FC = () => {
               <p className="text-gray-700 dark:text-gray-300 break-words">
                 {completedOrder.address}
               </p>
+              {completedOrder.customerTelegram && (
+                <p className="text-xs font-semibold text-brand-green">
+                  Telegram: {completedOrder.customerTelegram}
+                </p>
+              )}
               {completedOrder.locationCoordinates && (
                 <p className="text-xs font-mono text-brand-green pt-0.5">
                   Pin: {completedOrder.locationCoordinates.lat},{' '}
@@ -928,10 +947,11 @@ export const CartCheckoutPage: React.FC = () => {
     confirm: 4,
   };
   const currentStepNumber = stepIndexMap[activeStep];
+  const normalizedPreviewTelegram = normalizeTelegramUsername(customerTelegram);
 
   return (
     <div className="zaven-page-container py-4 sm:py-8 space-y-6">
-      {/* 4-Step Sequential Progress Bar: Cart -> Address -> Payment -> Confirm */}
+      {/* 4-Step Sequential Progress Bar */}
       <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card">
         <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
           {(
@@ -1213,7 +1233,8 @@ export const CartCheckoutPage: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & INTERACTIVE MAP PIN PICKER      */}
+      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & CUSTOMER CONTACT FIELDS         */}
+      {/* Order: 1. Full Name -> 2. Phone -> 3. Email -> 4. Telegram (Optional) */}
       {/* ===================================================================== */}
       {activeStep === 'address' && (
         <form
@@ -1230,7 +1251,6 @@ export const CartCheckoutPage: React.FC = () => {
                 {t('cart.step2Title')}
               </h1>
             </div>
-            {/* Small Delivery-Time Badge strictly separated from address */}
             <Badge variant="gold" size="sm">
               <Clock className="w-3 h-3 mr-1" />
               <span>{t('delivery.estimateValue')}</span>
@@ -1238,6 +1258,7 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
+            {/* 1. Full Name & 2. Phone Number (Required) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label={t('cart.fullName')}
@@ -1269,14 +1290,38 @@ export const CartCheckoutPage: React.FC = () => {
               />
             </div>
 
-            <Input
-              label={t('cart.emailOptional')}
-              type="email"
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              placeholder="namuna@mail.uz"
-              leftIcon={<Mail className="w-4 h-4" />}
-            />
+            {/* 3. Email (Prefilled from verified account when available) & 4. Optional Telegram Username */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label={t('cart.emailOptional')}
+                type="email"
+                value={customerEmail}
+                onChange={(e) => setCustomerEmail(e.target.value)}
+                placeholder="namuna@mail.uz"
+                leftIcon={<Mail className="w-4 h-4" />}
+                helperText={
+                  currentCustomer?.emailVerified &&
+                  currentCustomer.email === customerEmail
+                    ? t('cart.emailPrefilledHelper')
+                    : undefined
+                }
+              />
+
+              <Input
+                label={t('cart.telegramOptional')}
+                type="text"
+                value={customerTelegram}
+                onChange={(e) => {
+                  setCustomerTelegram(e.target.value);
+                  if (errors.telegram)
+                    setErrors((prev) => ({ ...prev, telegram: undefined }));
+                }}
+                placeholder={t('cart.telegramPlaceholder')}
+                leftIcon={<Send className="w-4 h-4" />}
+                error={errors.telegram}
+                helperText={t('cart.telegramHelper')}
+              />
+            </div>
 
             {/* Uzbekistan Region/District Selectors + Manual Map Pin Picker + Optional Geolocation */}
             <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-4">
@@ -1718,7 +1763,6 @@ export const CartCheckoutPage: React.FC = () => {
                 {t('cart.step4Title')}
               </h1>
             </div>
-            {/* Delivery-Time Badge strictly separated from address */}
             <Badge variant="gold" size="sm">
               <Clock className="w-3 h-3 mr-1" />
               <span>{t('delivery.estimateValue')}</span>
@@ -1746,7 +1790,15 @@ export const CartCheckoutPage: React.FC = () => {
                 <p className="text-brand-green font-semibold">
                   {customerPhone}
                 </p>
-                <p className="text-gray-700 dark:text-gray-300 break-words">
+                {customerEmail && (
+                  <p className="text-xs text-gray-500">{customerEmail}</p>
+                )}
+                {normalizedPreviewTelegram && (
+                  <p className="text-xs font-semibold text-brand-green">
+                    Telegram: {normalizedPreviewTelegram}
+                  </p>
+                )}
+                <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5">
                   {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
                   , {addressLine}
                 </p>
@@ -1874,9 +1926,7 @@ export const CartCheckoutPage: React.FC = () => {
         </div>
       )}
 
-      {/* ===================================================================== */}
-      {/* INTERACTIVE UZBEKISTAN MAP PIN PICKER MODAL                           */}
-      {/* ===================================================================== */}
+      {/* Interactive Uzbekistan Map Pin Picker Modal */}
       <Modal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}
@@ -1911,7 +1961,6 @@ export const CartCheckoutPage: React.FC = () => {
             {mapLabels.mapInstruction}
           </p>
 
-          {/* Interactive Click-to-Place Uzbekistan Coordinate Map Canvas */}
           <div className="relative rounded-2xl overflow-hidden border-2 border-[#0F3D2E] dark:border-[#2F5246] bg-[#0B221A] select-none">
             <svg
               viewBox="0 0 600 300"
@@ -1939,7 +1988,6 @@ export const CartCheckoutPage: React.FC = () => {
               <rect width="600" height="300" fill="#0D281E" />
               <rect width="600" height="300" fill="url(#uz-map-grid)" />
 
-              {/* Regional Nodes Across Uzbekistan */}
               {UZBEKISTAN_REGIONS.map((reg) => {
                 const cx =
                   ((reg.approxCenter.lng - UZ_LNG_MIN) /
@@ -1979,13 +2027,14 @@ export const CartCheckoutPage: React.FC = () => {
                       fontSize="10"
                       fontWeight={isSelectedReg ? '800' : '600'}
                     >
-                      {reg.nameUz.replace(' viloyati', '').replace(' Respublikasi', '')}
+                      {reg.nameUz
+                        .replace(' viloyati', '')
+                        .replace(' Respublikasi', '')}
                     </text>
                   </g>
                 );
               })}
 
-              {/* Active Customer Movable Pin */}
               {(() => {
                 const pinX = Math.max(
                   14,
@@ -2025,7 +2074,6 @@ export const CartCheckoutPage: React.FC = () => {
               })()}
             </svg>
 
-            {/* Fine-Tune Pin Nudge Controls */}
             <div className="px-3 py-2 bg-[#09261C] border-t border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-100">
               <div className="flex items-center gap-1.5">
                 <Navigation className="w-3.5 h-3.5 text-[#C89D54]" />
@@ -2094,7 +2142,6 @@ export const CartCheckoutPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Region Jump & Address Review Inside Map Modal */}
           <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
@@ -2116,9 +2163,7 @@ export const CartCheckoutPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* ===================================================================== */}
-      {/* RESTYLED CLEAR-CART CONFIRMATION DIALOG (Distinct, aligned, unclipped)*/}
-      {/* ===================================================================== */}
+      {/* Restyled Clear-Cart Confirmation Dialog */}
       <Modal
         isOpen={isClearCartModalOpen}
         onClose={() => setIsClearCartModalOpen(false)}

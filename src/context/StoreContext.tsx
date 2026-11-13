@@ -5,7 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import { RealtimeChannel } from '@supabase/supabase-js';
+import { RealtimeChannel, User as SupabaseUser } from '@supabase/supabase-js';
 import {
   ADMIN_USERS,
   INITIAL_BANNERS,
@@ -19,7 +19,7 @@ import {
   INITIAL_STORE_SETTINGS,
 } from '../data/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { formatUZS } from '../utils/format';
+import { formatUZS, normalizeTelegramUsername } from '../utils/format';
 import {
   AdminRole,
   AdminUser,
@@ -69,8 +69,9 @@ interface StoreContextType {
   clearFavorites: () => void;
   recordRecentlyViewed: (productId: string) => void;
 
+  syncVerifiedCustomerFromAuthUser: (user: SupabaseUser) => Promise<void>;
   signInCustomerDemo: (phone: string, fullName?: string) => void;
-  signOutCustomer: () => void;
+  signOutCustomer: () => Promise<void>;
   updateCustomerProfile: (updated: Partial<Customer>) => void;
 
   submitCustomerInquiry: (data: {
@@ -250,6 +251,9 @@ function mapRowToOrder(
     customerName: String(row.customer_name),
     customerPhone: String(row.customer_phone),
     customerEmail: row.customer_email ? String(row.customer_email) : undefined,
+    customerTelegram: row.customer_telegram
+      ? String(row.customer_telegram)
+      : undefined,
     region: String(row.region),
     district: row.district ? String(row.district) : undefined,
     address: String(row.address),
@@ -313,9 +317,14 @@ function mapRowToOrder(
 function mapRowToCustomer(row: Record<string, unknown>): Customer {
   return {
     id: String(row.id),
+    authUserId: row.auth_user_id ? String(row.auth_user_id) : undefined,
     fullName: String(row.full_name),
     phone: String(row.phone),
     email: row.email ? String(row.email) : undefined,
+    emailVerified: Boolean(row.email_verified ?? false),
+    telegramUsername: row.telegram_username
+      ? String(row.telegram_username)
+      : undefined,
     addresses: Array.isArray(row.addresses)
       ? (row.addresses as Customer['addresses'])
       : [],
@@ -331,9 +340,12 @@ function mapRowToCustomer(row: Record<string, unknown>): Customer {
 function mapCustomerToRow(cust: Customer) {
   return {
     id: cust.id,
+    auth_user_id: cust.authUserId || null,
     full_name: cust.fullName,
     phone: cust.phone,
     email: cust.email || null,
+    email_verified: Boolean(cust.emailVerified),
+    telegram_username: cust.telegramUsername || null,
     addresses: cust.addresses,
     order_count: cust.orderCount,
     total_spent: Math.round(cust.totalSpent),
@@ -452,7 +464,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(
     savedState?.currentCustomer !== undefined
       ? savedState.currentCustomer
-      : INITIAL_CUSTOMERS[0]
+      : null
   );
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -490,6 +502,89 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       } catch (err) {
         console.error('Failed to sync store_settings to Supabase:', err);
       }
+    },
+    []
+  );
+
+  // ===========================================================================
+  // Syncs a verified Supabase Auth customer into `currentCustomer` & `customers`
+  // Only treats the account as verified when `user.email_confirmed_at` is set.
+  // ===========================================================================
+  const syncVerifiedCustomerFromAuthUser = useCallback(
+    async (user: SupabaseUser) => {
+      const email = user.email?.trim().toLowerCase();
+      const isConfirmed = Boolean(user.email_confirmed_at);
+
+      if (!email || !isConfirmed) {
+        return;
+      }
+
+      const metaFullName =
+        typeof user.user_metadata?.full_name === 'string'
+          ? user.user_metadata.full_name.trim()
+          : '';
+      const metaPhone =
+        typeof user.user_metadata?.phone === 'string'
+          ? user.user_metadata.phone.trim()
+          : '';
+      const metaTelegram = normalizeTelegramUsername(
+        typeof user.user_metadata?.telegram_username === 'string'
+          ? user.user_metadata.telegram_username
+          : undefined
+      );
+
+      setCustomers((prev) => {
+        const cleanMetaPhone = metaPhone.replace(/\D/g, '');
+        const existing = prev.find(
+          (c) =>
+            c.authUserId === user.id ||
+            (c.email && c.email.toLowerCase() === email) ||
+            (cleanMetaPhone.length >= 9 &&
+              c.phone.replace(/\D/g, '') === cleanMetaPhone)
+        );
+
+        if (existing) {
+          const merged: Customer = {
+            ...existing,
+            authUserId: user.id,
+            email,
+            emailVerified: true,
+            fullName: metaFullName || existing.fullName,
+            phone: metaPhone || existing.phone,
+            telegramUsername: metaTelegram || existing.telegramUsername,
+          };
+          setCurrentCustomer(merged);
+          if (isSupabaseConfigured && supabase) {
+            supabase
+              .from('customers')
+              .upsert(mapCustomerToRow(merged))
+              .then(() => {});
+          }
+          return prev.map((c) => (c.id === existing.id ? merged : c));
+        }
+
+        const created: Customer = {
+          id: `cust-${user.id.slice(0, 8)}`,
+          authUserId: user.id,
+          fullName: metaFullName || email.split('@')[0] || 'Xaridor',
+          phone: metaPhone || '+998 90 000-00-00',
+          email,
+          emailVerified: true,
+          telegramUsername: metaTelegram,
+          addresses: [],
+          orderCount: 0,
+          totalSpent: 0,
+          createdAt: new Date().toISOString(),
+        };
+        setCurrentCustomer(created);
+        if (isSupabaseConfigured && supabase) {
+          supabase
+            .from('customers')
+            .upsert(mapCustomerToRow(created))
+            .then(() => {});
+        }
+        return [created, ...prev];
+      });
     },
     []
   );
@@ -551,6 +646,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       } = await supabase.auth.getSession();
 
       if (session?.user) {
+        if (session.user.email_confirmed_at) {
+          await syncVerifiedCustomerFromAuthUser(session.user);
+        }
+
         const [ordersRes, custRes, logsRes, inqRes] = await Promise.all([
           supabase
             .from('orders')
@@ -584,12 +683,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             })
           );
           if (mappedOrders.length > 0) {
-            setOrders(mappedOrders);
+            setOrders((prev) => {
+              const byOrderNum = new Map(
+                prev.map((item) => [item.orderNumber, item])
+              );
+              for (const mo of mappedOrders) {
+                byOrderNum.set(mo.orderNumber, mo);
+              }
+              return Array.from(byOrderNum.values()).sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime()
+              );
+            });
           }
         }
 
         if (!custRes.error && custRes.data && custRes.data.length > 0) {
-          setCustomers(custRes.data.map(mapRowToCustomer));
+          const fetchedCustomers = custRes.data.map(mapRowToCustomer);
+          setCustomers((prev) => {
+            const byId = new Map(prev.map((c) => [c.id, c]));
+            for (const fc of fetchedCustomers) {
+              byId.set(fc.id, fc);
+            }
+            return Array.from(byId.values());
+          });
         }
 
         if (!logsRes.error && logsRes.data && logsRes.data.length > 0) {
@@ -605,7 +723,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       setIsSyncingSupabase(false);
     }
-  }, []);
+  }, [syncVerifiedCustomerFromAuthUser]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -796,11 +914,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (
+        (event === 'SIGNED_IN' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED') &&
+        session?.user
+      ) {
+        if (session.user.email_confirmed_at) {
+          syncVerifiedCustomerFromAuthUser(session.user);
+        }
         refreshFromSupabase();
         setupRealtimeChannel();
       } else if (event === 'SIGNED_OUT') {
+        setCurrentCustomer(null);
         if (realtimeChannel && supabase) {
           supabase.removeChannel(realtimeChannel);
           realtimeChannel = null;
@@ -815,7 +942,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [refreshFromSupabase, addToast]);
+  }, [refreshFromSupabase, syncVerifiedCustomerFromAuthUser, addToast]);
 
   useEffect(() => {
     try {
@@ -916,7 +1043,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearCart = () => setCart([]);
 
-  // Requirement 2: Persistent Guest & Customer Favorites Toggle
   const toggleFavorite = useCallback((productId: string) => {
     setFavoriteIds((prev) => {
       const exists = prev.includes(productId);
@@ -976,7 +1102,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const signOutCustomer = () => {
+  const signOutCustomer = async () => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut().catch(() => {});
+    }
     setCurrentCustomer(null);
     addToast({
       type: 'info',
@@ -986,7 +1115,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const updateCustomerProfile = (updated: Partial<Customer>) => {
     if (!currentCustomer) return;
-    const nextCustomer = { ...currentCustomer, ...updated };
+    const normalizedTg =
+      updated.telegramUsername !== undefined
+        ? normalizeTelegramUsername(updated.telegramUsername)
+        : currentCustomer.telegramUsername;
+
+    const nextCustomer: Customer = {
+      ...currentCustomer,
+      ...updated,
+      telegramUsername: normalizedTg,
+    };
     setCurrentCustomer(nextCustomer);
     setCustomers((prev) =>
       prev.map((c) => (c.id === nextCustomer.id ? nextCustomer : c))
@@ -1050,6 +1188,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const placeOrder: StoreContextType['placeOrder'] = async (orderData) => {
     const now = new Date().toISOString();
     const orderNumber = `ZVN-2026-${1042 + orders.length}`;
+    const normalizedTelegram = normalizeTelegramUsername(
+      orderData.customerTelegram
+    );
 
     const initialNotes = [
       orderData.paymentVerificationStatus === 'pending_verification'
@@ -1069,6 +1210,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             body: {
               order: {
                 ...orderData,
+                customerTelegram: normalizedTelegram,
                 orderNumber,
                 internalNotes: initialNotes,
               },
@@ -1085,6 +1227,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             customer_name: orderData.customerName,
             customer_phone: orderData.customerPhone,
             customer_email: orderData.customerEmail || null,
+            customer_telegram: normalizedTelegram || null,
             region: orderData.region,
             district: orderData.district || null,
             address: orderData.address,
@@ -1122,6 +1265,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const newOrder: Order = {
       ...orderData,
+      customerTelegram: normalizedTelegram,
       id: `ord-${Date.now()}`,
       orderNumber,
       paymentReceipt: orderData.paymentReceipt
@@ -1223,16 +1367,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const cleanPhone = orderData.customerPhone.replace(/\D/g, '');
+    const cleanEmail = orderData.customerEmail?.trim().toLowerCase();
+
     setCustomers((prev) => {
       const existing = prev.find(
         (c) =>
           c.id === orderData.customerId ||
+          (cleanEmail && c.email && c.email.toLowerCase() === cleanEmail) ||
           c.phone.replace(/\D/g, '') === cleanPhone
       );
       if (existing) {
         const updatedCustomer: Customer = {
           ...existing,
           email: orderData.customerEmail || existing.email,
+          telegramUsername: normalizedTelegram || existing.telegramUsername,
           orderCount: existing.orderCount + 1,
           totalSpent: existing.totalSpent + orderData.totalAmount,
           lastOrderDate: now,
@@ -1254,6 +1402,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         fullName: orderData.customerName,
         phone: orderData.customerPhone,
         email: orderData.customerEmail,
+        telegramUsername: normalizedTelegram,
         addresses: [
           {
             id: `addr-${Date.now()}`,
@@ -1734,7 +1883,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setStoreSettings(INITIAL_STORE_SETTINGS);
     setCart([{ productId: 'prod-1', quantity: 1 }]);
     setFavoriteIds([]);
-    setCurrentCustomer(INITIAL_CUSTOMERS[0]);
+    setCurrentCustomer(null);
     setCurrentAdminRole('owner');
     addToast({
       type: 'info',
@@ -1769,6 +1918,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         toggleFavorite,
         clearFavorites,
         recordRecentlyViewed,
+        syncVerifiedCustomerFromAuthUser,
         signInCustomerDemo,
         signOutCustomer,
         updateCustomerProfile,

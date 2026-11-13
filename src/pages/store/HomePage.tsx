@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -10,53 +10,100 @@ import {
   CreditCard,
   Headphones,
   Instagram,
-  Copy,
-  Check,
   Home,
   Smartphone,
   Zap,
   Gift,
   Compass,
   MapPin,
-  Clock,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { ProductCard } from '../../components/product/ProductCard';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { formatUZS } from '../../utils/format';
+import { formatUZS, calculateDiscountPercent } from '../../utils/format';
 
 export const HomePage: React.FC = () => {
   const {
     products,
     categories,
-    banners,
-    coupons,
     storeSettings,
-    addToast,
+    recordRecentlyViewed,
   } = useStore();
-  const { t, language, getCategoryText, getBannerText } = useThemeLanguage();
+  const { t, getCategoryText, getProductText } = useThemeLanguage();
 
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-
-  // Requirement 8: Collapsible trust/tariff/payment sections closed by default on mobile
+  // Collapsible trust/tariff/payment sections closed by default on mobile
   const [openTrustPanel, setOpenTrustPanel] = useState<
     'quality' | 'tariffs' | 'payments' | null
   >(null);
 
-  const visibleProducts = products.filter(
-    (p) => p.status === 'active' || p.status === 'out_of_stock'
+  // Featured Product Carousel State (User-controlled, no autoplay)
+  const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  const visibleProducts = useMemo(
+    () =>
+      products.filter(
+        (p) => p.status === 'active' || p.status === 'out_of_stock'
+      ),
+    [products]
   );
+
+  // Real active products with images for the top featured carousel
+  const carouselProducts = useMemo(() => {
+    const activeWithImages = products.filter(
+      (p) => p.status === 'active' && p.images && p.images.length > 0
+    );
+    const featured = activeWithImages.filter(
+      (p) => p.isPopular || p.isRecommended || p.isNew
+    );
+    return (featured.length > 0 ? featured : activeWithImages).slice(0, 5);
+  }, [products]);
+
+  const safeSlideIdx =
+    carouselProducts.length > 0
+      ? activeSlideIdx % carouselProducts.length
+      : 0;
+  const currentCarouselProduct = carouselProducts[safeSlideIdx] || null;
+
+  const handlePrevSlide = () => {
+    if (carouselProducts.length <= 1) return;
+    setActiveSlideIdx((prev) =>
+      prev === 0 ? carouselProducts.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextSlide = () => {
+    if (carouselProducts.length <= 1) return;
+    setActiveSlideIdx((prev) =>
+      prev === carouselProducts.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(deltaX) > 40) {
+      if (deltaX < 0) {
+        handleNextSlide();
+      } else {
+        handlePrevSlide();
+      }
+    }
+    setTouchStartX(null);
+  };
 
   const activeCategories = categories
     .filter((c) => c.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  const activeBanner =
-    banners.find((b) => b.isActive) || banners[0] || null;
-  const localizedBanner = activeBanner ? getBannerText(activeBanner) : null;
 
   const popularProducts = [...visibleProducts]
     .filter((p) => p.isPopular)
@@ -69,9 +116,6 @@ export const HomePage: React.FC = () => {
     .filter((p) => p.salePrice && p.salePrice < p.price)
     .slice(0, 4);
 
-  const activeCoupon = coupons.find(
-    (c) => c.isActive && c.usedCount < c.usageLimit
-  );
   const enabledTrustItems = storeSettings.trustItems.filter(
     (item) => item.isEnabled
   );
@@ -81,23 +125,6 @@ export const HomePage: React.FC = () => {
   const enabledPayments = storeSettings.paymentMethods.filter(
     (pm) => pm.isEnabled
   );
-
-  const compactHeroDescription =
-    language === 'ru'
-      ? 'Товары для дома, гаджеты и аксессуары с проверкой качества на складе ZAVEN.'
-      : language === 'en'
-      ? 'Quality-checked home essentials, everyday gadgets, and phone accessories.'
-      : 'Sifat nazoratidan oʻtgan uy-roʻzgʻor buyumlari, gadjetlar va aksessuarlar.';
-
-  const handleCopyCoupon = (code: string) => {
-    navigator.clipboard?.writeText(code).catch(() => {});
-    setCopiedCode(code);
-    addToast({
-      type: 'success',
-      title: `Promokod: ${code}`,
-    });
-    setTimeout(() => setCopiedCode(null), 3000);
-  };
 
   const renderCategoryIcon = (iconName: string) => {
     switch (iconName) {
@@ -133,66 +160,154 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="w-full max-w-full overflow-x-clip bg-[#F8F9FA] dark:bg-[#0B1512] space-y-6 sm:space-y-10 py-3 sm:py-6">
-      {/* 1. Compact Marketplace Hero (~185–220px tall on phones) */}
-      {activeBanner && localizedBanner && (
-        <section className="zaven-page-container">
-          <div className="bg-[#0F3D2E] rounded-2xl overflow-hidden border border-[#1D4D3C] shadow-sm">
-            <div className="grid grid-cols-1 lg:grid-cols-12 items-center">
-              <div className="min-w-0 px-4 py-3.5 sm:p-6 lg:p-7 lg:col-span-8 space-y-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#C89D54] text-[#09261C]">
-                    {localizedBanner.badgeText}
-                  </span>
-                  <span className="text-[11px] sm:text-xs text-emerald-100/90 font-medium">
-                    • {t('delivery.estimateValue')}
-                  </span>
-                </div>
+      {/* ===================================================================== */}
+      {/* 1. Requirement 3: Compact Image-First Featured Product Carousel        */}
+      {/* Driven by real active products; touch swipe + prev/next + pagination  */}
+      {/* ===================================================================== */}
+      {currentCarouselProduct && (
+        <section
+          aria-roledescription="carousel"
+          aria-label={t('home.popularTitle')}
+          className="zaven-page-container"
+        >
+          {(() => {
+            const locProd = getProductText(currentCarouselProduct);
+            const catObj = categories.find(
+              (c) => c.id === currentCarouselProduct.categoryId
+            );
+            const locCat = catObj ? getCategoryText(catObj) : null;
+            const effectivePrice =
+              currentCarouselProduct.salePrice ?? currentCarouselProduct.price;
+            const discountPercent = calculateDiscountPercent(
+              currentCarouselProduct.price,
+              currentCarouselProduct.salePrice
+            );
 
-                <h1 className="text-[15px] sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight leading-snug line-clamp-2 break-words">
-                  {localizedBanner.headline}
-                </h1>
-
-                <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed line-clamp-2 max-w-2xl break-words">
-                  {compactHeroDescription}
-                </p>
-
-                <div className="pt-1 flex flex-wrap items-center gap-2">
+            return (
+              <div
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                className="relative bg-[#0F3D2E] rounded-2xl border border-[#1D4D3C] shadow-card overflow-hidden select-none"
+              >
+                <div className="p-3 sm:p-5 lg:p-6 flex items-center gap-3.5 sm:gap-6">
+                  {/* Product Image Thumbnail (1:1 aspect ratio, no stretching or layout shift) */}
                   <Link
-                    to={activeBanner.ctaLink || '/catalog'}
-                    className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-3.5 rounded-lg bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs shadow-sm transition-colors"
+                    to={`/product/${currentCarouselProduct.slug}`}
+                    onClick={() =>
+                      recordRecentlyViewed(currentCarouselProduct.id)
+                    }
+                    className="relative w-28 h-28 sm:w-40 sm:h-40 lg:w-44 lg:h-44 rounded-xl bg-white dark:bg-[#12211C] overflow-hidden border border-[#C89D54]/40 shrink-0 group"
                   >
-                    <span>{localizedBanner.ctaText}</span>
-                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                    <img
+                      src={currentCarouselProduct.images[0]}
+                      alt={locProd.name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    {discountPercent > 0 && (
+                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-[#C89D54] text-[#09261C] shadow-sm">
+                        -{discountPercent}%
+                      </span>
+                    )}
                   </Link>
 
-                  {activeCoupon && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCoupon(activeCoupon.code)}
-                      className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-2.5 rounded-lg bg-[#09261C]/90 hover:bg-[#09261C] border border-[#C89D54]/45 text-[11px] font-bold text-[#E5C992] transition-colors"
-                      title={activeCoupon.description}
-                    >
-                      <Tag className="w-3 h-3 text-[#C89D54] shrink-0" />
-                      <span>{activeCoupon.code}</span>
-                      {copiedCode === activeCoupon.code ? (
-                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                      ) : (
-                        <Copy className="w-3 h-3 text-[#C89D54] shrink-0" />
+                  {/* Product Info: Category Badge, 2-Line Title, Price & Single Clear "Koʻrish" Action */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2 sm:space-y-3">
+                    <div className="space-y-1 min-w-0">
+                      {locCat && (
+                        <span className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#E5C992] truncate max-w-full">
+                          {locCat.name}
+                        </span>
                       )}
-                    </button>
-                  )}
-                </div>
-              </div>
 
-              <div className="hidden lg:block lg:col-span-4 h-full max-h-[210px] bg-[#09261C] relative overflow-hidden">
-                <img
-                  src={activeBanner.image}
-                  alt={localizedBanner.headline}
-                  className="w-full h-full object-cover"
-                />
+                      <Link
+                        to={`/product/${currentCarouselProduct.slug}`}
+                        onClick={() =>
+                          recordRecentlyViewed(currentCarouselProduct.id)
+                        }
+                        className="block text-sm sm:text-xl lg:text-2xl font-extrabold text-white hover:text-[#E5C992] transition-colors line-clamp-2 leading-snug break-words"
+                      >
+                        {locProd.name}
+                      </Link>
+                    </div>
+
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-base sm:text-2xl font-extrabold text-[#C89D54] leading-none">
+                        {formatUZS(effectivePrice)}
+                      </span>
+                      {currentCarouselProduct.salePrice && (
+                        <span className="text-[11px] sm:text-sm text-emerald-200/70 line-through">
+                          {formatUZS(currentCarouselProduct.price)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="pt-0.5 flex items-center justify-between gap-2">
+                      <Link
+                        to={`/product/${currentCarouselProduct.slug}`}
+                        onClick={() =>
+                          recordRecentlyViewed(currentCarouselProduct.id)
+                        }
+                        className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs shadow-sm transition-colors shrink-0"
+                      >
+                        <span>{t('home.carouselViewBtn')}</span>
+                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      </Link>
+
+                      {/* Accessible Previous / Next Controls */}
+                      {carouselProducts.length > 1 && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={handlePrevSlide}
+                            aria-label={t('home.carouselPrevAria')}
+                            className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-white flex items-center justify-center transition-colors"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleNextSlide}
+                            aria-label={t('home.carouselNextAria')}
+                            className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-white flex items-center justify-center transition-colors"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accessible Pagination Dots */}
+                {carouselProducts.length > 1 && (
+                  <div
+                    role="tablist"
+                    aria-label="Carousel slides"
+                    className="px-3 pb-2.5 sm:px-5 sm:pb-3 flex items-center justify-center gap-1.5"
+                  >
+                    {carouselProducts.map((item, idx) => {
+                      const isCurrent = idx === safeSlideIdx;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={isCurrent}
+                          aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
+                          onClick={() => setActiveSlideIdx(idx)}
+                          className={`h-1.5 rounded-full transition-all ${
+                            isCurrent
+                              ? 'w-6 bg-[#C89D54]'
+                              : 'w-2 bg-emerald-700/70 hover:bg-emerald-500'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            );
+          })()}
         </section>
       )}
 
@@ -318,35 +433,26 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* ===================================================================== */}
-      {/* 6. Requirement 8: Compact Collapsible Trust, Delivery & Payment Block */}
-      {/* Closed by default on mobile; deep forest surfaces with zero gray band */}
+      {/* 6. Requirement 1: Homepage Information Section                        */}
+      {/* Large "Taxminan 10–25 kun" badge removed from this section header     */}
       {/* ===================================================================== */}
       <section className="zaven-page-container bg-transparent">
         <div className="bg-white dark:bg-[#0F1D18] rounded-2xl border border-gray-200 dark:border-[#243E35] p-4 sm:p-6 shadow-sm space-y-3">
-          {/* Compact Summary Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-100 dark:border-[#243E35]">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="green" size="sm">
-                  {t('home.transparentRulesBadge')}
-                </Badge>
-                <Badge variant="gold" size="sm">
-                  <Clock className="w-3 h-3 mr-1 shrink-0" />
-                  <span>{t('delivery.estimateValue')}</span>
-                </Badge>
-              </div>
-              <h2 className="text-sm sm:text-lg font-extrabold text-gray-900 dark:text-gray-100 mt-1.5 break-words">
-                {t('home.trustSectionTitle')}
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {t('home.trustSectionSub')}
-              </p>
-            </div>
+          {/* Compact Summary Header (No delivery-time badge here) */}
+          <div className="pb-2 border-b border-gray-100 dark:border-[#243E35]">
+            <Badge variant="green" size="sm">
+              {t('home.transparentRulesBadge')}
+            </Badge>
+            <h2 className="text-sm sm:text-lg font-extrabold text-gray-900 dark:text-gray-100 mt-1.5 break-words">
+              {t('home.trustSectionTitle')}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {t('home.trustSectionSub')}
+            </p>
           </div>
 
-          {/* 3 Labeled Collapsible Sections (Closed by default on mobile) */}
+          {/* 3 Labeled Collapsible Sections */}
           <div className="divide-y divide-gray-200 dark:divide-[#243E35]">
-            {/* Collapsible 1: Quality & Store Guarantees */}
             {enabledTrustItems.length > 0 && (
               <div>
                 <button
@@ -393,7 +499,6 @@ export const HomePage: React.FC = () => {
               </div>
             )}
 
-            {/* Collapsible 2: Regional Delivery Tariffs */}
             {storeSettings.delivery.isDeliveryEnabled && (
               <div>
                 <button
@@ -441,7 +546,6 @@ export const HomePage: React.FC = () => {
               </div>
             )}
 
-            {/* Collapsible 3: Accepted Payment Methods */}
             <div>
               <button
                 type="button"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   RotateCcw,
@@ -353,7 +353,9 @@ export const CatalogPage: React.FC = () => {
               }`}
             >
               <span>{t('nav.allCategories')}</span>
-              {!selectedCategorySlug && <Check className="w-3.5 h-3.5 shrink-0" />}
+              {!selectedCategorySlug && (
+                <Check className="w-3.5 h-3.5 shrink-0" />
+              )}
             </button>
           </li>
 
@@ -510,44 +512,15 @@ export const CatalogPage: React.FC = () => {
 
   return (
     <>
-      <div className="zaven-page-container py-4 sm:py-6 space-y-4 sm:space-y-5">
-        {/* Requirement 3: Clean Catalog Header (Removed "8 ta mahsulot" badge) */}
-        <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3.5 sm:p-5 shadow-card space-y-1.5">
-          <nav
-            aria-label="Breadcrumb"
-            className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500"
-          >
-            <Link to="/" className="hover:text-brand-green font-medium">
-              {t('nav.home')}
-            </Link>
-            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-            <Link
-              to="/catalog"
-              onClick={() => handleSelectCategory('')}
-              className={`hover:text-brand-green ${
-                !selectedCategoryObj ? 'font-bold text-gray-900' : 'font-medium'
-              }`}
-            >
-              {t('nav.catalog')}
-            </Link>
-            {localizedSelectedCategory && (
-              <>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="font-bold text-brand-green">
-                  {localizedSelectedCategory.name}
-                </span>
-              </>
-            )}
-          </nav>
-
-          <h1 className="text-base sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 break-words">
-            {localizedSelectedCategory
-              ? localizedSelectedCategory.name
-              : searchQuery.trim()
-              ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
-              : t('catalog.titleAll')}
-          </h1>
-        </div>
+      <div className="zaven-page-container py-3.5 sm:py-5 space-y-3.5 sm:space-y-4">
+        {/* Requirement 2: Compact Single-Line Catalog Title (Large bordered card removed) */}
+        <h1 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 px-0.5 break-words">
+          {localizedSelectedCategory
+            ? localizedSelectedCategory.name
+            : searchQuery.trim()
+            ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
+            : t('catalog.titleAll')}
+        </h1>
 
         {/* Main Catalog Layout */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
@@ -579,7 +552,7 @@ export const CatalogPage: React.FC = () => {
             )}
           </aside>
 
-          <div className="xl:col-span-9 space-y-4 min-w-0">
+          <div className="xl:col-span-9 space-y-3.5 min-w-0">
             <QuickFilterBar
               categories={activeCategories}
               selectedCategorySlug={selectedCategorySlug}
@@ -627,7 +600,6 @@ export const CatalogPage: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Pagination / Load More (Rendered only when there are more items or pages; no redundant "1–8 / 8 koʻrsatilmoqda" line) */}
                 {(hasMoreToLoad || totalPages > 1) && (
                   <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-center gap-3">
                     {hasMoreToLoad && (
