@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -25,7 +25,9 @@ import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { ProductCard } from '../../components/product/ProductCard';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { formatUZS, calculateDiscountPercent } from '../../utils/format';
+import { formatUZS } from '../../utils/format';
+
+const SLIDE_DURATION_MS = 4200;
 
 export const HomePage: React.FC = () => {
   const {
@@ -36,36 +38,9 @@ export const HomePage: React.FC = () => {
   } = useStore();
   const { t, getCategoryText, getProductText } = useThemeLanguage();
 
-  // Collapsible trust/tariff/payment sections closed by default on mobile
   const [openTrustPanel, setOpenTrustPanel] = useState<
     'quality' | 'tariffs' | 'payments' | null
   >(null);
-
-  // Featured product carousel state
-  const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
-  const carouselPauseTimeoutRef = useRef<number | null>(null);
-
-  const pauseCarouselBriefly = () => {
-    setIsCarouselPaused(true);
-    if (carouselPauseTimeoutRef.current !== null) {
-      window.clearTimeout(carouselPauseTimeoutRef.current);
-    }
-    carouselPauseTimeoutRef.current = window.setTimeout(() => {
-      setIsCarouselPaused(false);
-      carouselPauseTimeoutRef.current = null;
-    }, 5000);
-  };
-
-  useEffect(
-    () => () => {
-      if (carouselPauseTimeoutRef.current !== null) {
-        window.clearTimeout(carouselPauseTimeoutRef.current);
-      }
-    },
-    []
-  );
 
   const visibleProducts = useMemo(
     () =>
@@ -75,7 +50,7 @@ export const HomePage: React.FC = () => {
     [products]
   );
 
-  // Real active products with images for the top featured carousel
+  // Featured products for the image-first slider
   const carouselProducts = useMemo(() => {
     const activeWithImages = products.filter(
       (p) => p.status === 'active' && p.images && p.images.length > 0
@@ -86,40 +61,121 @@ export const HomePage: React.FC = () => {
     return (featured.length > 0 ? featured : activeWithImages).slice(0, 5);
   }, [products]);
 
-  // Rotate featured products gently; respect reduced-motion and background tabs.
+  const count = carouselProducts.length;
+
+  /**
+   * Seamless infinite loop track:
+   * Extended array is `[lastSlideClone, ...carouselProducts, firstSlideClone]`
+   * - Real slides live at trackIndex `1 .. count`
+   * - Advancing past `count` lands on `count + 1` (firstSlideClone) with smooth animation,
+   *   then `onTransitionEnd` snaps silently (`isTransitionEnabled = false`) back to `1`.
+   */
+  const extendedSlides = useMemo(() => {
+    if (count <= 1) return carouselProducts;
+    return [
+      carouselProducts[count - 1],
+      ...carouselProducts,
+      carouselProducts[0],
+    ];
+  }, [carouselProducts, count]);
+
+  const [trackIndex, setTrackIndex] = useState<number>(count > 1 ? 1 : 0);
+  const [isTransitionEnabled, setIsTransitionEnabled] = useState<boolean>(true);
+  const [cycleTick, setCycleTick] = useState<number>(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+  // Active real slide index (0 .. count - 1) synchronized with indicator bar
+  const activeLogicalIdx = useMemo(() => {
+    if (count <= 1) return 0;
+    if (trackIndex <= 0) return count - 1;
+    if (trackIndex >= count + 1) return 0;
+    return trackIndex - 1;
+  }, [trackIndex, count]);
+
+  // Reset trackIndex if product count changes
   useEffect(() => {
-    if (carouselProducts.length < 2 || isCarouselPaused) return;
-    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (motionPreference.matches) return;
+    setIsTransitionEnabled(false);
+    setTrackIndex(count > 1 ? 1 : 0);
+    setCycleTick((c) => c + 1);
+  }, [count]);
 
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        setActiveSlideIdx((current) => (current + 1) % carouselProducts.length);
-      }
-    }, 5000);
-    return () => window.clearInterval(timer);
-  }, [carouselProducts.length, isCarouselPaused]);
+  // Re-enable CSS transition on the frame after a silent clone snap
+  useEffect(() => {
+    if (!isTransitionEnabled) {
+      let raf2 = 0;
+      const raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(() => {
+          setIsTransitionEnabled(true);
+        });
+      });
+      return () => {
+        window.cancelAnimationFrame(raf1);
+        window.cancelAnimationFrame(raf2);
+      };
+    }
+  }, [isTransitionEnabled]);
 
-  const safeSlideIdx =
-    carouselProducts.length > 0
-      ? activeSlideIdx % carouselProducts.length
-      : 0;
-  const currentCarouselProduct = carouselProducts[safeSlideIdx] || null;
+  const advanceNext = useCallback(() => {
+    if (count <= 1) return;
+    setIsTransitionEnabled(true);
+    setTrackIndex((prev) => {
+      if (prev >= count + 1) return 1;
+      return prev + 1;
+    });
+    setCycleTick((c) => c + 1);
+  }, [count]);
 
-  const handlePrevSlide = () => {
-    if (carouselProducts.length <= 1) return;
-    pauseCarouselBriefly();
-    setActiveSlideIdx((prev) =>
-      prev === 0 ? carouselProducts.length - 1 : prev - 1
-    );
-  };
+  const advancePrev = useCallback(() => {
+    if (count <= 1) return;
+    setIsTransitionEnabled(true);
+    setTrackIndex((prev) => {
+      if (prev <= 0) return count;
+      return prev - 1;
+    });
+    setCycleTick((c) => c + 1);
+  }, [count]);
 
-  const handleNextSlide = () => {
-    if (carouselProducts.length <= 1) return;
-    pauseCarouselBriefly();
-    setActiveSlideIdx((prev) =>
-      prev === carouselProducts.length - 1 ? 0 : prev + 1
-    );
+  const goToLogicalSlide = useCallback(
+    (targetIdx: number) => {
+      if (count <= 1) return;
+      setIsTransitionEnabled(true);
+      setTrackIndex(targetIdx + 1);
+      setCycleTick((c) => c + 1);
+    },
+    [count]
+  );
+
+  // Continuous steady autoplay (does NOT pause on hover or focus; resets cleanly on manual interaction via cycleTick)
+  useEffect(() => {
+    if (count <= 1) return;
+    const timer = window.setTimeout(() => {
+      advanceNext();
+    }, SLIDE_DURATION_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [count, cycleTick, advanceNext]);
+
+  // Safety guard if browser tab was backgrounded and transitionend didn't fire
+  useEffect(() => {
+    if (count <= 1) return;
+    if (trackIndex === count + 1 || trackIndex === 0) {
+      const fallbackTimer = window.setTimeout(() => {
+        setIsTransitionEnabled(false);
+        setTrackIndex(trackIndex === count + 1 ? 1 : count);
+      }, 540);
+      return () => window.clearTimeout(fallbackTimer);
+    }
+  }, [trackIndex, count]);
+
+  const handleTrackTransitionEnd = () => {
+    if (count <= 1) return;
+    if (trackIndex >= count + 1) {
+      setIsTransitionEnabled(false);
+      setTrackIndex(1);
+    } else if (trackIndex <= 0) {
+      setIsTransitionEnabled(false);
+      setTrackIndex(count);
+    }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -131,12 +187,21 @@ export const HomePage: React.FC = () => {
     const deltaX = e.changedTouches[0].clientX - touchStartX;
     if (Math.abs(deltaX) > 40) {
       if (deltaX < 0) {
-        handleNextSlide();
+        advanceNext();
       } else {
-        handlePrevSlide();
+        advancePrev();
       }
     }
     setTouchStartX(null);
+  };
+
+  const handleOpenProductTop = (productId: string) => {
+    recordRecentlyViewed(productId);
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'instant' as ScrollBehavior,
+    });
   };
 
   const activeCategories = categories
@@ -199,171 +264,128 @@ export const HomePage: React.FC = () => {
   return (
     <div className="w-full max-w-full overflow-x-clip bg-[#F8F9FA] dark:bg-[#0B1512] space-y-6 sm:space-y-10 py-3 sm:py-6">
       {/* ===================================================================== */}
-      {/* 1. Requirement 3: Compact Image-First Featured Product Carousel        */}
-      {/* Driven by real active products; touch swipe + prev/next + pagination  */}
+      {/* REQUIREMENTS 2 & 3: Large Image-First Continuous-Loop Product Slider  */}
+      {/* - Shows the full product image with `object-contain` (never shrunk    */}
+      {/*   into a small thumbnail beside a text card)                          */}
+      {/* - Clicking any slide opens that product's detail page                 */}
+      {/* - Loops continuously forward from last slide to first without jumping */}
+      {/* - Active indicator bar visibly fills over 4.2s in sync with the slide */}
       {/* ===================================================================== */}
-      {currentCarouselProduct && (
+      {count > 0 && (
         <section
           aria-roledescription="carousel"
           aria-label={t('home.popularTitle')}
-          onMouseEnter={() => setIsCarouselPaused(true)}
-          onMouseLeave={() => setIsCarouselPaused(false)}
           className="zaven-page-container"
         >
           <div
-            className="relative overflow-hidden rounded-2xl border border-[#1D4D3C] bg-[#0F3D2E] shadow-card"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
+            className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-white to-[#F2F6F4] dark:from-[#12211C] dark:to-[#0C1713] border border-gray-200/90 dark:border-[#28453B] shadow-card select-none"
           >
+            {/* Sliding Image Track */}
             <div
-              className="flex motion-reduce:transition-none transition-transform duration-500 ease-in-out"
+              onTransitionEnd={handleTrackTransitionEnd}
+              className={`flex w-full will-change-transform ${
+                isTransitionEnabled
+                  ? 'transition-transform duration-500 ease-out motion-reduce:transition-none'
+                  : 'transition-none'
+              }`}
               style={{
-                width: `${carouselProducts.length * 100}%`,
-                transform: `translate3d(-${safeSlideIdx * (100 / carouselProducts.length)}%, 0, 0)`,
+                transform: `translate3d(-${trackIndex * 100}%, 0, 0)`,
               }}
             >
-              {carouselProducts.map((product, idx) => {
-                const localizedProduct = getProductText(product);
-                const category = categories.find(
-                  (item) => item.id === product.categoryId
-                );
-                const localizedCategory = category
-                  ? getCategoryText(category)
-                  : null;
-                const price = product.salePrice ?? product.price;
-                const discount = calculateDiscountPercent(
-                  product.price,
-                  product.salePrice
-                );
-                const isCurrent = idx === safeSlideIdx;
+              {extendedSlides.map((slideProduct, idx) => {
+                const locProd = getProductText(slideProduct);
+                const isLogicalActive =
+                  count <= 1 ? true : idx - 1 === activeLogicalIdx;
 
                 return (
-                  <article
-                    key={product.id}
-                    aria-roledescription="slide"
-                    aria-label={`${idx + 1} / ${carouselProducts.length}`}
-                    aria-hidden={!isCurrent}
-                    className="box-border flex h-[204px] w-full shrink-0 items-center gap-3 p-3 sm:h-[232px] sm:gap-6 sm:p-5 lg:h-[248px] lg:p-6"
-                    style={{ width: `${100 / carouselProducts.length}%` }}
+                  <div
+                    key={`${slideProduct.id}-slide-${idx}`}
+                    aria-hidden={!isLogicalActive}
+                    className="w-full shrink-0 h-[230px] sm:h-[310px] lg:h-[370px] relative flex items-center justify-center p-4 sm:p-6 lg:p-8 pb-9 sm:pb-11"
                   >
                     <Link
-                      to={`/product/${product.slug}`}
-                      tabIndex={isCurrent ? 0 : -1}
-                      onClick={() => {
-                        recordRecentlyViewed(product.id);
-                        window.scrollTo(0, 0);
-                      }}
-                      className="relative aspect-square w-[88px] shrink-0 overflow-hidden rounded-xl border border-[#C89D54]/40 bg-white sm:w-36 lg:w-40"
+                      to={`/product/${slideProduct.slug}`}
+                      tabIndex={isLogicalActive ? 0 : -1}
+                      aria-label={locProd.name}
+                      title={locProd.name}
+                      onClick={() => handleOpenProductTop(slideProduct.id)}
+                      className="w-full h-full flex items-center justify-center focus:outline-none group"
                     >
                       <img
-                        src={product.images[0]}
-                        alt={localizedProduct.name}
-                        className="block h-full w-full object-cover"
+                        src={slideProduct.images[0]}
+                        alt={locProd.name}
+                        className="max-w-full max-h-full w-auto h-full object-contain rounded-2xl drop-shadow-md transition-transform duration-300 group-hover:scale-[1.02]"
                       />
-                      {discount > 0 && (
-                        <span className="absolute left-1 top-1 rounded-md bg-[#C89D54] px-1.5 py-0.5 text-[10px] font-extrabold text-[#09261C] shadow-sm">
-                          -{discount}%
-                        </span>
-                      )}
                     </Link>
-
-                    <div className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1.5 py-1 sm:gap-2">
-                      <span className="h-4 truncate text-[9px] font-bold uppercase tracking-wide text-[#E5C992] sm:h-5 sm:text-xs">
-                        {localizedCategory?.name || '\u00a0'}
-                      </span>
-                      <Link
-                        to={`/product/${product.slug}`}
-                        tabIndex={isCurrent ? 0 : -1}
-                        title={localizedProduct.name}
-                        onClick={() => {
-                          recordRecentlyViewed(product.id);
-                          window.scrollTo(0, 0);
-                        }}
-                        className="line-clamp-3 min-h-[2.75rem] break-words text-xs font-extrabold leading-4 text-white hover:text-[#E5C992] sm:min-h-[3.5rem] sm:text-xl sm:leading-7 lg:text-2xl"
-                      >
-                        {localizedProduct.name}
-                      </Link>
-                      <div className="flex min-h-9 min-w-0 flex-col justify-center gap-1 sm:min-h-11 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-2">
-                        <span className="truncate text-sm font-extrabold leading-tight text-[#C89D54] sm:text-2xl">
-                          {formatUZS(price)}
-                        </span>
-                        {product.salePrice && (
-                          <span className="truncate text-[10px] leading-tight text-emerald-200/70 line-through sm:text-sm">
-                            {formatUZS(product.price)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-1.5">
-                        <Link
-                          to={`/product/${product.slug}`}
-                          tabIndex={isCurrent ? 0 : -1}
-                          onClick={() => {
-                            recordRecentlyViewed(product.id);
-                            window.scrollTo(0, 0);
-                          }}
-                          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#C89D54] px-2.5 text-[11px] font-extrabold text-[#09261C] sm:h-9 sm:gap-1.5 sm:rounded-xl sm:px-4 sm:text-sm"
-                        >
-                          {t('home.carouselViewBtn')}
-                          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-                        </Link>
-                        {carouselProducts.length > 1 && isCurrent && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={handlePrevSlide}
-                              aria-label={t('home.carouselPrevAria')}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/70 bg-[#09261C]/80 text-white transition-colors hover:bg-[#16533F]"
-                            >
-                              <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleNextSlide}
-                              aria-label={t('home.carouselNextAria')}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/70 bg-[#09261C]/80 text-white transition-colors hover:bg-[#16533F]"
-                            >
-                              <ChevronRight className="h-4 w-4" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </article>
+                  </div>
                 );
               })}
             </div>
 
-            {carouselProducts.length > 1 && (
+            {/* Subtle, Unobtrusive Prev / Next Controls */}
+            {count > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={advancePrev}
+                  aria-label={t('home.carouselPrevAria')}
+                  className="absolute left-2.5 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#09261C]/55 hover:bg-[#0F3D2E] text-white/90 hover:text-white border border-white/15 backdrop-blur-sm flex items-center justify-center shadow-sm transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={advanceNext}
+                  aria-label={t('home.carouselNextAria')}
+                  className="absolute right-2.5 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#09261C]/55 hover:bg-[#0F3D2E] text-white/90 hover:text-white border border-white/15 backdrop-blur-sm flex items-center justify-center shadow-sm transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </>
+            )}
+
+            {/* Synchronized Animated Progress Indicator Bar */}
+            {count > 1 && (
               <div
                 role="tablist"
-                aria-label={t('home.popularTitle')}
-                className="flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3"
+                aria-label="Carousel slides"
+                className="absolute bottom-2.5 sm:bottom-3.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-full bg-[#09261C]/75 backdrop-blur-md border border-white/10 flex items-center gap-1.5"
               >
-                {carouselProducts.map((product, idx) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={idx === safeSlideIdx}
-                    aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
-                    onClick={() => {
-                      pauseCarouselBriefly();
-                      setActiveSlideIdx(idx);
-                    }}
-                    className={`h-1.5 rounded-full transition-all ${
-                      idx === safeSlideIdx
-                        ? 'w-6 bg-[#C89D54]'
-                        : 'w-2 bg-emerald-700/70 hover:bg-emerald-500'
-                    }`}
-                  />
-                ))}
+                {carouselProducts.map((item, idx) => {
+                  const isCurrent = idx === activeLogicalIdx;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isCurrent}
+                      aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
+                      onClick={() => goToLogicalSlide(idx)}
+                      className={`relative h-1.5 rounded-full overflow-hidden transition-all duration-300 ${
+                        isCurrent
+                          ? 'w-9 sm:w-11 bg-white/25'
+                          : 'w-2 bg-white/35 hover:bg-white/60'
+                      }`}
+                    >
+                      {isCurrent && (
+                        <span
+                          key={`fill-${activeLogicalIdx}-${cycleTick}`}
+                          className="block w-full h-full bg-[#C89D54] rounded-full zaven-carousel-progress-fill"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
         </section>
       )}
 
-      {/* 2. Popular Products — Visible Near First Screen on Mobile */}
+      {/* 2. Popular Products */}
       <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -373,7 +395,7 @@ export const HomePage: React.FC = () => {
             </h2>
           </div>
           <Link
-            to="/catalog?sort=popular"
+            to="/catalog?sort=popular&view=products"
             className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-green hover:underline shrink-0"
           >
             <span>{t('home.viewAllPopular')}</span>
@@ -409,7 +431,7 @@ export const HomePage: React.FC = () => {
             return (
               <Link
                 key={category.id}
-                to={`/catalog?category=${category.slug}`}
+                to={`/catalog?category=${category.slug}&view=products`}
                 className="w-44 sm:w-48 lg:w-auto shrink-0 group bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#28453B] overflow-hidden hover:border-brand-green transition-all flex items-center lg:flex-col p-2.5 lg:p-3 gap-2.5 min-w-0 shadow-sm"
               >
                 <div className="w-11 h-11 lg:w-full lg:h-28 rounded-lg bg-gray-100 dark:bg-[#1A3028] overflow-hidden shrink-0 relative">
@@ -444,7 +466,7 @@ export const HomePage: React.FC = () => {
             </h2>
           </div>
           <Link
-            to="/catalog?filter=new"
+            to="/catalog?filter=new&view=products"
             className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-green hover:underline shrink-0"
           >
             <span>{t('home.viewAllNew')}</span>
@@ -469,7 +491,7 @@ export const HomePage: React.FC = () => {
             </h2>
           </div>
           <Link
-            to="/catalog?filter=discounted"
+            to="/catalog?filter=discounted&view=products"
             className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-brand-green hover:underline shrink-0"
           >
             <span>{t('nav.discounts')}</span>
@@ -484,13 +506,9 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* ===================================================================== */}
-      {/* 6. Requirement 1: Homepage Information Section                        */}
-      {/* Large "Taxminan 10–25 kun" badge removed from this section header     */}
-      {/* ===================================================================== */}
+      {/* 6. Homepage Information Section */}
       <section className="zaven-page-container bg-transparent">
         <div className="bg-white dark:bg-[#0F1D18] rounded-2xl border border-gray-200 dark:border-[#243E35] p-4 sm:p-6 shadow-sm space-y-3">
-          {/* Compact Summary Header (No delivery-time badge here) */}
           <div className="pb-2 border-b border-gray-100 dark:border-[#243E35]">
             <Badge variant="green" size="sm">
               {t('home.transparentRulesBadge')}
@@ -503,7 +521,6 @@ export const HomePage: React.FC = () => {
             </p>
           </div>
 
-          {/* 3 Labeled Collapsible Sections */}
           <div className="divide-y divide-gray-200 dark:divide-[#243E35]">
             {enabledTrustItems.length > 0 && (
               <div>

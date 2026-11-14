@@ -81,7 +81,7 @@ export const StoreFooter: React.FC = () => {
   };
 
   return (
-    <footer className="bg-[#09261C] text-emerald-50 border-t border-emerald-900/60 mt-8">
+    <footer className="mx-2 sm:mx-4 md:mx-6 mb-4 mt-8 overflow-hidden rounded-3xl border border-[#1D4D3C] bg-[#09261C] text-emerald-50 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
       <div className="zaven-page-container py-6 sm:py-10 space-y-6">
         {/* Top Compact Brand + Quick Contact/Social Row */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-emerald-800/60">

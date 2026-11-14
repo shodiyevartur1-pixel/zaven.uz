@@ -16,6 +16,7 @@ import {
   matchUzbekistanRegionAndDistrictFromGeocode,
 } from '../../utils/uzbekistanLocations';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 import { Button } from '../ui/Button';
 
 export interface ConfirmedMapLocationPayload {
@@ -276,7 +277,9 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
     [t]
   );
 
-  // Lock page scroll & hide mobile bottom nav while map sheet is open
+  useBodyScrollLock(isOpen);
+
+  // Keep Escape handling separate from the shared background scroll lock.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -286,31 +289,12 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       }
     };
 
-    const savedScrollY = window.scrollY;
-    const previousBodyStyles = {
-      position: document.body.style.position,
-      top: document.body.style.top,
-      left: document.body.style.left,
-      right: document.body.style.right,
-      width: document.body.style.width,
-      overflow: document.body.style.overflow,
-    };
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${savedScrollY}px`;
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
-    document.body.classList.add('zaven-modal-open');
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       locateRequestIdRef.current += 1;
       setIsLocatingUser(false);
-      Object.assign(document.body.style, previousBodyStyles);
-      document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
-      window.scrollTo(0, savedScrollY);
     };
   }, [isOpen, onClose]);
 
@@ -703,7 +687,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
 
           {/* Search Results Dropdown */}
           {searchResults.length > 1 && (
-            <ul className="bg-white dark:bg-[#12211C] text-gray-900 dark:text-gray-100 rounded-xl border border-gray-200 dark:border-[#2F5246] divide-y divide-gray-100 dark:divide-[#28453B] max-h-36 overflow-y-auto shadow-lg text-xs">
+            <ul data-zaven-scroll-area="true" className="bg-white dark:bg-[#12211C] text-gray-900 dark:text-gray-100 rounded-xl border border-gray-200 dark:border-[#2F5246] divide-y divide-gray-100 dark:divide-[#28453B] max-h-36 overflow-y-auto overscroll-contain shadow-lg text-xs">
               {searchResults.map((res, idx) => (
                 <li key={`${res.lat}-${res.lon}-${idx}`}>
                   <button
@@ -750,7 +734,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
         </div>
 
         {/* Center Interactive Touch Map Viewport (Fills available height) */}
-        <div className="relative flex-1 min-h-[220px] w-full bg-gray-100 dark:bg-[#0B1512] overflow-hidden">
+        <div data-zaven-scroll-area="true" className="relative flex-1 min-h-[220px] w-full bg-gray-100 dark:bg-[#0B1512] overflow-hidden">
           <div
             ref={mapContainerRef}
             className="w-full h-full z-0"

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronDown, Search, Check, X, MapPin } from 'lucide-react';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 
 export interface SelectSheetOption {
   value: string;
@@ -42,6 +43,7 @@ export const SearchableSelectSheet: React.FC<SearchableSelectSheetProps> = ({
   helperText,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  useBodyScrollLock(isOpen);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,8 +72,6 @@ export const SearchableSelectSheet: React.FC<SearchableSelectSheetProps> = ({
       }
     };
 
-    document.body.style.overflow = 'hidden';
-    document.body.classList.add('zaven-modal-open');
     window.addEventListener('keydown', handleKeyDown);
 
     const focusTimer = setTimeout(() => {
@@ -80,8 +80,6 @@ export const SearchableSelectSheet: React.FC<SearchableSelectSheetProps> = ({
 
     return () => {
       clearTimeout(focusTimer);
-      document.body.style.overflow = '';
-      document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen]);
@@ -210,7 +208,8 @@ export const SearchableSelectSheet: React.FC<SearchableSelectSheetProps> = ({
             <ul
               role="listbox"
               aria-label={sheetTitle}
-              className="flex-1 overflow-y-auto scrollbar-thin divide-y divide-gray-100 dark:divide-[#28453B] p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              data-zaven-scroll-area="true"
+              className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin divide-y divide-gray-100 dark:divide-[#28453B] p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
             >
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((opt) => {

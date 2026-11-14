@@ -18,6 +18,7 @@ import {
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { ThemeLanguageControls } from '../ui/ThemeLanguageControls';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -39,6 +40,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const favoritesCount = favoriteIds.length;
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -47,15 +49,9 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       }
     };
 
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.classList.add('zaven-modal-open');
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = '';
-      document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
@@ -77,7 +73,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       />
 
       {/* Drawer Content */}
-      <div className="relative w-full max-w-xs bg-white dark:bg-[#12211C] h-full max-h-[100dvh] flex flex-col justify-between overflow-y-auto z-10 shadow-2xl border-r border-gray-200 dark:border-[#28453B]">
+      <div data-zaven-scroll-area="true" className="relative w-full max-w-xs bg-white dark:bg-[#12211C] h-full max-h-[100dvh] flex flex-col justify-between overflow-y-auto overscroll-contain z-10 shadow-2xl border-r border-gray-200 dark:border-[#28453B]">
         <div>
           {/* Drawer Header */}
           <div className="bg-[#0F3D2E] text-white px-4 py-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] flex items-center justify-between">

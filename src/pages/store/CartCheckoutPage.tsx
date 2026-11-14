@@ -2080,21 +2080,7 @@ export const CartCheckoutPage: React.FC = () => {
         title={t('cart.authRequiredTitle')}
         maxWidth="sm"
         footer={
-          <div className="w-full flex flex-col sm:flex-row gap-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              fullWidth
-              onClick={() => {
-                setIsAuthPromptModalOpen(false);
-                if (location.pathname.startsWith('/checkout')) {
-                  navigate('/cart', { replace: true });
-                }
-              }}
-            >
-              {t('footer.cancelBtn')}
-            </Button>
+          <div className="w-full">
             <Button
               type="button"
               variant="primary"

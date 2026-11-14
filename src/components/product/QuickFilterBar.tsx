@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
   X,
@@ -72,6 +72,24 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   onOpenMobileFilters,
 }) => {
   const { t, getCategoryText } = useThemeLanguage();
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isSortOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!sortMenuRef.current?.contains(event.target as Node)) setIsSortOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsSortOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSortOpen]);
 
   const selectedCategory = categories.find(
     (c) => c.slug === selectedCategorySlug || c.id === selectedCategorySlug
@@ -150,22 +168,36 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           </button>
         </div>
 
-        {/* Responsive Styled Native Select Sort Control (Never renders off-screen or behind bottom nav) */}
-        <div className="relative flex-1 min-w-[165px] sm:flex-initial sm:w-auto ml-auto">
-          <ArrowUpDown className="w-3.5 h-3.5 text-brand-green absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <select
+        {/* Themed custom sort menu: avoids the oversized browser-native popup on phones. */}
+        <div ref={sortMenuRef} className="relative flex-1 min-w-[165px] sm:flex-initial sm:w-auto ml-auto">
+          <button
+            type="button"
             aria-label={t('catalog.sortLabel')}
-            value={sortBy}
-            onChange={(e) => onChangeSort(e.target.value as SortOption)}
-            className="w-full h-10 pl-8 pr-8 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-xs font-bold text-gray-800 dark:text-gray-100 appearance-none cursor-pointer focus:border-brand-green focus:outline-none shadow-sm"
+            aria-haspopup="listbox"
+            aria-expanded={isSortOpen}
+            onClick={() => setIsSortOpen((open) => !open)}
+            className="w-full h-10 pl-8 pr-8 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-xs font-bold text-gray-800 dark:text-gray-100 focus:border-brand-green focus:outline-none shadow-sm text-left"
           >
-            {sortOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ArrowUpDown className="w-3.5 h-3.5 text-brand-green absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <span className="block truncate">{sortOptions.find((option) => option.value === sortBy)?.label ?? sortOptions[0].label}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isSortOpen && (
+            <div role="listbox" aria-label={t('catalog.sortLabel')} className="absolute right-0 top-full z-[60] mt-2 w-max min-w-full max-w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[#2F5246] bg-[#10231C] p-1.5 text-white shadow-2xl">
+              {sortOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={sortBy === option.value}
+                  onClick={() => { onChangeSort(option.value); setIsSortOpen(false); }}
+                  className={`w-full rounded-lg px-3 py-2.5 text-left text-xs font-semibold transition-colors ${sortBy === option.value ? 'bg-[#0F5A45] text-[#71E2D0]' : 'text-gray-100 hover:bg-[#1D352D]'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

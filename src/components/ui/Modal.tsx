@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -23,6 +25,9 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   maxWidth = 'lg',
 }) => {
+  const { t } = useThemeLanguage();
+  useBodyScrollLock(isOpen);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -30,15 +35,9 @@ export const Modal: React.FC<ModalProps> = ({
       }
     };
 
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.classList.add('zaven-modal-open');
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = '';
-      document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
@@ -83,14 +82,14 @@ export const Modal: React.FC<ModalProps> = ({
             type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white flex items-center justify-center shrink-0 transition-colors"
-            aria-label="Yopish / Close"
+            aria-label={t('product.close')}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto scrollbar-thin flex-1 min-h-0">
+        <div data-zaven-scroll-area="true" className="p-4 sm:p-5 overflow-y-auto overscroll-contain scrollbar-thin flex-1 min-h-0">
           {children}
         </div>
 

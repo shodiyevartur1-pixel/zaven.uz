@@ -49,6 +49,29 @@ body.zaven-modal-open nav[aria-label="Mobile bottom navigation"] {
   visibility: hidden !important;
 }
 
+body.zaven-modal-open .zaven-desktop-cart {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+@keyframes zaven-carousel-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.zaven-carousel-progress-fill {
+  transform-origin: left center;
+  animation: zaven-carousel-progress 4.2s linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zaven-carousel-progress-fill {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
+
 @keyframes zaven-carousel-enter {
   from {
     opacity: 0.35;

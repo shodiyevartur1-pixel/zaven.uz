@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 import { Language } from '../../types';
 import { ProductCard } from '../../components/product/ProductCard';
 import {
@@ -171,30 +172,7 @@ export const CatalogPage: React.FC = () => {
   const [visibleMultiplier, setVisibleMultiplier] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!isMobileFilterOpen) return;
-    const savedScrollY = window.scrollY;
-    const previous = {
-      position: document.body.style.position,
-      top: document.body.style.top,
-      left: document.body.style.left,
-      right: document.body.style.right,
-      width: document.body.style.width,
-      overflow: document.body.style.overflow,
-    };
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${savedScrollY}px`;
-    document.body.style.left = '0';
-    document.body.style.right = '0';
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
-    document.body.classList.add('zaven-modal-open');
-    return () => {
-      Object.assign(document.body.style, previous);
-      document.body.classList.remove('zaven-modal-open');
-      window.scrollTo(0, savedScrollY);
-    };
-  }, [isMobileFilterOpen]);
+  useBodyScrollLock(isMobileFilterOpen);
 
   useEffect(() => {
     const catParam = searchParams.get('category') || '';
@@ -1065,7 +1043,7 @@ export const CatalogPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-4 flex-1 overflow-y-auto scrollbar-thin min-h-0">
+            <div data-zaven-scroll-area="true" className="p-4 flex-1 overflow-y-auto overscroll-contain scrollbar-thin min-h-0">
               {renderFilterSidebarContent()}
             </div>
 

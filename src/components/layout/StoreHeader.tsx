@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Search,
   User,
+  Heart,
   Grid,
   Phone,
   ShieldCheck,
@@ -26,7 +27,7 @@ const COMPACT_LANGS: { code: Language; label: string }[] = [
 ];
 
 export const StoreHeader: React.FC = () => {
-  const { products, currentCustomer, storeSettings } = useStore();
+  const { products, currentCustomer, storeSettings, favoriteIds } = useStore();
   const {
     t,
     theme,
@@ -286,8 +287,22 @@ export const StoreHeader: React.FC = () => {
               </form>
             </div>
 
-            {/* Right Actions: Language, Theme and Account */}
+            {/* Right Actions: Wishlist, Language, Theme and Account */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <Link
+                to="/favorites"
+                className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 text-[#E5C992] hover:bg-[#16533F] flex items-center justify-center transition-colors shrink-0"
+                aria-label={`${t('header.favoritesShort')}${favoriteIds.length ? ` (${favoriteIds.length})` : ''}`}
+                title={t('header.favoritesShort')}
+              >
+                <Heart className="w-4 h-4" />
+                {favoriteIds.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                    {favoriteIds.length > 99 ? '99+' : favoriteIds.length}
+                  </span>
+                )}
+              </Link>
+
               <button
                 type="button"
                 onClick={cycleLanguageMobile}

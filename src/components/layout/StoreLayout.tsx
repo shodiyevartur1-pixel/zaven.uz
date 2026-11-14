@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Grid, Heart, ShoppingBag, User } from 'lucide-react';
+import { Home, Grid, ShoppingBag, User } from 'lucide-react';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
 import { ToastContainer } from '../ui/ToastContainer';
@@ -12,28 +12,27 @@ interface StoreLayoutProps {
 }
 
 export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
-  const { cart, favoriteIds } = useStore();
+  const { cart } = useStore();
   const { t } = useThemeLanguage();
   const location = useLocation();
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const favoritesCount = favoriteIds.length;
 
   // Full informational footer is rendered strictly on the homepage ('/')
   const isHomePage = location.pathname === '/';
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 pb-20 md:pb-8 transition-colors">
+    <div className="min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-8 transition-colors">
       <StoreHeader />
 
       <main className="flex-1 bg-transparent">{children}</main>
 
       {isHomePage && <StoreFooter />}
 
-      {/* Mobile Sticky Bottom Tab Bar (5 Comfortable, Uncluttered Entries including Favorites) */}
+      {/* Mobile navigation: wishlist is in the header, so the four main destinations stay clear. */}
       <nav
         aria-label="Mobile bottom navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] shadow-lg grid grid-cols-5 items-center h-16 px-1 pb-safe transition-opacity duration-150"
+        className="md:hidden fixed bottom-0 left-2 right-2 z-40 bg-white/95 dark:bg-[#12211C]/95 backdrop-blur-md border border-gray-200 dark:border-[#28453B] shadow-[0_-8px_28px_rgba(0,0,0,0.16)] grid grid-cols-4 items-center h-[calc(4.25rem+env(safe-area-inset-bottom))] px-1 pb-[env(safe-area-inset-bottom)] rounded-t-2xl rounded-b-xl transition-opacity duration-150"
       >
         <Link
           to="/"
@@ -57,33 +56,6 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
         >
           <Grid className="w-5 h-5 mb-0.5 shrink-0" />
           <span className="truncate max-w-full px-0.5">{t('nav.catalog')}</span>
-        </Link>
-
-        <Link
-          to="/favorites"
-          className={`relative flex flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
-            location.pathname === '/favorites'
-              ? 'text-brand-green font-bold'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <div className="relative">
-            <Heart
-              className={`w-5 h-5 mb-0.5 shrink-0 ${
-                location.pathname === '/favorites' && favoritesCount > 0
-                  ? 'fill-current text-rose-500'
-                  : ''
-              }`}
-            />
-            {favoritesCount > 0 && (
-              <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                {favoritesCount}
-              </span>
-            )}
-          </div>
-          <span className="truncate max-w-full px-0.5">
-            {t('header.favoritesShort')}
-          </span>
         </Link>
 
         <Link
@@ -120,6 +92,16 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
           </span>
         </Link>
       </nav>
+
+      {/* Desktop cart access stays separate from the ZAVEN brand header. */}
+      <Link
+        to="/cart"
+        aria-label={`${t('header.cart')}${cartItemCount ? ` (${cartItemCount})` : ''}`}
+        className="zaven-desktop-cart hidden md:flex fixed bottom-5 right-6 z-40 items-center gap-2.5 rounded-full border border-[#C89D54]/40 bg-[#0F3D2E] px-4 py-3 text-white shadow-xl transition-colors hover:bg-[#16533F]"
+      >
+        <span className="relative"><ShoppingBag className="h-5 w-5 text-[#E5C992]" />{cartItemCount > 0 && <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#C89D54] px-1 text-[9px] font-extrabold text-[#09261C]">{cartItemCount > 99 ? '99+' : cartItemCount}</span>}</span>
+        <span className="text-sm font-bold">{t('header.cart')}</span>
+      </Link>
 
       <ToastContainer />
     </div>
