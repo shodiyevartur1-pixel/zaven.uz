@@ -303,7 +303,7 @@ export const HomePage: React.FC = () => {
                   <div
                     key={`${slideProduct.id}-slide-${idx}`}
                     aria-hidden={!isLogicalActive}
-                    className="w-full shrink-0 h-[230px] sm:h-[310px] lg:h-[370px] relative flex items-center justify-center p-4 sm:p-6 lg:p-8 pb-9 sm:pb-11"
+                    className="relative h-[250px] w-full shrink-0 overflow-hidden bg-[#07110D] sm:h-[340px] lg:h-[440px]"
                   >
                     <Link
                       to={`/product/${slideProduct.slug}`}
@@ -311,13 +311,15 @@ export const HomePage: React.FC = () => {
                       aria-label={locProd.name}
                       title={locProd.name}
                       onClick={() => handleOpenProductTop(slideProduct.id)}
-                      className="w-full h-full flex items-center justify-center focus:outline-none group"
+                      className="absolute inset-0 flex h-full w-full items-center justify-center overflow-hidden focus:outline-none group"
                     >
                       <img
                         src={slideProduct.images[0]}
                         alt={locProd.name}
-                        className="max-w-full max-h-full w-auto h-full object-contain rounded-2xl drop-shadow-md transition-transform duration-300 group-hover:scale-[1.02]"
+                        draggable={false}
+                        className="absolute inset-0 h-full w-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-[1.035]"
                       />
+                      <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#07110D]/50 via-transparent to-[#07110D]/20" />
                     </Link>
                   </div>
                 );
