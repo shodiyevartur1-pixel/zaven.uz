@@ -91,27 +91,27 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             />
           </Link>
 
-          {/* Restrained Top-Left Badges */}
-          <div className="absolute top-2.5 left-2.5 flex flex-wrap items-center gap-1 pointer-events-none max-w-[74%]">
+          {/* Requirements #3 & #5: Top-Left Badges with guaranteed right clearance (right-12 pr-1.5) so they never touch or overlap the heart button */}
+          <div className="absolute top-2 left-2 right-12 pr-1.5 flex flex-wrap items-center gap-1 pointer-events-none z-10">
             {discountPercent > 0 && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#C89D54] text-[#09261C] border border-[#E5C992] shadow-sm">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#C89D54] text-[#09261C] border border-[#F3D79B] shadow-md">
                 -{discountPercent}%
               </span>
             )}
             {product.isNew ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-[#0F3D2E] text-white border border-emerald-500/40 shadow-sm">
-                <Sparkles className="w-2.5 h-2.5 mr-0.5 text-[#C89D54] shrink-0" />
-                {t('product.new')}
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#0F3D2E] text-white border border-emerald-400/50 shadow-md">
+                <Sparkles className="w-2.5 h-2.5 mr-1 text-[#C89D54] shrink-0" />
+                <span className="truncate">{t('product.new')}</span>
               </span>
             ) : product.isPopular && discountPercent === 0 ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold bg-sky-950/90 text-sky-200 border border-sky-700/60 shadow-sm">
-                <Flame className="w-2.5 h-2.5 mr-0.5 shrink-0" />
-                {t('product.popular')}
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-extrabold bg-[#09261C] text-[#F3D79B] border border-[#C89D54] shadow-md">
+                <Flame className="w-2.5 h-2.5 mr-1 text-[#C89D54] shrink-0" />
+                <span className="truncate">{t('product.popular')}</span>
               </span>
             ) : null}
           </div>
 
-          {/* Requirement 2: Accessible Heart Favorite Button (Replaces old Eye / Quick View button) */}
+          {/* Requirement #5: Accessible Heart Favorite Button with clear space from badges */}
           <button
             type="button"
             onClick={handleToggleFavoriteClick}
@@ -126,10 +126,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 ? t('favorites.removeAria')
                 : t('favorites.addAria')
             }
-            className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-lg border flex items-center justify-center shadow-sm transition-all active:scale-95 ${
+            className={`absolute top-2 right-2 z-20 w-8 h-8 sm:w-9 sm:h-9 rounded-xl border flex items-center justify-center shadow-md transition-all active:scale-95 ${
               isFavorited
-                ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-200 dark:border-rose-700/80 text-rose-600 dark:text-rose-400'
-                : 'bg-white/95 dark:bg-[#12211C]/95 hover:bg-white border-gray-200 dark:border-[#2F5246] text-gray-600 dark:text-gray-300 hover:text-rose-600'
+                ? 'bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400'
+                : 'bg-white/95 dark:bg-[#12211C]/95 hover:bg-white border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200 hover:text-rose-600'
             }`}
           >
             <Heart
@@ -146,7 +146,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        {/* Tappable Card Body -> Opens Product Detail Page */}
+        {/* Tappable Card Body */}
         <div
           onClick={handleNavigateToProduct}
           className="p-3 sm:p-4 flex-1 flex flex-col justify-between gap-2 min-w-0 cursor-pointer"
@@ -176,6 +176,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </Link>
           </div>
 
+          {/* Requirement #4: Price & Status Row (No exact remaining stock number on catalog cards) */}
           <div className="pt-2 border-t border-gray-100 dark:border-[#28453B] min-w-0">
             <div className="flex flex-col min-w-0">
               <span className="text-sm sm:text-base font-extrabold text-brand-green leading-tight truncate">
@@ -199,11 +200,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </span>
               ) : isLowStock ? (
                 <span className="text-amber-700 dark:text-amber-300 font-semibold truncate">
-                  {t('product.lowStock')}: {product.stock}
+                  {t('product.lowStock')}
                 </span>
               ) : (
                 <span className="text-emerald-700 dark:text-emerald-300 font-medium truncate">
-                  {t('product.inStock')} ({product.stock})
+                  {t('product.inStock')}
                 </span>
               )}
             </div>

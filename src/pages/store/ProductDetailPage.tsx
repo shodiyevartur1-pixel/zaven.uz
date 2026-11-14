@@ -17,9 +17,9 @@ import {
   Sparkles,
   Flame,
   CreditCard,
-  Clock,
   FileText,
   Sliders,
+  Heart,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -38,10 +38,13 @@ export const ProductDetailPage: React.FC = () => {
     products,
     categories,
     cart,
+    favoriteIds,
     recentlyViewedIds,
     storeSettings,
     addToCart,
     updateCartQuantity,
+    removeFromCart,
+    toggleFavorite,
     recordRecentlyViewed,
     addToast,
   } = useStore();
@@ -61,7 +64,7 @@ export const ProductDetailPage: React.FC = () => {
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
   const [isZoomedInLightbox, setIsZoomedInLightbox] = useState<boolean>(false);
-  const [selectedQty, setSelectedQty] = useState<number>(1);
+  const [pendingQty, setPendingQty] = useState<number>(1);
 
   const [openSection, setOpenSection] = useState<
     'description' | 'specs' | 'delivery' | null
@@ -74,7 +77,7 @@ export const ProductDetailPage: React.FC = () => {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setSelectedImageIdx(0);
-    setSelectedQty(1);
+    setPendingQty(1);
     setIsZoomedInLightbox(false);
     setShowStickyMobileBar(false);
     setOpenSection('description');
@@ -127,6 +130,11 @@ export const ProductDetailPage: React.FC = () => {
 
   const cartItem = cart.find((item) => item.productId === product.id);
   const quantityInCart = cartItem ? cartItem.quantity : 0;
+  const isInCart = quantityInCart > 0;
+  const isFavorited = favoriteIds.includes(product.id);
+
+  // Requirement #6: Displayed quantity always reflects the real cart quantity when in cart
+  const displayedQuantity = isInCart ? quantityInCart : pendingQty;
 
   const effectivePrice = product.salePrice ?? product.price;
   const discountPercent = calculateDiscountPercent(
@@ -135,8 +143,6 @@ export const ProductDetailPage: React.FC = () => {
   );
   const isOutOfStock =
     product.status === 'out_of_stock' || product.stock <= 0;
-  const isLowStock =
-    !isOutOfStock && product.stock <= product.lowStockThreshold;
 
   const images =
     product.images && product.images.length > 0
@@ -190,9 +196,34 @@ export const ProductDetailPage: React.FC = () => {
     storeSettings.delivery.isDeliveryEnabled &&
     storeSettings.delivery.showDeliveryInfoOnProductPage;
 
-  const handleAddSelectedQuantity = () => {
+  // Requirement #6: Unified quantity stepper handlers
+  const handleDecreaseQuantity = () => {
+    if (isInCart) {
+      if (quantityInCart <= 1) {
+        removeFromCart(product.id);
+        setPendingQty(1);
+      } else {
+        updateCartQuantity(product.id, quantityInCart - 1);
+      }
+    } else {
+      setPendingQty((prev) => Math.max(1, prev - 1));
+    }
+  };
+
+  const handleIncreaseQuantity = () => {
     if (isOutOfStock) return;
-    addToCart(product.id, selectedQty);
+    if (isInCart) {
+      if (quantityInCart < product.stock) {
+        updateCartQuantity(product.id, quantityInCart + 1);
+      }
+    } else {
+      setPendingQty((prev) => Math.min(product.stock, prev + 1));
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (isOutOfStock) return;
+    addToCart(product.id, pendingQty);
   };
 
   const handleShareProduct = () => {
@@ -216,44 +247,31 @@ export const ProductDetailPage: React.FC = () => {
     setOpenSection((prev) => (prev === section ? null : section));
   };
 
-  return (
-    <div className="zaven-page-container py-4 sm:py-7 pb-20 md:pb-8 space-y-6 sm:space-y-8">
-      {/* Compact Breadcrumb & Back Row */}
-      <div className="flex items-center justify-between gap-2">
-        <nav
-          aria-label="Breadcrumb"
-          className="flex items-center gap-1.5 text-xs text-gray-500 min-w-0 truncate"
-        >
-          <Link to="/" className="hover:text-brand-green font-medium shrink-0">
-            {t('nav.home')}
-          </Link>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-          <Link
-            to="/catalog"
-            className="hover:text-brand-green font-medium shrink-0"
-          >
-            {t('nav.catalog')}
-          </Link>
-          {category && localizedCategory && (
-            <>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-              <Link
-                to={`/catalog?category=${category.slug}`}
-                className="hover:text-brand-green font-medium truncate"
-              >
-                {localizedCategory.name}
-              </Link>
-            </>
-          )}
-        </nav>
+  // Minus button is only disabled when the item is NOT in the cart and pendingQty is 1.
+  // When the item IS in the cart at quantity 1, minus stays enabled so pressing it removes the item.
+  const isMinusDisabled = !isInCart && pendingQty <= 1;
+  const isPlusDisabled = displayedQuantity >= product.stock;
 
+  return (
+    <div className="zaven-page-container py-3.5 sm:py-6 pb-20 md:pb-8 space-y-6 sm:space-y-8">
+      {/* Requirement #1: Removed "Bosh sahifa > Katalog > ..." breadcrumb row; kept only compact Back action */}
+      <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1 text-xs font-bold text-brand-green hover:underline shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#28453B] text-xs font-bold text-gray-800 dark:text-gray-100 hover:border-brand-green shadow-sm transition-colors"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="w-3.5 h-3.5 text-brand-green" />
           <span>{t('product.back')}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleShareProduct}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#28453B] text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-brand-green shadow-sm transition-colors"
+        >
+          <Share2 className="w-3.5 h-3.5" />
+          <span>{t('product.share')}</span>
         </button>
       </div>
 
@@ -270,35 +288,59 @@ export const ProductDetailPage: React.FC = () => {
                 className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300 group-hover:scale-105"
               />
 
-              <div className="absolute top-3 left-3 flex flex-wrap items-center gap-1.5 pointer-events-none">
+              {/* Requirements #3 & #5: High-contrast badges with right clearance so they never overlap top-right controls */}
+              <div className="absolute top-3 left-3 right-24 pr-2 flex flex-wrap items-center gap-1.5 pointer-events-none z-10">
                 {discountPercent > 0 && (
-                  <Badge variant="gold" size="md">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold bg-[#C89D54] text-[#09261C] border border-[#F3D79B] shadow-md">
                     -{discountPercent}%
-                  </Badge>
+                  </span>
                 )}
                 {product.isNew && (
-                  <Badge variant="green" size="md">
-                    <Sparkles className="w-3.5 h-3.5 mr-1 text-[#C89D54]" />
-                    {t('product.new')}
-                  </Badge>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold bg-[#0F3D2E] text-white border border-emerald-400/50 shadow-md">
+                    <Sparkles className="w-3.5 h-3.5 mr-1 text-[#C89D54] shrink-0" />
+                    <span>{t('product.new')}</span>
+                  </span>
                 )}
-                {product.isPopular && discountPercent === 0 && (
-                  <Badge variant="info" size="md">
-                    <Flame className="w-3.5 h-3.5 mr-1" />
-                    {t('product.popular')}
-                  </Badge>
+                {product.isPopular && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold bg-[#09261C] text-[#F3D79B] border border-[#C89D54] shadow-md">
+                    <Flame className="w-3.5 h-3.5 mr-1 text-[#C89D54] shrink-0" />
+                    <span>{t('product.popular')}</span>
+                  </span>
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsLightboxOpen(true)}
-                className="absolute top-3 right-3 px-2.5 py-1.5 rounded-lg bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
-                aria-label={t('product.zoom')}
-              >
-                <ZoomIn className="w-4 h-4" />
-                <span className="hidden sm:inline">{t('product.zoom')}</span>
-              </button>
+              {/* Top-Right Heart Favorite + Zoom Buttons */}
+              <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(product.id)}
+                  aria-pressed={isFavorited}
+                  aria-label={
+                    isFavorited
+                      ? t('favorites.removeAria')
+                      : t('favorites.addAria')
+                  }
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center shadow-md transition-all ${
+                    isFavorited
+                      ? 'bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400'
+                      : 'bg-white/95 dark:bg-[#12211C]/95 hover:bg-white border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200 hover:text-rose-600'
+                  }`}
+                >
+                  <Heart
+                    className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="w-9 h-9 sm:w-auto sm:px-2.5 rounded-xl bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] text-xs font-bold flex items-center justify-center gap-1.5 shadow-md transition-colors"
+                  aria-label={t('product.zoom')}
+                >
+                  <ZoomIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('product.zoom')}</span>
+                </button>
+              </div>
 
               {images.length > 1 && (
                 <>
@@ -322,7 +364,6 @@ export const ProductDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* PART 1 FIX: Consistent Square Thumbnails with Equal Spacing & Clear Selection State */}
             {images.length > 1 && (
               <div
                 role="tablist"
@@ -357,33 +398,18 @@ export const ProductDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Right Column: Concise Core Purchase Panel + Expandable Secondary Accordions */}
-          <div className="lg:col-span-6 space-y-5 min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                {category && localizedCategory && (
-                  <Link to={`/catalog?category=${category.slug}`}>
-                    <Badge variant="neutral" size="sm">
-                      {localizedCategory.name}
-                    </Badge>
-                  </Link>
-                )}
-
-                <Badge variant="gold" size="sm">
-                  <Clock className="w-3 h-3 mr-1 shrink-0" />
-                  <span>{t('delivery.estimateValue')}</span>
-                </Badge>
+          {/* Right Column: Core Purchase Panel */}
+          <div className="lg:col-span-6 space-y-4 sm:space-y-5 min-w-0">
+            {/* Category Badge Only (Requirement #2: Removed "Taxminan 10–25 kun" badge from product detail page) */}
+            {category && localizedCategory && (
+              <div>
+                <Link to={`/catalog?category=${category.slug}`}>
+                  <Badge variant="neutral" size="sm">
+                    {localizedCategory.name}
+                  </Badge>
+                </Link>
               </div>
-
-              <button
-                type="button"
-                onClick={handleShareProduct}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-brand-green transition-colors"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>{t('product.share')}</span>
-              </button>
-            </div>
+            )}
 
             <div className="space-y-1.5">
               <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 leading-snug break-words">
@@ -394,7 +420,7 @@ export const ProductDetailPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Prominent Price Block */}
+            {/* Requirement #4: Price Block + Exact Remaining Stock Quantity ("Omborda: 19 dona") */}
             <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-baseline gap-2.5">
@@ -421,91 +447,88 @@ export const ProductDetailPage: React.FC = () => {
                     <AlertCircle className="w-3.5 h-3.5 mr-1" />
                     {t('product.outOfStockShort')}
                   </Badge>
-                ) : isLowStock ? (
-                  <Badge variant="warning" size="md">
-                    {t('product.lowStock')}: {product.stock}{' '}
-                    {t('product.units')}
-                  </Badge>
                 ) : (
                   <Badge variant="success" size="md">
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                    {t('product.inStock')}
+                    {t('product.stockPrefix')} {product.stock}{' '}
+                    {t('product.units')}
                   </Badge>
                 )}
               </div>
             </div>
 
-            {/* Clear Quantity Controls & Single Primary "Savatchaga qoʻshish" Action */}
-            <div ref={purchaseActionsRef} className="space-y-3 pt-1">
+            {/* Requirements #6 & #7: Synchronized Quantity Control + Single Non-Competing Purchase Action */}
+            <div ref={purchaseActionsRef} className="pt-1">
               {!isOutOfStock ? (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className="flex items-center justify-between sm:justify-start border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] px-2.5 py-1.5 shrink-0">
-                    <span className="text-xs font-semibold text-gray-500 sm:hidden mr-2">
-                      Miqdor:
+                  {/* Unified Quantity Stepper */}
+                  <div className="flex items-center justify-between sm:justify-start border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] px-3 py-1.5 shrink-0">
+                    <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 sm:hidden mr-3">
+                      {t('product.quantityLabel')}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelectedQty((prev) => Math.max(1, prev - 1))
+                        onClick={handleDecreaseQuantity}
+                        disabled={isMinusDisabled}
+                        className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold transition-colors"
+                        aria-label={
+                          isInCart && quantityInCart === 1
+                            ? 'Mahsulotni savatdan olib tashlash / Remove from cart'
+                            : 'Miqdorni kamaytirish / Decrease quantity'
                         }
-                        disabled={selectedQty <= 1}
-                        className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold"
-                        aria-label="Decrease quantity"
                       >
                         <Minus className="w-4 h-4" />
                       </button>
-                      <span className="w-9 text-center text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                        {selectedQty}
+                      <span className="w-10 text-center text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        {displayedQuantity}
                       </span>
                       <button
                         type="button"
-                        onClick={() =>
-                          setSelectedQty((prev) =>
-                            Math.min(product.stock, prev + 1)
-                          )
-                        }
-                        disabled={selectedQty >= product.stock}
-                        className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold"
-                        aria-label="Increase quantity"
+                        onClick={handleIncreaseQuantity}
+                        disabled={isPlusDisabled}
+                        className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-[#162923] hover:bg-gray-200 disabled:opacity-40 flex items-center justify-center text-gray-800 dark:text-gray-100 font-bold transition-colors"
+                        aria-label="Miqdorni oshirish / Increase quantity"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
 
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    fullWidth
-                    leftIcon={
-                      <ShoppingBag className="w-5 h-5 text-[#C89D54]" />
-                    }
-                    onClick={handleAddSelectedQuantity}
-                  >
-                    {t('product.addToCart')} —{' '}
-                    {formatUZS(effectivePrice * selectedQty)}
-                  </Button>
+                  {/* Single Primary CTA: "Savatga oʻtish" when in cart, or "Savatchaga — [narx]" when not in cart */}
+                  {isInCart ? (
+                    <Button
+                      type="button"
+                      variant="gold"
+                      size="lg"
+                      fullWidth
+                      leftIcon={<ShoppingBag className="w-5 h-5" />}
+                      rightIcon={<ChevronRight className="w-4 h-4" />}
+                      onClick={() => navigate('/cart')}
+                    >
+                      {t('product.goToCartBtn')} ({quantityInCart}{' '}
+                      {t('product.units')})
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      leftIcon={
+                        <ShoppingBag className="w-5 h-5 text-[#C89D54]" />
+                      }
+                      onClick={handleAddToCart}
+                    >
+                      {t('product.addToCart')} —{' '}
+                      {formatUZS(effectivePrice * pendingQty)}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <Button variant="outline" size="lg" fullWidth disabled>
                   {t('product.outOfStock')}
                 </Button>
-              )}
-
-              {quantityInCart > 0 && (
-                <div className="px-3.5 py-2.5 rounded-xl bg-brand-green-light/60 border border-brand-green/25 flex items-center justify-between gap-2 text-xs">
-                  <span className="font-bold text-brand-green">
-                    {t('product.inCart')}: {quantityInCart} {t('product.units')}
-                  </span>
-                  <Link
-                    to="/cart"
-                    className="font-extrabold text-brand-green hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>{t('header.cart')}ga oʻtish</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
               )}
             </div>
 
@@ -556,7 +579,7 @@ export const ProductDetailPage: React.FC = () => {
 
                     <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                       <span>
-                        {t('product.inStock')}:{' '}
+                        {t('product.stockPrefix')}{' '}
                         <strong className="text-gray-800 dark:text-gray-200">
                           {product.stock} {t('product.units')}
                         </strong>
@@ -652,17 +675,8 @@ export const ProductDetailPage: React.FC = () => {
 
                   {openSection === 'delivery' && (
                     <div className="pb-4 space-y-3 text-xs text-gray-600 dark:text-gray-300">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">
-                          {t('delivery.estimateLabel')}
-                        </span>
-                        <Badge variant="gold" size="sm">
-                          {t('delivery.estimateValue')}
-                        </Badge>
-                      </div>
-
                       <p className="leading-relaxed">
-                        {t('delivery.estimateDisclaimer')}
+                        {storeSettings.delivery.generalDeliveryNote}
                       </p>
 
                       <div className="space-y-1.5 pt-1">
@@ -762,14 +776,12 @@ export const ProductDetailPage: React.FC = () => {
                 <span className="inline-flex items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-[#162621] text-gray-400 text-xs font-bold">
                   {t('product.outOfStockShort')}
                 </span>
-              ) : quantityInCart > 0 ? (
+              ) : isInCart ? (
                 <div className="flex items-center gap-1.5">
                   <div className="flex items-center bg-brand-green-light dark:bg-[#1A332A] rounded-lg p-0.5 border border-brand-green/30 dark:border-emerald-600/40 h-9">
                     <button
                       type="button"
-                      onClick={() =>
-                        updateCartQuantity(product.id, quantityInCart - 1)
-                      }
+                      onClick={handleDecreaseQuantity}
                       className="w-7 h-7 rounded-md bg-white dark:bg-[#12211C] text-brand-green flex items-center justify-center font-bold shadow-sm"
                       aria-label="Decrease quantity"
                     >
@@ -780,9 +792,7 @@ export const ProductDetailPage: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() =>
-                        updateCartQuantity(product.id, quantityInCart + 1)
-                      }
+                      onClick={handleIncreaseQuantity}
                       disabled={quantityInCart >= product.stock}
                       className="w-7 h-7 rounded-md bg-[#0F3D2E] text-white disabled:opacity-40 flex items-center justify-center font-bold shadow-sm"
                       aria-label="Increase quantity"
@@ -795,13 +805,13 @@ export const ProductDetailPage: React.FC = () => {
                     to="/cart"
                     className="h-9 px-3 rounded-lg bg-[#C89D54] text-[#09261C] font-extrabold text-xs inline-flex items-center justify-center shadow-sm"
                   >
-                    {t('header.cart')} →
+                    {t('product.goToCartBtn')}
                   </Link>
                 </div>
               ) : (
                 <button
                   type="button"
-                  onClick={() => addToCart(product.id, selectedQty)}
+                  onClick={handleAddToCart}
                   className="h-9 px-3.5 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] active:bg-[#09261C] text-white border border-emerald-500/30 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-colors"
                 >
                   <ShoppingBag className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />

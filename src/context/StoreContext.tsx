@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import { RealtimeChannel, User as SupabaseUser } from '@supabase/supabase-js';
@@ -470,12 +471,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
 
+  // Requirement #8: Deduplicate toasts so one user action creates strictly one notification
+  const lastToastRef = useRef<{
+    signature: string;
+    timestamp: number;
+  }>({ signature: '', timestamp: 0 });
+
   const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setToasts((prev) => [...prev, { ...toast, id }]);
+    const now = Date.now();
+    const signature = `${toast.type}|${toast.title}|${toast.description || ''}`;
+    if (
+      lastToastRef.current.signature === signature &&
+      now - lastToastRef.current.timestamp < 1200
+    ) {
+      return;
+    }
+    lastToastRef.current = { signature, timestamp: now };
+
+    const id = `toast-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => {
+      // Replace any active toast with the exact same title so they never stack duplicates
+      const withoutSameTitle = prev.filter((t) => t.title !== toast.title);
+      return [...withoutSameTitle, { ...toast, id }];
+    });
+
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 2600);
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -506,10 +528,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     []
   );
 
-  // ===========================================================================
-  // Syncs a verified Supabase Auth customer into `currentCustomer` & `customers`
-  // Only treats the account as verified when `user.email_confirmed_at` is set.
-  // ===========================================================================
   const syncVerifiedCustomerFromAuthUser = useCallback(
     async (user: SupabaseUser) => {
       const email = user.email?.trim().toLowerCase();
@@ -983,63 +1001,72 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     currentAdminRole,
   ]);
 
-  const addToCart = (productId: string, quantity = 1) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-
-    if (product.status !== 'active' || product.stock <= 0) {
+  const removeFromCart = useCallback(
+    (productId: string) => {
+      setCart((prev) => prev.filter((item) => item.productId !== productId));
       addToast({
-        type: 'error',
-        title: 'Mahsulot vaqtincha tugagan',
-        description: `${product.name} hozirda omborda mavjud emas.`,
+        type: 'info',
+        title: 'Mahsulot savatchadan olib tashlandi',
       });
-      return;
-    }
+    },
+    [addToast]
+  );
 
-    setCart((prev) => {
-      const existing = prev.find((item) => item.productId === productId);
-      if (existing) {
-        const nextQty = Math.min(product.stock, existing.quantity + quantity);
-        return prev.map((item) =>
-          item.productId === productId ? { ...item, quantity: nextQty } : item
-        );
+  const addToCart = useCallback(
+    (productId: string, quantity = 1) => {
+      const product = products.find((p) => p.id === productId);
+      if (!product) return;
+
+      if (product.status !== 'active' || product.stock <= 0) {
+        addToast({
+          type: 'error',
+          title: 'Mahsulot vaqtincha tugagan',
+          description: `${product.name} hozirda omborda mavjud emas.`,
+        });
+        return;
       }
-      return [
-        ...prev,
-        { productId, quantity: Math.min(product.stock, quantity) },
-      ];
-    });
 
-    addToast({
-      type: 'success',
-      title: 'Savatchaga qoʻshildi',
-      description: product.name,
-    });
-  };
+      setCart((prev) => {
+        const existing = prev.find((item) => item.productId === productId);
+        if (existing) {
+          const nextQty = Math.min(product.stock, existing.quantity + quantity);
+          return prev.map((item) =>
+            item.productId === productId ? { ...item, quantity: nextQty } : item
+          );
+        }
+        return [
+          ...prev,
+          { productId, quantity: Math.min(product.stock, quantity) },
+        ];
+      });
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    const product = products.find((p) => p.id === productId);
-    const maxStock = product ? product.stock : quantity;
-    setCart((prev) =>
-      prev.map((item) =>
-        item.productId === productId
-          ? { ...item, quantity: Math.min(maxStock, quantity) }
-          : item
-      )
-    );
-  };
+      addToast({
+        type: 'success',
+        title: 'Savatchaga qoʻshildi',
+        description: product.name,
+      });
+    },
+    [products, addToast]
+  );
 
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.productId !== productId));
-    addToast({
-      type: 'info',
-      title: 'Mahsulot savatchadan olib tashlandi',
-    });
-  };
+  const updateCartQuantity = useCallback(
+    (productId: string, quantity: number) => {
+      if (quantity <= 0) {
+        removeFromCart(productId);
+        return;
+      }
+      const product = products.find((p) => p.id === productId);
+      const maxStock = product ? product.stock : quantity;
+      setCart((prev) =>
+        prev.map((item) =>
+          item.productId === productId
+            ? { ...item, quantity: Math.min(maxStock, quantity) }
+            : item
+        )
+      );
+    },
+    [products, removeFromCart]
+  );
 
   const clearCart = () => setCart([]);
 

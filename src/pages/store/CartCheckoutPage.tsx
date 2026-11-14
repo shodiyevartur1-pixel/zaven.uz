@@ -22,12 +22,10 @@ import {
   CreditCard,
   AlertCircle,
   Clock,
-  LocateFixed,
   CheckCircle2,
   Sparkles,
   Map as MapIcon,
   AlertTriangle,
-  Search,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -47,7 +45,8 @@ import { ProductCard } from '../../components/product/ProductCard';
 import { DeliveryMapModal } from '../../components/checkout/DeliveryMapModal';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
-import { Input, Select } from '../../components/ui/Input';
+import { Input } from '../../components/ui/Input';
+import { SearchableSelectSheet } from '../../components/ui/SearchableSelectSheet';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
 
@@ -125,18 +124,12 @@ export const CartCheckoutPage: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>(
     UZBEKISTAN_REGIONS[0].districts[0]
   );
-  const [districtSearchFilter, setDistrictSearchFilter] = useState<string>('');
   const [addressLine, setAddressLine] = useState<string>(
     currentCustomer?.addresses.find((a) => a.isDefault)?.addressLine || ''
   );
   const [customerNote, setCustomerNote] = useState<string>('');
 
-  // Never automatically detect or save location on page load
-  const [isLocating, setIsLocating] = useState<boolean>(false);
-  const [geoStatusMessage, setGeoStatusMessage] = useState<{
-    type: 'success' | 'warning';
-    text: string;
-  } | null>(null);
+  // Map pin coordinates confirmed by the customer (never auto-populated on mount)
   const [sharedCoordinates, setSharedCoordinates] = useState<{
     lat: number;
     lng: number;
@@ -227,15 +220,6 @@ export const CartCheckoutPage: React.FC = () => {
     [selectedUzRegionId]
   );
 
-  const filteredDistricts = useMemo(() => {
-    const q = districtSearchFilter.trim().toLowerCase();
-    if (!q) return currentUzRegionObj.districts;
-    const matches = currentUzRegionObj.districts.filter((d) =>
-      d.toLowerCase().includes(q)
-    );
-    return matches.length > 0 ? matches : currentUzRegionObj.districts;
-  }, [currentUzRegionObj.districts, districtSearchFilter]);
-
   const getRegionDisplayName = (reg: (typeof UZBEKISTAN_REGIONS)[number]) => {
     if (language === 'ru') return reg.nameRu;
     if (language === 'en') return reg.nameEn;
@@ -244,7 +228,6 @@ export const CartCheckoutPage: React.FC = () => {
 
   const handleRegionChange = (newRegionId: string) => {
     setSelectedUzRegionId(newRegionId);
-    setDistrictSearchFilter('');
     const found = UZBEKISTAN_REGIONS.find((r) => r.id === newRegionId);
     if (found && found.districts.length > 0) {
       setSelectedDistrict(found.districts[0]);
@@ -256,73 +239,6 @@ export const CartCheckoutPage: React.FC = () => {
       region: undefined,
       district: undefined,
     }));
-  };
-
-  // Optional Browser Geolocation — never auto-selects region/district silently
-  const handleUseMyLocation = () => {
-    setGeoStatusMessage(null);
-
-    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
-      setGeoStatusMessage({
-        type: 'warning',
-        text: t('cart.locationUnsupported'),
-      });
-      return;
-    }
-
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        setIsLocating(false);
-        const { latitude, longitude, accuracy } = position.coords;
-        const roundedLat = Number(latitude.toFixed(5));
-        const roundedLng = Number(longitude.toFixed(5));
-
-        setSharedCoordinates({
-          lat: roundedLat,
-          lng: roundedLng,
-          accuracyMeters: accuracy ? Math.round(accuracy) : undefined,
-        });
-
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${roundedLat}&lon=${roundedLng}&accept-language=uz,ru`
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const streetParts = [
-              data?.address?.suburb || data?.address?.neighbourhood,
-              data?.address?.road,
-              data?.address?.house_number
-                ? `${data.address.house_number}-uy`
-                : undefined,
-            ].filter(Boolean);
-            if (streetParts.length > 0 && !addressLine.trim()) {
-              setAddressLine(streetParts.join(', '));
-            }
-          }
-        } catch {
-          // Ignore reverse geocode network error; manual entry remains active
-        }
-
-        setGeoStatusMessage({
-          type: 'success',
-          text: `${t('cart.locationSuccess')} (${roundedLat}, ${roundedLng})`,
-        });
-      },
-      () => {
-        setIsLocating(false);
-        setGeoStatusMessage({
-          type: 'warning',
-          text: t('cart.locationDenied'),
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
   };
 
   const detailedCartItems = useMemo(() => {
@@ -433,36 +349,29 @@ export const CartCheckoutPage: React.FC = () => {
       ? 'Confirmed by operator'
       : 'Operator bilan aniqlashtiriladi';
 
-  // PART 3 FIX: Short, readable mobile step labels so no step is ever cut off on 320px-390px phones
   const shortStepLabels = {
     uz: {
       cart: 'Savat',
       address: 'Manzil',
       payment: 'Toʻlov',
       confirm: 'Tasdiq',
-      openMapBtn: 'Xaritadan belgilash',
       clearCartWarn:
         'Savatchadagi barcha tanlangan mahsulotlarni olib tashlamoqchimisiz?',
-      districtFilterPlaceholder: 'Tumanni tez qidirish...',
     },
     ru: {
       cart: 'Корзина',
       address: 'Адрес',
       payment: 'Оплата',
       confirm: 'Готово',
-      openMapBtn: 'Выбрать на карте',
       clearCartWarn: 'Вы действительно хотите удалить все товары из корзины?',
-      districtFilterPlaceholder: 'Быстрый поиск района...',
     },
     en: {
       cart: 'Cart',
       address: 'Address',
       payment: 'Payment',
       confirm: 'Confirm',
-      openMapBtn: 'Choose on Map',
       clearCartWarn:
         'Are you sure you want to remove all items from your shopping cart?',
-      districtFilterPlaceholder: 'Filter districts...',
     },
   }[language];
 
@@ -573,7 +482,6 @@ export const CartCheckoutPage: React.FC = () => {
     });
   };
 
-  // PART 3 FIX: Pressing minus at quantity === 1 removes the item immediately
   const handleDecreaseCartItem = (productId: string, currentQty: number) => {
     if (currentQty <= 1) {
       removeFromCart(productId);
@@ -755,7 +663,7 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-5 sm:p-8 space-y-5">
-            <div className="p-3.5 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex items-center justify-between gap-3 text-xs sm:text-sm">
+            <div className="p-3.5 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
               <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-green shrink-0" />
                 <span>{t('delivery.estimateLabel')}</span>
@@ -807,9 +715,9 @@ export const CartCheckoutPage: React.FC = () => {
               {completedOrder.items.map((item) => (
                 <div
                   key={item.productId}
-                  className="p-3.5 sm:p-4 flex items-center justify-between gap-4 bg-white dark:bg-[#12211C]"
+                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 bg-white dark:bg-[#12211C]"
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
                     <img
                       src={item.image}
                       alt={item.productName}
@@ -824,25 +732,26 @@ export const CartCheckoutPage: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs sm:text-sm font-extrabold text-brand-green shrink-0">
+                  <span className="text-xs sm:text-sm font-extrabold text-brand-green whitespace-nowrap shrink-0">
                     {formatUZS(item.totalPrice)}
                   </span>
                 </div>
               ))}
             </div>
 
-            <div className="bg-[#F8F9FA] dark:bg-[#162923] rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-[#28453B] space-y-2 text-sm">
-              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+            {/* Requirement #9: Mobile-Friendly Order Summary */}
+            <div className="bg-[#F8F9FA] dark:bg-[#162923] rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-[#28453B] space-y-2.5 text-xs sm:text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                 <span>{t('cart.productsSubtotal')}:</span>
-                <span className="font-bold">
+                <span className="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                   {formatUZS(completedOrder.subtotal)}
                 </span>
               </div>
-              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                 <span>
                   {t('cart.deliveryService')} ({completedOrder.region}):
                 </span>
-                <span className="font-bold">
+                <span className="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                   {isDeliveryFeeToBeConfirmed
                     ? feeToBeConfirmedLabel
                     : completedOrder.deliveryFee === 0
@@ -850,11 +759,11 @@ export const CartCheckoutPage: React.FC = () => {
                     : formatUZS(completedOrder.deliveryFee)}
                 </span>
               </div>
-              <div className="pt-2.5 border-t border-gray-200 dark:border-[#28453B] flex justify-between items-baseline text-base sm:text-lg">
-                <span className="font-extrabold text-gray-900 dark:text-gray-100">
+              <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.totalAmount')}
                 </span>
-                <span className="text-xl font-extrabold text-brand-green">
+                <span className="text-lg sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
                   {formatUZS(completedOrder.totalAmount)}
                 </span>
               </div>
@@ -904,7 +813,7 @@ export const CartCheckoutPage: React.FC = () => {
 
   return (
     <div className="zaven-page-container py-4 sm:py-8 space-y-5 sm:space-y-6">
-      {/* PART 3 FIX: Non-Truncated Step Indicator (Short mobile labels + full desktop labels) */}
+      {/* 4-Step Sequential Progress Bar */}
       <nav
         aria-label="Checkout progress"
         className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-2.5 sm:p-4 shadow-card"
@@ -1044,11 +953,11 @@ export const CartCheckoutPage: React.FC = () => {
                               {localized.name}
                             </Link>
                             <div className="flex flex-wrap items-baseline gap-2 pt-0.5">
-                              <span className="text-xs sm:text-sm font-extrabold text-brand-green">
+                              <span className="text-xs sm:text-sm font-extrabold text-brand-green whitespace-nowrap">
                                 {formatUZS(unitPrice)}
                               </span>
                               {product.salePrice && (
-                                <span className="text-[11px] text-gray-400 line-through">
+                                <span className="text-[11px] text-gray-400 line-through whitespace-nowrap">
                                   {formatUZS(regularPrice)}
                                 </span>
                               )}
@@ -1056,7 +965,6 @@ export const CartCheckoutPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* PART 3 FIX: Aligned Plus/Minus Controls where Minus at Quantity 1 removes the item */}
                         <div className="flex items-center justify-between sm:justify-end gap-3 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                           <div className="inline-flex items-center border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] p-0.5 h-10">
                             <button
@@ -1110,13 +1018,13 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            {/* PART 3 FIX: Order Summary with Separate Delivery Estimate Line & Concise Normal-Case Promo Label */}
+            {/* Order Summary */}
             <aside className="lg:col-span-5 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card space-y-4 lg:sticky lg:top-24">
               <div className="space-y-1.5 border-b border-gray-100 dark:border-[#28453B] pb-3">
                 <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.summaryTitle')}
                 </h2>
-                <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
                   <Clock className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
                   <span>{t('delivery.estimateLabel')}</span>
                   <strong className="text-brand-green font-bold">
@@ -1125,7 +1033,6 @@ export const CartCheckoutPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Normal-case concise promo-code label and single-row input + button */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {t('cart.promoLabel')}
@@ -1174,31 +1081,31 @@ export const CartCheckoutPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="space-y-2.5 pt-2 border-t border-gray-100 dark:border-[#28453B] text-sm">
-                <div className="flex items-center justify-between text-gray-700 dark:text-gray-300">
+              <div className="space-y-2.5 pt-2 border-t border-gray-100 dark:border-[#28453B] text-xs sm:text-sm">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                   <span>
                     {t('cart.productsSubtotal')} ({totalItemsCount}{' '}
                     {t('product.units')}):
                   </span>
-                  <span className="font-bold text-gray-900 dark:text-gray-100">
+                  <span className="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                     {formatUZS(productsSubtotal)}
                   </span>
                 </div>
 
                 {totalProductSaleSavings > 0 && (
-                  <div className="flex items-center justify-between text-xs text-brand-gold-dark bg-brand-gold-light/70 px-3 py-1.5 rounded-lg border border-brand-gold-border">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-brand-gold-dark bg-brand-gold-light/70 px-3 py-1.5 rounded-lg border border-brand-gold-border">
                     <span>{t('cart.saleSavings')}</span>
-                    <span className="font-bold">
+                    <span className="font-bold whitespace-nowrap">
                       {formatUZS(totalProductSaleSavings)}
                     </span>
                   </div>
                 )}
 
-                <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex items-baseline justify-between gap-2">
+                <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
                   <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                     {t('cart.totalAmount')}
                   </span>
-                  <span className="text-xl sm:text-2xl font-extrabold text-brand-green">
+                  <span className="text-xl sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
                     {formatUZS(cartPageTotalAmount)}
                   </span>
                 </div>
@@ -1236,7 +1143,7 @@ export const CartCheckoutPage: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & MAP-BASED LOCATION PICKER       */}
+      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & CUSTOM ZAVEN PICKERS            */}
       {/* ===================================================================== */}
       {activeStep === 'address' && (
         <form
@@ -1260,7 +1167,7 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
-            {/* 1. Full Name & 2. Phone Number (Required) */}
+            {/* 1. Full Name & 2. Phone Number */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label={t('cart.fullName')}
@@ -1292,7 +1199,7 @@ export const CartCheckoutPage: React.FC = () => {
               />
             </div>
 
-            {/* 3. Email (Prefilled from verified account when available) & 4. Optional Telegram Username */}
+            {/* 3. Email & 4. Optional Telegram Username */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input
                 label={t('cart.emailOptional')}
@@ -1325,77 +1232,55 @@ export const CartCheckoutPage: React.FC = () => {
               />
             </div>
 
-            {/* Uzbekistan Region/District Selectors + Customer-Initiated Map Picker */}
+            {/* Requirements #11 & #12: Custom ZAVEN Region/District Pickers + Map Picker (No GPS Button) */}
             <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
                 <div>
                   <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
                     {t('cart.region')} & {t('cart.district')}
                   </p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    {t('cart.locationPrivacyNote')}
-                  </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<MapIcon className="w-4 h-4 text-brand-green" />}
-                    onClick={() => setIsMapModalOpen(true)}
-                  >
-                    {shortStepLabels.openMapBtn}
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    isLoading={isLocating}
-                    leftIcon={<LocateFixed className="w-4 h-4" />}
-                    onClick={handleUseMyLocation}
-                  >
-                    {isLocating
-                      ? t('cart.locatingBtn')
-                      : t('cart.useMyLocationBtn')}
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<MapIcon className="w-4 h-4 text-brand-green" />}
+                  onClick={() => setIsMapModalOpen(true)}
+                >
+                  {t('cart.openMapBtn')}
+                </Button>
               </div>
 
-              {geoStatusMessage && (
-                <div
-                  className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2 ${
-                    geoStatusMessage.type === 'success'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : 'bg-amber-50 border-amber-200 text-amber-800'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{geoStatusMessage.text}</span>
+              {sharedCoordinates && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="w-4 h-4 shrink-0" />
+                    <span className="truncate font-semibold">
+                      {t('cart.mapPinConfirmed')} ({sharedCoordinates.lat},{' '}
+                      {sharedCoordinates.lng})
+                    </span>
                   </div>
-                  {sharedCoordinates && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSharedCoordinates(null);
-                        setGeoStatusMessage(null);
-                      }}
-                      className="text-[11px] font-bold underline shrink-0"
-                    >
-                      ×
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSharedCoordinates(null)}
+                    className="text-xs font-extrabold underline shrink-0"
+                  >
+                    ×
+                  </button>
                 </div>
               )}
 
+              {/* Requirement #11: Custom Searchable Bottom-Sheet/Modal Pickers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Select
+                <SearchableSelectSheet
                   label={t('cart.region')}
+                  sheetTitle={t('cart.regionPickerTitle')}
+                  searchPlaceholder={t('cart.regionSearchPlaceholder')}
+                  noResultsText={t('cart.pickerNoResults')}
                   required
                   value={selectedUzRegionId}
-                  onChange={(e) => handleRegionChange(e.target.value)}
+                  onChange={handleRegionChange}
                   options={UZBEKISTAN_REGIONS.map((reg) => {
                     const rule = resolveRegionTariffRule(
                       reg.nameUz,
@@ -1403,9 +1288,11 @@ export const CartCheckoutPage: React.FC = () => {
                     );
                     return {
                       value: reg.id,
-                      label: `${getRegionDisplayName(reg)} — ${
-                        rule ? formatUZS(rule.fee) : feeToBeConfirmedLabel
-                      }`,
+                      label: getRegionDisplayName(reg),
+                      sublabel: rule?.note,
+                      badgeText: rule
+                        ? formatUZS(rule.fee)
+                        : feeToBeConfirmedLabel,
                     };
                   })}
                   error={errors.region}
@@ -1416,48 +1303,27 @@ export const CartCheckoutPage: React.FC = () => {
                   }
                 />
 
-                <div className="space-y-1.5">
-                  <Select
-                    label={t('cart.district')}
-                    required
-                    value={selectedDistrict}
-                    onChange={(e) => {
-                      setSelectedDistrict(e.target.value);
-                      if (errors.district)
-                        setErrors((prev) => ({
-                          ...prev,
-                          district: undefined,
-                        }));
-                    }}
-                    options={filteredDistricts.map((dist) => ({
-                      value: dist,
-                      label: dist,
-                    }))}
-                    error={errors.district}
-                  />
-                  {currentUzRegionObj.districts.length > 6 && (
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={districtSearchFilter}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDistrictSearchFilter(val);
-                          const firstMatch =
-                            currentUzRegionObj.districts.find((d) =>
-                              d.toLowerCase().includes(val.trim().toLowerCase())
-                            );
-                          if (firstMatch) {
-                            setSelectedDistrict(firstMatch);
-                          }
-                        }}
-                        placeholder={shortStepLabels.districtFilterPlaceholder}
-                        className="w-full h-8 pl-8 pr-2.5 rounded-lg border border-gray-200 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-[11px] text-gray-700 dark:text-gray-200"
-                      />
-                    </div>
-                  )}
-                </div>
+                <SearchableSelectSheet
+                  label={t('cart.district')}
+                  sheetTitle={t('cart.districtPickerTitle')}
+                  searchPlaceholder={t('cart.districtSearchPlaceholder')}
+                  noResultsText={t('cart.pickerNoResults')}
+                  required
+                  value={selectedDistrict}
+                  onChange={(dist) => {
+                    setSelectedDistrict(dist);
+                    if (errors.district)
+                      setErrors((prev) => ({
+                        ...prev,
+                        district: undefined,
+                      }));
+                  }}
+                  options={currentUzRegionObj.districts.map((dist) => ({
+                    value: dist,
+                    label: dist,
+                  }))}
+                  error={errors.district}
+                />
               </div>
 
               <Input
@@ -1777,10 +1643,11 @@ export const CartCheckoutPage: React.FC = () => {
 
       {/* ===================================================================== */}
       {/* STEP 4: SEQUENTIAL CONFIRMATION / REVIEW STEP                         */}
+      {/* Requirements #9 & #10: Clean mobile summary + unclipped Confirm CTA   */}
       {/* ===================================================================== */}
       {activeStep === 'confirm' && (
         <div className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
-          <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
+          <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span className="w-7 h-7 rounded-full bg-[#0F3D2E] text-white text-xs font-extrabold flex items-center justify-center shrink-0">
                 4
@@ -1882,7 +1749,7 @@ export const CartCheckoutPage: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <span className="font-extrabold text-brand-green shrink-0">
+                    <span className="font-extrabold text-brand-green whitespace-nowrap shrink-0">
                       {formatUZS(lineTotal)}
                     </span>
                   </div>
@@ -1890,25 +1757,33 @@ export const CartCheckoutPage: React.FC = () => {
               )}
             </div>
 
-            <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2">
-              <div className="flex justify-between text-gray-700 dark:text-gray-300">
-                <span>{t('cart.productsSubtotal')}:</span>
-                <span className="font-bold">{formatUZS(productsSubtotal)}</span>
+            {/* Requirement #9: Scannable Mobile Order Summary (No awkward word splitting) */}
+            <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2.5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
+                <span>
+                  {t('cart.productsSubtotal')} ({totalItemsCount}{' '}
+                  {t('product.units')}):
+                </span>
+                <span className="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                  {formatUZS(productsSubtotal)}
+                </span>
               </div>
+
               {couponDiscountAmount > 0 && (
-                <div className="flex justify-between text-emerald-700">
+                <div className="flex flex-wrap items-baseline justify-between gap-2 text-emerald-700">
                   <span>Promokod ({appliedCoupon?.code}):</span>
-                  <span className="font-bold">
+                  <span className="font-bold whitespace-nowrap">
                     -{formatUZS(couponDiscountAmount)}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+
+              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-2 text-gray-700 dark:text-gray-300">
                 <span>
                   {t('cart.deliveryService')} (
                   {getRegionDisplayName(currentUzRegionObj)}):
                 </span>
-                <span className="font-bold">
+                <span className="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                   {isDeliveryFeeToBeConfirmed
                     ? feeToBeConfirmedLabel
                     : deliveryFee === 0
@@ -1916,16 +1791,18 @@ export const CartCheckoutPage: React.FC = () => {
                     : formatUZS(deliveryFee)}
                 </span>
               </div>
-              <div className="pt-2.5 border-t border-gray-200 dark:border-[#28453B] flex justify-between items-baseline text-base sm:text-lg">
-                <span className="font-extrabold text-gray-900 dark:text-gray-100">
+
+              <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.totalAmount')}
                 </span>
-                <span className="text-xl font-extrabold text-brand-green">
+                <span className="text-xl sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
                   {formatUZS(finalTotalAmount)}
                 </span>
               </div>
             </div>
 
+            {/* Requirement #10: Full-width mobile "Buyurtmani tasdiqlash" button with full visible label (no price appended inside button to prevent 320px clipping) */}
             <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <Button
                 type="button"
@@ -1936,23 +1813,27 @@ export const CartCheckoutPage: React.FC = () => {
               >
                 {t('cart.returnToPaymentBtn')}
               </Button>
+
               <Button
                 type="button"
                 variant="primary"
                 size="lg"
                 isLoading={isSubmittingOrder}
                 disabled={isSubmittingOrder}
-                leftIcon={<ShieldCheck className="w-5 h-5 text-[#C89D54]" />}
+                leftIcon={
+                  <ShieldCheck className="w-5 h-5 text-[#C89D54] shrink-0" />
+                }
                 onClick={handleFinalSubmitOrder}
+                className="w-full sm:w-auto sm:min-w-[240px] text-sm sm:text-base whitespace-nowrap"
               >
-                {t('cart.confirmOrderBtn')} — {formatUZS(finalTotalAmount)}
+                {t('cart.confirmOrderBtn')}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* PART 3 FIX: Real Interactive Map-Based Delivery Picker Modal */}
+      {/* Requirement #12: Polished Map-Based Delivery Picker Modal (Updates only coords & address) */}
       <DeliveryMapModal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}
@@ -1964,14 +1845,15 @@ export const CartCheckoutPage: React.FC = () => {
             setAddressLine(reverseGeocodedAddress);
             setErrors((prev) => ({ ...prev, address: undefined }));
           }
-          setGeoStatusMessage({
+          addToast({
             type: 'success',
-            text: `Xarita nuqtasi tasdiqlandi (${coords.lat}, ${coords.lng})`,
+            title: t('cart.mapPinConfirmed'),
+            description: reverseGeocodedAddress || `${coords.lat}, ${coords.lng}`,
           });
         }}
       />
 
-      {/* Restyled Clear-Cart Confirmation Dialog */}
+      {/* Clear-Cart Confirmation Dialog */}
       <Modal
         isOpen={isClearCartModalOpen}
         onClose={() => setIsClearCartModalOpen(false)}
