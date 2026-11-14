@@ -976,8 +976,8 @@ export const CartCheckoutPage: React.FC = () => {
 
   return (
     <div className="zaven-page-container py-4 sm:py-8 space-y-5 sm:space-y-6">
-      {/* 4-Step Sequential Progress Bar */}
-      <nav
+      {/* Show checkout progress only after the customer chooses to continue. */}
+      {activeStep !== 'cart' && <nav
         aria-label="Checkout progress"
         className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-2.5 sm:p-4 shadow-card"
       >
@@ -1054,7 +1054,7 @@ export const CartCheckoutPage: React.FC = () => {
             );
           })}
         </div>
-      </nav>
+      </nav>}
 
       {/* ===================================================================== */}
       {/* STEP 1: CART-FOCUSED VIEW (/cart)                                     */}
@@ -1187,61 +1187,6 @@ export const CartCheckoutPage: React.FC = () => {
                 <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.summaryTitle')}
                 </h2>
-                <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-                  <Clock className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
-                  <span>{t('delivery.estimateLabel')}</span>
-                  <strong className="text-brand-green font-bold">
-                    {t('delivery.estimateValue')}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  {t('cart.promoLabel')}
-                </label>
-                {appliedCoupon ? (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span className="text-xs font-extrabold text-emerald-900 truncate">
-                        {appliedCoupon.code} (-
-                        {formatUZS(couponDiscountAmount)})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAppliedCouponCode(null)}
-                      className="text-xs font-bold text-red-600 hover:underline shrink-0"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : (
-                  <form
-                    onSubmit={handleApplyCoupon}
-                    className="flex flex-wrap sm:flex-nowrap items-center gap-2"
-                  >
-                    <input
-                      type="text"
-                      value={couponInput}
-                      onChange={(e) => {
-                        setCouponInput(e.target.value);
-                        setCouponError('');
-                      }}
-                      placeholder="ZAVEN10"
-                      className="flex-1 min-w-[140px] h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs font-semibold uppercase"
-                    />
-                    <Button type="submit" variant="secondary" size="sm">
-                      {t('cart.applyBtn')}
-                    </Button>
-                  </form>
-                )}
-                {couponError && (
-                  <p className="text-xs text-red-600 font-medium">
-                    {couponError}
-                  </p>
-                )}
               </div>
 
               <div className="space-y-2.5 pt-2 border-t border-gray-100 dark:border-[#28453B] text-xs sm:text-sm">
@@ -1330,6 +1275,47 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
+            <section className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#162923] p-3.5 sm:p-4 space-y-2.5">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                {t('cart.promoLabel')}
+              </label>
+              {appliedCoupon ? (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="text-xs font-extrabold text-emerald-900 truncate">
+                      {appliedCoupon.code} (-{formatUZS(couponDiscountAmount)})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAppliedCouponCode(null)}
+                    className="text-xs font-bold text-red-600 hover:underline shrink-0"
+                    aria-label={t('catalog.clear')}
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleApplyCoupon} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => {
+                      setCouponInput(e.target.value);
+                      setCouponError('');
+                    }}
+                    placeholder="ZAVEN10"
+                    className="flex-1 min-w-[140px] h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs font-semibold uppercase bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100"
+                  />
+                  <Button type="submit" variant="secondary" size="sm">
+                    {t('cart.applyBtn')}
+                  </Button>
+                </form>
+              )}
+              {couponError && <p className="text-xs text-red-600 font-medium">{couponError}</p>}
+            </section>
+
             {/* 1. Full Name & 2. Phone Number */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Input

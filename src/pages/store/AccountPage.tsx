@@ -112,7 +112,6 @@ export const AccountPage: React.FC = () => {
   const [authNewPassword, setAuthNewPassword] = useState<string>('');
   const [authFullName, setAuthFullName] = useState<string>('');
   const [authPhone, setAuthPhone] = useState<string>('+998 ');
-  const [authTelegram, setAuthTelegram] = useState<string>('');
   const [pendingEmail, setPendingEmail] = useState<string>('');
 
   const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
@@ -307,17 +306,10 @@ export const AccountPage: React.FC = () => {
       setAuthError(t('account.passwordLabel'));
       return;
     }
-    if (!isValidTelegramUsername(authTelegram)) {
-      setAuthError(t('cart.telegramInvalidError'));
-      return;
-    }
-
     if (!isSupabaseConfigured || !supabase) {
       setAuthError(t('account.unconfiguredNoticeDesc'));
       return;
     }
-
-    const normalizedTg = normalizeTelegramUsername(authTelegram);
 
     setIsAuthSubmitting(true);
     try {
@@ -333,7 +325,6 @@ export const AccountPage: React.FC = () => {
           data: {
             full_name: authFullName.trim(),
             phone: authPhone.trim(),
-            telegram_username: normalizedTg || null,
           },
         },
       });
@@ -653,9 +644,10 @@ export const AccountPage: React.FC = () => {
             )}
 
             {/* Mode Switcher Tabs */}
-            {authMode !== 'verify_pending' &&
+            {authMode !== 'reset' &&
+              authMode !== 'verify_pending' &&
               authMode !== 'update_password' && (
-                <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B]">
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B]">
                   <button
                     type="button"
                     onClick={() => {
@@ -685,21 +677,6 @@ export const AccountPage: React.FC = () => {
                     }`}
                   >
                     {t('account.signUpTab')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('reset');
-                      setAuthError('');
-                      setAuthFeedback('');
-                    }}
-                    className={`py-2 px-2 rounded-lg text-xs font-bold transition-colors ${
-                      authMode === 'reset'
-                        ? 'bg-[#0F3D2E] text-white shadow-sm'
-                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900'
-                    }`}
-                  >
-                    {t('account.resetTab')}
                   </button>
                 </div>
               )}
@@ -819,14 +796,6 @@ export const AccountPage: React.FC = () => {
                 />
 
                 <Input
-                  label={t('cart.telegramOptional')}
-                  value={authTelegram}
-                  onChange={(e) => setAuthTelegram(e.target.value)}
-                  placeholder={t('cart.telegramPlaceholder')}
-                  leftIcon={<Send className="w-4 h-4" />}
-                />
-
-                <Input
                   label={t('account.passwordLabel')}
                   required
                   type="password"
@@ -852,29 +821,42 @@ export const AccountPage: React.FC = () => {
 
             {/* VIEW C: PASSWORD RESET REQUEST */}
             {authMode === 'reset' && (
-              <form onSubmit={handleSendPasswordReset} className="space-y-4">
-                <Input
-                  label={t('account.emailLabel')}
-                  required
-                  type="email"
-                  autoComplete="email"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="namuna@mail.uz"
-                  leftIcon={<Mail className="w-4 h-4" />}
-                />
+              <div className="space-y-3">
+                <form onSubmit={handleSendPasswordReset} className="space-y-4">
+                  <Input
+                    label={t('account.emailLabel')}
+                    required
+                    type="email"
+                    autoComplete="email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    placeholder="namuna@mail.uz"
+                    leftIcon={<Mail className="w-4 h-4" />}
+                  />
 
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  fullWidth
-                  isLoading={isAuthSubmitting}
-                  leftIcon={<Mail className="w-4 h-4 text-[#C89D54]" />}
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    fullWidth
+                    isLoading={isAuthSubmitting}
+                    leftIcon={<Mail className="w-4 h-4 text-[#C89D54]" />}
+                  >
+                    {t('account.sendResetBtn')}
+                  </Button>
+                </form>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('signin');
+                    setAuthError('');
+                    setAuthFeedback('');
+                  }}
+                  className="w-full text-center text-xs font-bold text-brand-green hover:underline"
                 >
-                  {t('account.sendResetBtn')}
-                </Button>
-              </form>
+                  {t('account.signInTab')}
+                </button>
+              </div>
             )}
 
             {/* VIEW D: UPDATE PASSWORD AFTER CLICKING RECOVERY LINK */}
