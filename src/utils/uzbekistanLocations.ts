@@ -387,3 +387,253 @@ export function detectUzbekistanRegionFromCoords(
 
   return null;
 }
+
+/**
+ * Normalizes Uzbek/Russian/English location strings for reliable matching:
+ * strips apostrophes (ʻ, ʼ, ', `), suffixes (viloyati, tumani, shahri, область, район, г., region, district, city),
+ * and extra punctuation.
+ */
+function normalizeGeoToken(input: string | undefined | null): string {
+  if (!input) return '';
+  return input
+    .toLowerCase()
+    .replace(/[ʻʼ'`´']/g, '')
+    .replace(/o‘|o’/g, 'o')
+    .replace(/g‘|g’/g, 'g')
+    .replace(
+      /\b(viloyati|viloyat|respublikasi|respublika|tumani|tuman|shahri|shahar|область|район|город|республика|region|province|district|city|town)\b/gi,
+      ' '
+    )
+    .replace(/[^a-z0-9а-яё\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const REGION_KEYWORDS: Record<string, string[]> = {
+  'uz-toshkent-sh': ['toshkent shahri', 'tashkent city', 'ташкент'],
+  'uz-toshkent-vil': [
+    'toshkent viloyati',
+    'tashkent region',
+    'tashkent province',
+    'ташкентская',
+  ],
+  'uz-samarqand': ['samarqand', 'samarkand', 'самарканд'],
+  'uz-buxoro': ['buxoro', 'bukhara', 'бухар'],
+  'uz-fargona': ['fargona', 'fergana', 'ferghana', 'ферган'],
+  'uz-andijon': ['andijon', 'andijan', 'андижан'],
+  'uz-namangan': ['namangan', 'наманган'],
+  'uz-qashqadaryo': [
+    'qashqadaryo',
+    'kashkadarya',
+    'qashqadaryo',
+    'кашкадарь',
+    'qarshi',
+    'карши',
+  ],
+  'uz-surxondaryo': [
+    'surxondaryo',
+    'surkhandarya',
+    'сурхандарь',
+    'termiz',
+    'термез',
+  ],
+  'uz-navoiy': ['navoiy', 'navoi', 'навои'],
+  'uz-jizzax': ['jizzax', 'jizzakh', 'джизак'],
+  'uz-sirdaryo': ['sirdaryo', 'syrdarya', 'сырдарь', 'guliston', 'гулистан'],
+  'uz-xorazm': ['xorazm', 'khorezm', 'хорезм', 'urganch', 'ургенч', 'xiva'],
+  'uz-qoraqalpogiston': [
+    'qoraqalpogiston',
+    'karakalpakstan',
+    'каракалпакстан',
+    'nukus',
+    'нукус',
+  ],
+};
+
+const DISTRICT_CYRILLIC_ALIASES: Record<string, string[]> = {
+  'Qarshi shahri': ['qarshi', 'karshi', 'карши'],
+  'Shahrisabz shahri': ['shahrisabz', 'shakhrisabz', 'шахрисабз'],
+  'Samarqand shahri': ['samarqand', 'samarkand', 'самарканд'],
+  'Buxoro shahri': ['buxoro', 'bukhara', 'бухара'],
+  'Fargʻona shahri': ['fargona', 'fergana', 'фергана'],
+  'Qoʻqon shahri': ['qoqon', 'kokand', 'коканд'],
+  'Margʻilon shahri': ['margilon', 'margilan', 'маргилан'],
+  'Andijon shahri': ['andijon', 'andijan', 'андижан'],
+  'Namangan shahri': ['namangan', 'наманган'],
+  'Termiz shahri': ['termiz', 'termez', 'термез'],
+  'Navoiy shahri': ['navoiy', 'navoi', 'навои'],
+  'Jizzax shahri': ['jizzax', 'jizzakh', 'джизак'],
+  'Guliston shahri': ['guliston', 'gulistan', 'гулистан'],
+  'Urganch shahri': ['urganch', 'urgench', 'ургенч'],
+  'Xiva shahri': ['xiva', 'khiva', 'хива'],
+  'Nukus shahri': ['nukus', 'нукус'],
+  'Chirchiq shahri': ['chirchiq', 'chirchik', 'чирчик'],
+  'Olmaliq shahri': ['olmaliq', 'almalyk', 'алмалык'],
+  'Angren shahri': ['angren', 'ангрен'],
+  'Bekobod shahri': ['bekobod', 'bekabad', 'бекабад'],
+  'Nurafshon shahri': ['nurafshon', 'нурафшон'],
+  'Yunusobod tumani': ['yunusobod', 'yunusabad', 'юнусабад'],
+  'Chilonzor tumani': ['chilonzor', 'chilanzar', 'чиланзар'],
+  'Mirzo Ulugʻbek tumani': [
+    'mirzo ulugbek',
+    'mirzo-ulugbek',
+    'мирзо улугбек',
+    'мирзо-улугбек',
+  ],
+  'Shayxontohur tumani': ['shayxontohur', 'shaykhantakhur', 'шайхантахур'],
+  'Yakkasaroy tumani': ['yakkasaroy', 'yakkasaray', 'яккасарай'],
+  'Mirobod tumani': ['mirobod', 'mirabad', 'мирабад'],
+  'Olmazor tumani': ['olmazor', 'almazar', 'алмазар'],
+  'Uchtepa tumani': ['uchtepa', 'учтепа'],
+  'Sergeli tumani': ['sergeli', 'сергели'],
+  'Yashnobod tumani': ['yashnobod', 'yashnabad', 'яшнабад'],
+  'Yangihayot tumani': ['yangihayot', 'янгихаёт'],
+  'Bektemir tumani': ['bektemir', 'бектемир'],
+};
+
+export interface GeocodeLocationMatchResult {
+  matchedRegion: UzbekistanRegionOption | null;
+  matchedDistrict: string | null;
+  isConfidentRegion: boolean;
+  isConfidentDistrict: boolean;
+}
+
+/**
+ * Confidently matches a Nominatim reverse-geocode payload + coordinates against
+ * the project's real UZBEKISTAN_REGIONS and districts data.
+ * Never guesses a district if it doesn't match the geocoded locality/district fields.
+ */
+export function matchUzbekistanRegionAndDistrictFromGeocode(
+  addressObj: Record<string, string | undefined> | undefined,
+  displayName: string | undefined,
+  lat: number,
+  lng: number
+): GeocodeLocationMatchResult {
+  // Outside Uzbekistan geographic bounds
+  if (lat < 36.8 || lat > 46.0 || lng < 55.5 || lng > 73.8) {
+    return {
+      matchedRegion: null,
+      matchedDistrict: null,
+      isConfidentRegion: false,
+      isConfidentDistrict: false,
+    };
+  }
+
+  const rawState = addressObj?.state || addressObj?.region || '';
+  const rawCity =
+    addressObj?.city ||
+    addressObj?.town ||
+    addressObj?.municipality ||
+    addressObj?.village ||
+    '';
+  const rawCounty =
+    addressObj?.county ||
+    addressObj?.city_district ||
+    addressObj?.suburb ||
+    addressObj?.borough ||
+    '';
+
+  const combinedText = `${rawState} ${rawCounty} ${rawCity} ${
+    displayName || ''
+  }`
+    .toLowerCase()
+    .replace(/[ʻʼ'`´']/g, '');
+
+  let matchedRegion: UzbekistanRegionOption | null = null;
+
+  // 1. Distinguish Tashkent City vs Tashkent Region first
+  const tashkentCityBounds = UZBEKISTAN_REGIONS[0].approxBounds;
+  const isInsideTashkentCityBounds =
+    lat >= tashkentCityBounds.minLat &&
+    lat <= tashkentCityBounds.maxLat &&
+    lng >= tashkentCityBounds.minLng &&
+    lng <= tashkentCityBounds.maxLng;
+
+  if (
+    combinedText.includes('toshkent viloyati') ||
+    combinedText.includes('tashkent region') ||
+    combinedText.includes('ташкентская область')
+  ) {
+    matchedRegion =
+      UZBEKISTAN_REGIONS.find((r) => r.id === 'uz-toshkent-vil') || null;
+  } else if (
+    (combinedText.includes('toshkent') ||
+      combinedText.includes('tashkent') ||
+      combinedText.includes('ташкент')) &&
+    isInsideTashkentCityBounds
+  ) {
+    matchedRegion =
+      UZBEKISTAN_REGIONS.find((r) => r.id === 'uz-toshkent-sh') || null;
+  }
+
+  // 2. Match other regions by explicit state/region/city keywords
+  if (!matchedRegion) {
+    for (const reg of UZBEKISTAN_REGIONS) {
+      if (reg.id === 'uz-toshkent-sh') continue;
+      const keywords = REGION_KEYWORDS[reg.id] || [];
+      if (keywords.some((kw) => combinedText.includes(kw))) {
+        matchedRegion = reg;
+        break;
+      }
+    }
+  }
+
+  // 3. Fallback to non-overlapping bounding box only if unambiguous
+  if (!matchedRegion) {
+    const bboxMatches = UZBEKISTAN_REGIONS.filter((reg) => {
+      const b = reg.approxBounds;
+      return (
+        lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng
+      );
+    });
+    if (bboxMatches.length === 1) {
+      matchedRegion = bboxMatches[0];
+    }
+  }
+
+  if (!matchedRegion) {
+    return {
+      matchedRegion: null,
+      matchedDistrict: null,
+      isConfidentRegion: false,
+      isConfidentDistrict: false,
+    };
+  }
+
+  // 4. Match District within the identified Region (or across regions if a specific city/district matched)
+  const candidateTokens = [
+    normalizeGeoToken(rawCounty),
+    normalizeGeoToken(rawCity),
+    normalizeGeoToken(displayName),
+  ].filter(Boolean);
+
+  let matchedDistrict: string | null = null;
+
+  for (const dist of matchedRegion.districts) {
+    const baseDistToken = normalizeGeoToken(dist);
+    const aliases = [
+      baseDistToken,
+      ...(DISTRICT_CYRILLIC_ALIASES[dist] || []),
+    ].filter(Boolean);
+
+    const isHit = aliases.some(
+      (alias) =>
+        alias.length >= 3 &&
+        (candidateTokens.some((tok) => tok.includes(alias)) ||
+          combinedText.includes(alias))
+    );
+
+    if (isHit) {
+      matchedDistrict = dist;
+      break;
+    }
+  }
+
+  return {
+    matchedRegion,
+    matchedDistrict,
+    isConfidentRegion: Boolean(matchedRegion),
+    isConfidentDistrict: Boolean(matchedDistrict),
+  };
+}
+

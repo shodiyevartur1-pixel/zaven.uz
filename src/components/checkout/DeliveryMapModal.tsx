@@ -1,75 +1,75 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   MapPin,
   Check,
   Search,
   AlertCircle,
-  Navigation,
+  X,
+  Plus,
+  Minus,
   RefreshCw,
 } from 'lucide-react';
-import { UZBEKISTAN_REGIONS } from '../../utils/uzbekistanLocations';
+import {
+  UZBEKISTAN_REGIONS,
+  UzbekistanRegionOption,
+  matchUzbekistanRegionAndDistrictFromGeocode,
+} from '../../utils/uzbekistanLocations';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
-import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+
+export interface ConfirmedMapLocationPayload {
+  coords: { lat: number; lng: number };
+  reverseGeocodedAddress: string;
+  matchedRegion: UzbekistanRegionOption | null;
+  matchedDistrict: string | null;
+}
 
 interface DeliveryMapModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialCoords: { lat: number; lng: number };
   initialAddress: string;
-  onConfirmLocation: (payload: {
-    coords: { lat: number; lng: number };
-    reverseGeocodedAddress: string;
-  }) => void;
+  onConfirmLocation: (payload: ConfirmedMapLocationPayload) => void;
+}
+
+interface LeafletMapInstance {
+  setView: (center: [number, number], zoom?: number) => void;
+  getCenter: () => { lat: number; lng: number };
+  getZoom: () => number;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  on: (
+    event: string,
+    handler: (e?: { latlng?: { lat: number; lng: number } }) => void
+  ) => void;
+  invalidateSize: () => void;
+  remove: () => void;
 }
 
 declare global {
   interface Window {
-    ymaps?: {
-      ready: (cb: () => void) => void;
-      Map: new (
+    L?: {
+      map: (
         el: HTMLElement,
-        state: { center: [number, number]; zoom: number; controls: string[] }
-      ) => {
-        events: {
-          add: (
-            event: string,
-            cb: (e: { get: (k: string) => [number, number] }) => void
-          ) => void;
-        };
-        geoObjects: { add: (obj: unknown) => void };
-        setCenter: (center: [number, number], zoom?: number) => void;
-        destroy: () => void;
-      };
-      Placemark: new (
-        coords: [number, number],
-        props: Record<string, unknown>,
         opts: Record<string, unknown>
-      ) => {
-        geometry: {
-          setCoordinates: (coords: [number, number]) => void;
-          getCoordinates: () => [number, number];
-        };
-        events: { add: (event: string, cb: () => void) => void };
-      };
+      ) => LeafletMapInstance;
+      tileLayer: (
+        url: string,
+        opts: Record<string, unknown>
+      ) => { addTo: (map: LeafletMapInstance) => void };
     };
   }
 }
 
-const UZ_LAT_MIN = 37.0;
-const UZ_LAT_MAX = 45.6;
-const UZ_LNG_MIN = 55.8;
-const UZ_LNG_MAX = 73.2;
-
 /**
- * Requirement #12: Redesigned ZAVEN-styled Map Picker Modal.
- * - Removed "Joylashuvimni aniqlash" / "Find my location" GPS button completely.
- * - Never requests device GPS automatically and never overwrites the customer's
- *   selected region or district.
- * - Supports place search, tapping the map or nudging the pin, automatic reverse
- *   geocoding into the editable street/house/apartment field, and a clear Uzbek
- *   fallback message if reverse geocoding cannot find a street name.
+ * Full-screen mobile-first Touch Map Picker inspired by the reference screenshot:
+ * - Fills ~92dvh on phones with a floating search header, touch-draggable / pinch-zoomable
+ *   Leaflet map canvas, visible +/- zoom buttons, a fixed center ZAVEN pin, and a bottom
+ *   "Tanlangan manzil" sheet with an editable street/house/apartment input and full-width
+ *   "Manzilni tasdiqlash" button.
+ * - Reverse-geocodes the exact chosen point and matches the detected region & district
+ *   against `UZBEKISTAN_REGIONS`.
+ * - Never requests device GPS automatically and includes zero "Joylashuvimni aniqlash" button.
  */
 export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
   isOpen,
@@ -78,235 +78,306 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
   initialAddress,
   onConfirmLocation,
 }) => {
-  const { t } = useThemeLanguage();
+  const { t, language } = useThemeLanguage();
 
   const [pinCoords, setPinCoords] = useState<{ lat: number; lng: number }>(
     initialCoords
   );
-  const [detectedPlaceLabel, setDetectedPlaceLabel] = useState<string>('');
+  const [hasSelectedPoint, setHasSelectedPoint] = useState<boolean>(true);
+  const [detectedPlaceSummary, setDetectedPlaceSummary] = useState<string>(
+    initialAddress || ''
+  );
   const [editableAddress, setEditableAddress] =
     useState<string>(initialAddress);
+
+  const [matchedRegion, setMatchedRegion] =
+    useState<UzbekistanRegionOption | null>(null);
+  const [matchedDistrict, setMatchedDistrict] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<
+    Array<{ display_name: string; lat: number; lon: number }>
+  >([]);
+
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
   const [isSearchingPlace, setIsSearchingPlace] = useState<boolean>(false);
-  const [statusNotice, setStatusNotice] = useState<{
+  const [statusMessage, setStatusMessage] = useState<{
     type: 'info' | 'warning';
     text: string;
   } | null>(null);
 
-  const yandexContainerRef = useRef<HTMLDivElement>(null);
-  const yandexMapInstanceRef = useRef<{
-    setCenter: (center: [number, number], zoom?: number) => void;
-    destroy: () => void;
-  } | null>(null);
-  const yandexPlacemarkRef = useRef<{
-    geometry: { setCoordinates: (coords: [number, number]) => void };
-  } | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<LeafletMapInstance | null>(null);
+  const reverseGeocodeTimerRef = useRef<number | null>(null);
+  const isProgrammaticMoveRef = useRef<boolean>(false);
 
-  const yandexApiKey =
-    (
-      import.meta as unknown as {
-        env?: Record<string, string | undefined>;
-      }
-    ).env?.VITE_YANDEX_MAPS_API_KEY?.trim() || '';
+  const getRegionName = useCallback(
+    (reg: UzbekistanRegionOption) => {
+      if (language === 'ru') return reg.nameRu;
+      if (language === 'en') return reg.nameEn;
+      return reg.nameUz;
+    },
+    [language]
+  );
 
-  useEffect(() => {
-    if (isOpen) {
-      const startLat = Number(initialCoords.lat.toFixed(5));
-      const startLng = Number(initialCoords.lng.toFixed(5));
-      setPinCoords({ lat: startLat, lng: startLng });
-      setEditableAddress(initialAddress);
-      setDetectedPlaceLabel(initialAddress || '');
-      setStatusNotice(null);
-    }
-  }, [isOpen, initialCoords.lat, initialCoords.lng, initialAddress]);
+  // Reverse-geocode the exact pin coordinates and match against real Uzbekistan region/district data
+  const runReverseGeocode = useCallback(
+    async (lat: number, lng: number) => {
+      setIsReverseGeocoding(true);
+      setStatusMessage(null);
 
-  const fetchReverseGeocode = async (lat: number, lng: number) => {
-    if (
-      Number.isNaN(lat) ||
-      Number.isNaN(lng) ||
-      lat < 36.5 ||
-      lat > 46.0 ||
-      lng < 55.5 ||
-      lng > 74.0
-    ) {
-      setStatusNotice({
-        type: 'warning',
-        text: 'Tanlangan nuqta Oʻzbekiston hududidan tashqarida koʻrinmoqda. Manzilni quyidagi maydonga qoʻlda kiriting.',
-      });
-      return;
-    }
-
-    setIsReverseGeocoding(true);
-    setStatusNotice(null);
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=uz,ru`,
-        {
-          headers: {
-            Accept: 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Reverse geocoding HTTP error');
-      }
-
-      const data = await response.json();
-      if (data && data.address) {
-        const parts = [
-          data.address.Suburb ||
-            data.address.suburb ||
-            data.address.neighbourhood ||
-            data.address.quarter ||
-            data.address.city_district,
-          data.address.road || data.address.pedestrian || data.address.street,
-          data.address.house_number
-            ? `${data.address.house_number}-uy`
-            : undefined,
-          data.address.amenity || data.address.shop || data.address.building,
-        ].filter(Boolean);
-
-        const formatted =
-          parts.length > 0
-            ? parts.join(', ')
-            : typeof data.display_name === 'string'
-            ? data.display_name.split(',').slice(0, 3).join(', ').trim()
-            : '';
-
-        if (formatted) {
-          setDetectedPlaceLabel(formatted);
-          setEditableAddress(formatted);
-          return;
-        }
-      }
-
-      setStatusNotice({
-        type: 'warning',
-        text: 'Ushbu nuqta uchun koʻcha nomi avtomatik topilmadi. Iltimos, koʻcha, uy va xonadonni quyida qoʻlda yozing.',
-      });
-    } catch {
-      setStatusNotice({
-        type: 'warning',
-        text: 'Manzilni avtomatik aniqlash imkoni boʻlmadi. Nuqta saqlandi — koʻcha va uy raqamini quyida qoʻlda kiriting.',
-      });
-    } finally {
-      setIsReverseGeocoding(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isOpen || !yandexApiKey) return;
-
-    let isCancelled = false;
-    const scriptId = 'zaven-yandex-maps-sdk';
-
-    const initMap = () => {
-      if (isCancelled || !window.ymaps || !yandexContainerRef.current) return;
-      window.ymaps.ready(() => {
-        if (isCancelled || !yandexContainerRef.current || !window.ymaps) return;
-
-        if (yandexMapInstanceRef.current) {
-          yandexMapInstanceRef.current.destroy();
-        }
-
-        const map = new window.ymaps.Map(yandexContainerRef.current, {
-          center: [pinCoords.lat, pinCoords.lng],
-          zoom: 15,
-          controls: ['zoomControl'],
-        });
-
-        const placemark = new window.ymaps.Placemark(
-          [pinCoords.lat, pinCoords.lng],
-          {},
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=uz,ru`,
           {
-            draggable: true,
-            preset: 'islands#darkGreenDotIcon',
+            headers: { Accept: 'application/json' },
           }
         );
 
-        placemark.events.add('dragend', () => {
-          const coords = placemark.geometry.getCoordinates();
-          const nextLat = Number(coords[0].toFixed(5));
-          const nextLng = Number(coords[1].toFixed(5));
-          setPinCoords({ lat: nextLat, lng: nextLng });
-          fetchReverseGeocode(nextLat, nextLng);
-        });
+        if (!res.ok) {
+          throw new Error('Reverse geocode HTTP error');
+        }
 
-        map.events.add('click', (e) => {
-          const coords = e.get('coords');
-          const nextLat = Number(coords[0].toFixed(5));
-          const nextLng = Number(coords[1].toFixed(5));
-          placemark.geometry.setCoordinates([nextLat, nextLng]);
-          setPinCoords({ lat: nextLat, lng: nextLng });
-          fetchReverseGeocode(nextLat, nextLng);
-        });
+        const data = await res.json();
+        const addressObj = (data?.address || {}) as Record<
+          string,
+          string | undefined
+        >;
+        const rawDisplayName =
+          typeof data?.display_name === 'string' ? data.display_name : '';
 
-        map.geoObjects.add(placemark);
-        yandexMapInstanceRef.current = map;
-        yandexPlacemarkRef.current = placemark;
+        // Match against project's real Uzbekistan regions and districts
+        const geoMatch = matchUzbekistanRegionAndDistrictFromGeocode(
+          addressObj,
+          rawDisplayName,
+          lat,
+          lng
+        );
+        setMatchedRegion(geoMatch.matchedRegion);
+        setMatchedDistrict(geoMatch.matchedDistrict);
+
+        const streetParts = [
+          addressObj.suburb ||
+            addressObj.neighbourhood ||
+            addressObj.quarter ||
+            addressObj.residential,
+          addressObj.road || addressObj.pedestrian || addressObj.street,
+          addressObj.house_number
+            ? `${addressObj.house_number}-uy`
+            : undefined,
+          addressObj.amenity || addressObj.shop || addressObj.building,
+        ].filter(Boolean);
+
+        const conciseAddress =
+          streetParts.length > 0
+            ? streetParts.join(', ')
+            : rawDisplayName
+            ? rawDisplayName
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(
+                  (s: string) =>
+                    !s.toLowerCase().includes('oʻzbekiston') &&
+                    !s.toLowerCase().includes('uzbekistan') &&
+                    !s.toLowerCase().includes('узбекистан') &&
+                    !/^\d{5,6}$/.test(s)
+                )
+                .slice(0, 3)
+                .join(', ')
+            : '';
+
+        if (conciseAddress) {
+          setDetectedPlaceSummary(conciseAddress);
+          setEditableAddress(conciseAddress);
+          setHasSelectedPoint(true);
+        } else {
+          setDetectedPlaceSummary(`${lat}, ${lng}`);
+          setHasSelectedPoint(true);
+          setStatusMessage({
+            type: 'warning',
+            text: t('cart.mapAddressNotFound'),
+          });
+        }
+      } catch {
+        const fallbackMatch = matchUzbekistanRegionAndDistrictFromGeocode(
+          undefined,
+          undefined,
+          lat,
+          lng
+        );
+        setMatchedRegion(fallbackMatch.matchedRegion);
+        setMatchedDistrict(fallbackMatch.matchedDistrict);
+        setDetectedPlaceSummary(`${lat}, ${lng}`);
+        setHasSelectedPoint(true);
+        setStatusMessage({
+          type: 'warning',
+          text: t('cart.mapNetworkError'),
+        });
+      } finally {
+        setIsReverseGeocoding(false);
+      }
+    },
+    [t]
+  );
+
+  // Lock page scroll & hide mobile bottom nav while map sheet is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('zaven-modal-open');
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.classList.remove('zaven-modal-open');
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  // Load Leaflet touch map when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const startLat = Number(initialCoords.lat.toFixed(5));
+    const startLng = Number(initialCoords.lng.toFixed(5));
+    setPinCoords({ lat: startLat, lng: startLng });
+    setEditableAddress(initialAddress);
+    setDetectedPlaceSummary(initialAddress || `${startLat}, ${startLng}`);
+    setSearchResults([]);
+    setStatusMessage(null);
+    setHasSelectedPoint(true);
+
+    // Run initial reverse-geocode so the preview card immediately shows the current point
+    runReverseGeocode(startLat, startLng);
+
+    let isCancelled = false;
+
+    const ensureLeafletAssets = (): Promise<void> => {
+      return new Promise((resolve) => {
+        if (window.L) {
+          resolve();
+          return;
+        }
+
+        if (!document.getElementById('zaven-leaflet-css')) {
+          const link = document.createElement('link');
+          link.id = 'zaven-leaflet-css';
+          link.rel = 'stylesheet';
+          link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          document.head.appendChild(link);
+        }
+
+        const existingScript = document.getElementById(
+          'zaven-leaflet-js'
+        ) as HTMLScriptElement | null;
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve());
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'zaven-leaflet-js';
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.head.appendChild(script);
       });
     };
 
-    if (window.ymaps) {
-      initMap();
-    } else {
-      const existingScript = document.getElementById(
-        scriptId
-      ) as HTMLScriptElement | null;
-      if (existingScript) {
-        existingScript.addEventListener('load', initMap);
-      } else {
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(
-          yandexApiKey
-        )}&lang=uz_UZ`;
-        script.async = true;
-        script.onload = initMap;
-        document.head.appendChild(script);
+    ensureLeafletAssets().then(() => {
+      if (isCancelled || !window.L || !mapContainerRef.current) return;
+
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
       }
-    }
+
+      const map = window.L.map(mapContainerRef.current, {
+        center: [startLat, startLng],
+        zoom: 15,
+        zoomControl: false,
+        attributionControl: false,
+        dragging: true,
+        touchZoom: true,
+        scrollWheelZoom: true,
+        doubleClickZoom: true,
+      });
+
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Tap anywhere on the map to move the center pin to that exact point
+      map.on('click', (e) => {
+        if (!e?.latlng) return;
+        const nextLat = Number(e.latlng.lat.toFixed(5));
+        const nextLng = Number(e.latlng.lng.toFixed(5));
+        isProgrammaticMoveRef.current = true;
+        map.setView([nextLat, nextLng], map.getZoom());
+        setPinCoords({ lat: nextLat, lng: nextLng });
+        runReverseGeocode(nextLat, nextLng);
+        setTimeout(() => {
+          isProgrammaticMoveRef.current = false;
+        }, 180);
+      });
+
+      // Drag the map under the fixed center pin and reverse-geocode on release
+      map.on('moveend', () => {
+        if (isProgrammaticMoveRef.current) return;
+        const center = map.getCenter();
+        const nextLat = Number(center.lat.toFixed(5));
+        const nextLng = Number(center.lng.toFixed(5));
+        setPinCoords({ lat: nextLat, lng: nextLng });
+
+        if (reverseGeocodeTimerRef.current) {
+          window.clearTimeout(reverseGeocodeTimerRef.current);
+        }
+        reverseGeocodeTimerRef.current = window.setTimeout(() => {
+          runReverseGeocode(nextLat, nextLng);
+        }, 320);
+      });
+
+      leafletMapRef.current = map;
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 120);
+    });
 
     return () => {
       isCancelled = true;
-      if (yandexMapInstanceRef.current) {
-        yandexMapInstanceRef.current.destroy();
-        yandexMapInstanceRef.current = null;
+      if (reverseGeocodeTimerRef.current) {
+        window.clearTimeout(reverseGeocodeTimerRef.current);
+      }
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
       }
     };
-  }, [isOpen, yandexApiKey]);
+  }, [isOpen]);
 
-  const updatePinPosition = (nextLat: number, nextLng: number) => {
-    const clampedLat = Math.max(UZ_LAT_MIN, Math.min(UZ_LAT_MAX, nextLat));
-    const clampedLng = Math.max(UZ_LNG_MIN, Math.min(UZ_LNG_MAX, nextLng));
-    const roundedLat = Number(clampedLat.toFixed(5));
-    const roundedLng = Number(clampedLng.toFixed(5));
+  const moveMapToCoords = (nextLat: number, nextLng: number, zoom = 15) => {
+    const roundedLat = Number(nextLat.toFixed(5));
+    const roundedLng = Number(nextLng.toFixed(5));
     setPinCoords({ lat: roundedLat, lng: roundedLng });
+    setSearchResults([]);
 
-    if (yandexMapInstanceRef.current && yandexPlacemarkRef.current) {
-      yandexMapInstanceRef.current.setCenter([roundedLat, roundedLng], 16);
-      yandexPlacemarkRef.current.geometry.setCoordinates([
-        roundedLat,
-        roundedLng,
-      ]);
+    if (leafletMapRef.current) {
+      isProgrammaticMoveRef.current = true;
+      leafletMapRef.current.setView([roundedLat, roundedLng], zoom);
+      setTimeout(() => {
+        isProgrammaticMoveRef.current = false;
+      }, 220);
     }
 
-    fetchReverseGeocode(roundedLat, roundedLng);
-  };
-
-  // Interactive tap-to-place overlay handler for the OpenStreetMap viewport
-  const handleInteractiveMapOverlayTap = (
-    e: React.MouseEvent<HTMLDivElement>
-  ) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetX = (e.clientX - rect.left) / rect.width - 0.5;
-    const offsetY = 0.5 - (e.clientY - rect.top) / rect.height;
-
-    const nextLng = pinCoords.lng + offsetX * 0.016;
-    const nextLat = pinCoords.lat + offsetY * 0.01;
-    updatePinPosition(nextLat, nextLng);
+    runReverseGeocode(roundedLat, roundedLng);
   };
 
   const handlePlaceSearch = async (e: React.FormEvent) => {
@@ -315,69 +386,298 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
     if (!q) return;
 
     setIsSearchingPlace(true);
-    setStatusNotice(null);
+    setStatusMessage(null);
+    setSearchResults([]);
+
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=uz&limit=1&q=${encodeURIComponent(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=uz&limit=5&addressdetails=1&q=${encodeURIComponent(
           q
-        )}&accept-language=uz,ru`
+        )}&accept-language=uz,ru`,
+        {
+          headers: { Accept: 'application/json' },
+        }
       );
-      if (!res.ok) throw new Error('Search failed');
-      const results = await res.json();
-      if (Array.isArray(results) && results.length > 0) {
-        const first = results[0];
-        const foundLat = Number(parseFloat(first.lat).toFixed(5));
-        const foundLng = Number(parseFloat(first.lon).toFixed(5));
-        updatePinPosition(foundLat, foundLng);
+
+      if (!res.ok) throw new Error('Search HTTP error');
+      const data = await res.json();
+
+      if (Array.isArray(data) && data.length > 0) {
+        const parsed = data.map(
+          (item: { display_name: string; lat: string; lon: string }) => ({
+            display_name: item.display_name,
+            lat: Number(parseFloat(item.lat).toFixed(5)),
+            lon: Number(parseFloat(item.lon).toFixed(5)),
+          })
+        );
+
+        if (parsed.length === 1) {
+          moveMapToCoords(parsed[0].lat, parsed[0].lon, 16);
+        } else {
+          setSearchResults(parsed);
+          moveMapToCoords(parsed[0].lat, parsed[0].lon, 15);
+        }
       } else {
-        setStatusNotice({
+        setStatusMessage({
           type: 'warning',
-          text: 'Ushbu soʻrov boʻyicha joy topilmadi. Boshqa moʻljal yozib koʻring yoki xaritadan nuqtani tanlang.',
+          text: t('cart.mapSearchNoResult'),
         });
       }
     } catch {
-      setStatusNotice({
+      setStatusMessage({
         type: 'warning',
-        text: 'Qidiruv xizmati javob bermadi. Xaritadan nuqtani tanlang yoki manzilni qoʻlda yozing.',
+        text: t('cart.mapNetworkError'),
       });
     } finally {
       setIsSearchingPlace(false);
     }
   };
 
-  const osmBbox = `${(pinCoords.lng - 0.008).toFixed(5)}%2C${(
-    pinCoords.lat - 0.005
-  ).toFixed(5)}%2C${(pinCoords.lng + 0.008).toFixed(5)}%2C${(
-    pinCoords.lat + 0.005
-  ).toFixed(5)}`;
+  if (!isOpen) return null;
+
+  const isConfirmDisabled =
+    !hasSelectedPoint ||
+    isReverseGeocoding ||
+    Number.isNaN(pinCoords.lat) ||
+    Number.isNaN(pinCoords.lng);
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={t('cart.mapModalTitle')}
-      maxWidth="xl"
-      footer={
-        <div className="w-full grid grid-cols-2 gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            fullWidth
-            onClick={onClose}
-          >
-            {t('footer.cancelBtn')}
-          </Button>
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('cart.mapModalTitle')}
+    >
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-gray-950/80 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Full-Height Mobile Map Sheet (`h-[92dvh] sm:h-[85vh]`) */}
+      <div className="relative z-10 w-full sm:max-w-2xl h-[92dvh] sm:h-[85vh] bg-white dark:bg-[#12211C] rounded-t-3xl sm:rounded-3xl border-t sm:border border-gray-200 dark:border-[#2F5246] shadow-2xl flex flex-col overflow-hidden">
+        {/* Top Bar: Title + Search Input + Quick Region Chips */}
+        <div className="bg-[#0F3D2E] text-white px-3.5 pt-3 pb-2.5 sm:px-5 sm:py-3.5 space-y-2.5 shrink-0 border-b border-[#09261C]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-[#C89D54] text-[#09261C] flex items-center justify-center shrink-0">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs sm:text-base font-extrabold text-white truncate">
+                {t('cart.mapModalTitle')}
+              </h3>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('product.close')}
+              className="w-8 h-8 rounded-xl bg-[#09261C]/80 hover:bg-[#16533F] text-emerald-100 hover:text-white flex items-center justify-center shrink-0 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Search Input Row */}
+          <form onSubmit={handlePlaceSearch} className="relative flex gap-1.5">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('cart.mapSearchPlaceholder')}
+                className="w-full h-10 pl-9 pr-8 rounded-xl bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100 placeholder-gray-400 text-xs sm:text-sm border border-transparent focus:border-[#C89D54] focus:outline-none shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSearchingPlace}
+              className="h-10 px-3.5 rounded-xl bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs flex items-center justify-center shrink-0 shadow-sm transition-colors"
+            >
+              {isSearchingPlace ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                t('header.searchShortBtn')
+              )}
+            </button>
+          </form>
+
+          {/* Search Results Dropdown */}
+          {searchResults.length > 1 && (
+            <ul className="bg-white dark:bg-[#12211C] text-gray-900 dark:text-gray-100 rounded-xl border border-gray-200 dark:border-[#2F5246] divide-y divide-gray-100 dark:divide-[#28453B] max-h-36 overflow-y-auto shadow-lg text-xs">
+              {searchResults.map((res, idx) => (
+                <li key={`${res.lat}-${res.lon}-${idx}`}>
+                  <button
+                    type="button"
+                    onClick={() => moveMapToCoords(res.lat, res.lon, 16)}
+                    className="w-full px-3 py-2 text-left hover:bg-brand-green-light/50 dark:hover:bg-[#162923] flex items-center gap-2"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-brand-green shrink-0" />
+                    <span className="truncate">{res.display_name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Quick Uzbekistan City Jump Chips */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin pb-0.5">
+            {UZBEKISTAN_REGIONS.map((reg) => {
+              const isCurrentReg = matchedRegion?.id === reg.id;
+              return (
+                <button
+                  key={reg.id}
+                  type="button"
+                  onClick={() =>
+                    moveMapToCoords(
+                      reg.approxCenter.lat,
+                      reg.approxCenter.lng,
+                      13
+                    )
+                  }
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-colors border ${
+                    isCurrentReg
+                      ? 'bg-[#C89D54] text-[#09261C] border-[#F3D79B]'
+                      : 'bg-[#09261C]/75 text-emerald-100 border-emerald-700/70 hover:bg-[#16533F]'
+                  }`}
+                >
+                  {reg.nameUz
+                    .replace(' viloyati', '')
+                    .replace(' Respublikasi', '')}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Center Interactive Touch Map Viewport (Fills available height) */}
+        <div className="relative flex-1 min-h-[220px] w-full bg-gray-100 dark:bg-[#0B1512] overflow-hidden">
+          <div
+            ref={mapContainerRef}
+            className="w-full h-full z-0"
+            aria-label="Interactive delivery map"
+          />
+
+          {/* Floating Instruction Pill at Top of Map */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-3 py-1 rounded-full bg-[#09261C]/90 text-emerald-50 border border-[#C89D54]/50 shadow-md text-[11px] font-semibold whitespace-nowrap">
+            {t('cart.mapDragHint')}
+          </div>
+
+          {/* Fixed Center Pin (Matches Reference Screenshot Usability) */}
+          <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+            <div className="-mt-9 flex flex-col items-center">
+              <div className="w-10 h-10 rounded-full bg-[#0F3D2E] border-2 border-[#C89D54] text-[#C89D54] flex items-center justify-center shadow-xl">
+                {isReverseGeocoding ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <MapPin className="w-5 h-5 fill-[#C89D54]/25" />
+                )}
+              </div>
+              <div className="w-1 h-3 bg-[#09261C] rounded-b-full -mt-0.5" />
+              <div className="w-3 h-1.5 rounded-full bg-black/35 blur-[1px]" />
+            </div>
+          </div>
+
+          {/* Visible, Touch-Friendly Zoom Controls (+ / -) */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => leafletMapRef.current?.zoomIn()}
+              aria-label="Kattalashtirish / Zoom in"
+              className="w-11 h-11 rounded-2xl bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-900 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] shadow-lg flex items-center justify-center transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => leafletMapRef.current?.zoomOut()}
+              aria-label="Kichiklashtirish / Zoom out"
+              className="w-11 h-11 rounded-2xl bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-900 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] shadow-lg flex items-center justify-center transition-colors"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Sheet: "Tanlangan manzil" Preview + Editable Street Input + Confirm CTA */}
+        <div className="bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] p-3.5 sm:p-5 pb-[max(0.875rem,env(safe-area-inset-bottom))] space-y-3 shrink-0 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+          {/* Detected Address & Matched Region/District Preview */}
+          <div className="p-3 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400">
+                {t('cart.mapSelectedAddressLabel')}
+              </span>
+              {matchedRegion && (
+                <span className="text-[11px] font-extrabold text-brand-green bg-brand-green-light dark:bg-[#0F3D2E] px-2 py-0.5 rounded-md">
+                  {getRegionName(matchedRegion)}
+                  {matchedDistrict ? ` • ${matchedDistrict}` : ''}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-start gap-2">
+              <MapPin className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm font-extrabold text-gray-900 dark:text-gray-100 leading-snug break-words">
+                {isReverseGeocoding
+                  ? t('cart.mapLoadingAddress')
+                  : detectedPlaceSummary || t('cart.mapAddressNotFound')}
+              </p>
+            </div>
+          </div>
+
+          {statusMessage && (
+            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{statusMessage.text}</span>
+            </div>
+          )}
+
+          {/* Editable Street, House & Apartment Input */}
+          <div>
+            <label className="block text-[11px] sm:text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              {t('cart.mapAddressEditLabel')}
+            </label>
+            <input
+              type="text"
+              value={editableAddress}
+              onChange={(e) => setEditableAddress(e.target.value)}
+              placeholder={t('cart.addressPlaceholder')}
+              className="w-full h-10 px-3.5 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-xs sm:text-sm text-gray-900 dark:text-gray-100 focus:border-brand-green focus:outline-none"
+            />
+          </div>
+
+          {/* Primary Confirm CTA (Matches Reference Screenshot) */}
           <Button
             type="button"
             variant="primary"
-            size="md"
+            size="lg"
             fullWidth
-            leftIcon={<Check className="w-4 h-4 text-[#C89D54]" />}
+            disabled={isConfirmDisabled}
+            isLoading={isReverseGeocoding}
+            leftIcon={<Check className="w-5 h-5 text-[#C89D54]" />}
             onClick={() => {
               onConfirmLocation({
                 coords: pinCoords,
-                reverseGeocodedAddress: editableAddress.trim(),
+                reverseGeocodedAddress:
+                  editableAddress.trim() || detectedPlaceSummary.trim(),
+                matchedRegion,
+                matchedDistrict,
               });
               onClose();
             }}
@@ -385,182 +685,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
             {t('cart.mapConfirmBtn')}
           </Button>
         </div>
-      }
-    >
-      <div className="space-y-3.5 text-xs sm:text-sm">
-        {/* Place Search Bar (No automatic or button GPS trigger) */}
-        <form onSubmit={handlePlaceSearch} className="flex gap-2">
-          <div className="relative flex-1 min-w-0">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('cart.mapSearchPlaceholder')}
-              className="w-full h-10 pl-9 pr-3 rounded-xl border border-gray-300 dark:border-[#2F5246] text-xs sm:text-sm bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100 focus:border-[#C89D54] focus:outline-none"
-            />
-          </div>
-          <Button
-            type="submit"
-            variant="secondary"
-            size="sm"
-            isLoading={isSearchingPlace}
-          >
-            {t('header.searchShortBtn')}
-          </Button>
-        </form>
-
-        {/* Quick City Center Chips */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin pb-1">
-          {UZBEKISTAN_REGIONS.map((reg) => (
-            <button
-              key={reg.id}
-              type="button"
-              onClick={() =>
-                updatePinPosition(reg.approxCenter.lat, reg.approxCenter.lng)
-              }
-              className="px-2.5 py-1 rounded-lg bg-[#F8F9FA] dark:bg-[#162923] hover:bg-brand-green-light border border-gray-200 dark:border-[#28453B] text-[11px] font-semibold text-gray-700 dark:text-gray-200 shrink-0 transition-colors"
-            >
-              {reg.nameUz.replace(' viloyati', '').replace(' Respublikasi', '')}
-            </button>
-          ))}
-        </div>
-
-        {/* Map Canvas + Center Pin & Tap-to-Place Overlay */}
-        <div className="relative rounded-2xl overflow-hidden border-2 border-[#0F3D2E] dark:border-[#2F5246] bg-gray-100 dark:bg-[#0D1915]">
-          {yandexApiKey ? (
-            <div
-              ref={yandexContainerRef}
-              className="w-full h-56 sm:h-64"
-              aria-label="Yandex Map Picker"
-            />
-          ) : (
-            <div className="relative w-full h-56 sm:h-64 select-none">
-              <iframe
-                title="ZAVEN Delivery Map"
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=${osmBbox}&layer=mapnik&marker=${pinCoords.lat}%2C${pinCoords.lng}`}
-                className="w-full h-full border-0 pointer-events-none"
-                loading="lazy"
-              />
-              {/* Interactive click/tap layer so tapping anywhere on the map moves the pin */}
-              <div
-                onClick={handleInteractiveMapOverlayTap}
-                role="button"
-                tabIndex={0}
-                aria-label="Xaritadan nuqta tanlash uchun bosing"
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowUp')
-                    updatePinPosition(pinCoords.lat + 0.002, pinCoords.lng);
-                  if (e.key === 'ArrowDown')
-                    updatePinPosition(pinCoords.lat - 0.002, pinCoords.lng);
-                  if (e.key === 'ArrowLeft')
-                    updatePinPosition(pinCoords.lat, pinCoords.lng - 0.002);
-                  if (e.key === 'ArrowRight')
-                    updatePinPosition(pinCoords.lat, pinCoords.lng + 0.002);
-                }}
-                className="absolute inset-0 cursor-crosshair flex items-center justify-center focus:outline-none"
-              >
-                <div className="pointer-events-none -mt-6 flex flex-col items-center">
-                  <div className="px-2 py-0.5 rounded-md bg-[#09261C]/90 text-[#F3D79B] text-[10px] font-bold shadow-md mb-1 whitespace-nowrap">
-                    Xaritaga bosing
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-[#0F3D2E] border-2 border-[#C89D54] text-[#C89D54] flex items-center justify-center shadow-lg">
-                    <MapPin className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Fine-Tune Pin Nudge Bar */}
-          <div className="px-3 py-2 bg-[#09261C] text-emerald-100 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-            <div className="flex items-center gap-1.5">
-              <Navigation className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
-              <span className="font-mono text-[#C89D54] font-bold">
-                {pinCoords.lat}, {pinCoords.lng}
-              </span>
-              {isReverseGeocoding && (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-300 ml-1" />
-              )}
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  updatePinPosition(pinCoords.lat + 0.002, pinCoords.lng)
-                }
-                className="w-7 h-7 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] font-bold flex items-center justify-center"
-                aria-label="Shimolga / North"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  updatePinPosition(pinCoords.lat - 0.002, pinCoords.lng)
-                }
-                className="w-7 h-7 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] font-bold flex items-center justify-center"
-                aria-label="Janubga / South"
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  updatePinPosition(pinCoords.lat, pinCoords.lng - 0.002)
-                }
-                className="w-7 h-7 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] font-bold flex items-center justify-center"
-                aria-label="Gʻarbga / West"
-              >
-                ←
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  updatePinPosition(pinCoords.lat, pinCoords.lng + 0.002)
-                }
-                className="w-7 h-7 rounded-lg bg-[#0F3D2E] hover:bg-[#16533F] font-bold flex items-center justify-center"
-                aria-label="Sharqqa / East"
-              >
-                →
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Selected Address Review Card + Editable Street/House/Apartment Input */}
-        <div className="p-3.5 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-3">
-          {detectedPlaceLabel && (
-            <div className="flex items-start gap-2 text-xs">
-              <MapPin className="w-4 h-4 text-brand-green shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block">
-                  Xaritadan aniqlangan manzil:
-                </span>
-                <p className="font-bold text-gray-900 dark:text-gray-100 break-words">
-                  {detectedPlaceLabel}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {statusNotice && (
-            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{statusNotice.text}</span>
-            </div>
-          )}
-
-          <Input
-            label={t('cart.mapSelectedAddressLabel')}
-            value={editableAddress}
-            onChange={(e) => setEditableAddress(e.target.value)}
-            placeholder={t('cart.addressPlaceholder')}
-            leftIcon={<MapPin className="w-4 h-4" />}
-          />
-        </div>
       </div>
-    </Modal>
+    </div>
   );
 };

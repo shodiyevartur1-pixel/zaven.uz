@@ -42,7 +42,10 @@ import {
   resolveRegionTariffRule,
 } from '../../utils/uzbekistanLocations';
 import { ProductCard } from '../../components/product/ProductCard';
-import { DeliveryMapModal } from '../../components/checkout/DeliveryMapModal';
+import {
+  DeliveryMapModal,
+  ConfirmedMapLocationPayload,
+} from '../../components/checkout/DeliveryMapModal';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input } from '../../components/ui/Input';
@@ -129,11 +132,14 @@ export const CartCheckoutPage: React.FC = () => {
   );
   const [customerNote, setCustomerNote] = useState<string>('');
 
-  // Map pin coordinates confirmed by the customer (never auto-populated on mount)
   const [sharedCoordinates, setSharedCoordinates] = useState<{
     lat: number;
     lng: number;
     accuracyMeters?: number;
+  } | null>(null);
+  const [mapSelectionFeedback, setMapSelectionFeedback] = useState<{
+    type: 'success' | 'warning';
+    text: string;
   } | null>(null);
 
   const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
@@ -205,7 +211,10 @@ export const CartCheckoutPage: React.FC = () => {
         if (matchedReg) {
           setSelectedUzRegionId(matchedReg.id);
           setSelectedDistrict(
-            defaultAddr.district || matchedReg.districts[0] || ''
+            defaultAddr.district &&
+              matchedReg.districts.includes(defaultAddr.district)
+              ? defaultAddr.district
+              : matchedReg.districts[0] || ''
           );
         }
         setAddressLine((prev) => prev || defaultAddr.addressLine);
@@ -220,12 +229,23 @@ export const CartCheckoutPage: React.FC = () => {
     [selectedUzRegionId]
   );
 
+  // Guard: If selectedDistrict does not belong to currentUzRegionObj, reset it
+  useEffect(() => {
+    if (
+      selectedDistrict &&
+      !currentUzRegionObj.districts.includes(selectedDistrict)
+    ) {
+      setSelectedDistrict(currentUzRegionObj.districts[0] || '');
+    }
+  }, [currentUzRegionObj, selectedDistrict]);
+
   const getRegionDisplayName = (reg: (typeof UZBEKISTAN_REGIONS)[number]) => {
     if (language === 'ru') return reg.nameRu;
     if (language === 'en') return reg.nameEn;
     return reg.nameUz;
   };
 
+  // Manual region change resets incompatible district immediately
   const handleRegionChange = (newRegionId: string) => {
     setSelectedUzRegionId(newRegionId);
     const found = UZBEKISTAN_REGIONS.find((r) => r.id === newRegionId);
@@ -239,6 +259,67 @@ export const CartCheckoutPage: React.FC = () => {
       region: undefined,
       district: undefined,
     }));
+  };
+
+  // Confirming a point in DeliveryMapModal updates address, region, district, delivery fee & total
+  const handleConfirmMapLocation = ({
+    coords,
+    reverseGeocodedAddress,
+    matchedRegion,
+    matchedDistrict,
+  }: ConfirmedMapLocationPayload) => {
+    setSharedCoordinates(coords);
+
+    if (reverseGeocodedAddress) {
+      setAddressLine(reverseGeocodedAddress);
+      setErrors((prev) => ({ ...prev, address: undefined }));
+    }
+
+    if (matchedRegion) {
+      setSelectedUzRegionId(matchedRegion.id);
+      const nextRule = resolveRegionTariffRule(
+        matchedRegion.nameUz,
+        enabledRegions
+      );
+      const feeText = nextRule
+        ? formatUZS(nextRule.fee)
+        : feeToBeConfirmedLabel;
+
+      if (
+        matchedDistrict &&
+        matchedRegion.districts.includes(matchedDistrict)
+      ) {
+        setSelectedDistrict(matchedDistrict);
+        setErrors((prev) => ({
+          ...prev,
+          region: undefined,
+          district: undefined,
+        }));
+        setMapSelectionFeedback({
+          type: 'success',
+          text: `${t('cart.mapRegionMatchedNote')} ${getRegionDisplayName(
+            matchedRegion
+          )}, ${matchedDistrict} (${feeText})`,
+        });
+      } else {
+        // Region matched, but exact district wasn't confidently identified -> clear incompatible district and ask customer to pick
+        setSelectedDistrict('');
+        setErrors((prev) => ({ ...prev, region: undefined }));
+        setMapSelectionFeedback({
+          type: 'warning',
+          text: `${getRegionDisplayName(matchedRegion)} (${feeText}) — ${t(
+            'cart.mapSelectDistrictPrompt'
+          )}`,
+        });
+      }
+    } else {
+      // Could not confidently identify region -> do not guess; ask customer to select region & district manually
+      setSelectedDistrict('');
+      setMapSelectionFeedback({
+        type: 'warning',
+        text: t('cart.mapSelectRegionDistrictPrompt'),
+      });
+    }
   };
 
   const detailedCartItems = useMemo(() => {
@@ -518,8 +599,11 @@ export const CartCheckoutPage: React.FC = () => {
     if (!currentUzRegionObj) {
       nextErrors.region = t('cart.region');
     }
-    if (!selectedDistrict.trim()) {
-      nextErrors.district = t('cart.district');
+    if (
+      !selectedDistrict.trim() ||
+      !currentUzRegionObj.districts.includes(selectedDistrict)
+    ) {
+      nextErrors.district = t('cart.districtSelectPlaceholder');
     }
     if (addressLine.trim().length < 5) {
       nextErrors.address = t('cart.address');
@@ -529,7 +613,11 @@ export const CartCheckoutPage: React.FC = () => {
     if (Object.keys(nextErrors).length > 0) {
       addToast({
         type: 'error',
-        title: nextErrors.telegram || t('cart.step2Title'),
+        title:
+          nextErrors.district ||
+          nextErrors.address ||
+          nextErrors.telegram ||
+          t('cart.step2Title'),
       });
       return;
     }
@@ -739,7 +827,6 @@ export const CartCheckoutPage: React.FC = () => {
               ))}
             </div>
 
-            {/* Requirement #9: Mobile-Friendly Order Summary */}
             <div className="bg-[#F8F9FA] dark:bg-[#162923] rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-[#28453B] space-y-2.5 text-xs sm:text-sm">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                 <span>{t('cart.productsSubtotal')}:</span>
@@ -1143,7 +1230,7 @@ export const CartCheckoutPage: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & CUSTOM ZAVEN PICKERS            */}
+      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & TOUCH MAP PICKER                */}
       {/* ===================================================================== */}
       {activeStep === 'address' && (
         <form
@@ -1232,12 +1319,22 @@ export const CartCheckoutPage: React.FC = () => {
               />
             </div>
 
-            {/* Requirements #11 & #12: Custom ZAVEN Region/District Pickers + Map Picker (No GPS Button) */}
+            {/* Custom ZAVEN Region/District Pickers + Touch Map Picker (No GPS Button) */}
             <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
                     {t('cart.region')} & {t('cart.district')}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('cart.deliveryService')}{' '}
+                    <strong className="text-brand-green">
+                      {isDeliveryFeeToBeConfirmed
+                        ? feeToBeConfirmedLabel
+                        : deliveryFee === 0
+                        ? t('cart.freeDelivery')
+                        : formatUZS(deliveryFee)}
+                    </strong>
                   </p>
                 </div>
 
@@ -1252,18 +1349,23 @@ export const CartCheckoutPage: React.FC = () => {
                 </Button>
               </div>
 
-              {sharedCoordinates && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <MapPin className="w-4 h-4 shrink-0" />
-                    <span className="truncate font-semibold">
-                      {t('cart.mapPinConfirmed')} ({sharedCoordinates.lat},{' '}
-                      {sharedCoordinates.lng})
+              {mapSelectionFeedback && (
+                <div
+                  className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2 ${
+                    mapSelectionFeedback.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
+                >
+                  <div className="flex items-start gap-2 min-w-0">
+                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span className="font-semibold break-words">
+                      {mapSelectionFeedback.text}
                     </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSharedCoordinates(null)}
+                    onClick={() => setMapSelectionFeedback(null)}
                     className="text-xs font-extrabold underline shrink-0"
                   >
                     ×
@@ -1271,7 +1373,6 @@ export const CartCheckoutPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Requirement #11: Custom Searchable Bottom-Sheet/Modal Pickers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <SearchableSelectSheet
                   label={t('cart.region')}
@@ -1643,7 +1744,6 @@ export const CartCheckoutPage: React.FC = () => {
 
       {/* ===================================================================== */}
       {/* STEP 4: SEQUENTIAL CONFIRMATION / REVIEW STEP                         */}
-      {/* Requirements #9 & #10: Clean mobile summary + unclipped Confirm CTA   */}
       {/* ===================================================================== */}
       {activeStep === 'confirm' && (
         <div className="max-w-3xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
@@ -1757,7 +1857,6 @@ export const CartCheckoutPage: React.FC = () => {
               )}
             </div>
 
-            {/* Requirement #9: Scannable Mobile Order Summary (No awkward word splitting) */}
             <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2.5">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                 <span>
@@ -1802,7 +1901,6 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Requirement #10: Full-width mobile "Buyurtmani tasdiqlash" button with full visible label (no price appended inside button to prevent 320px clipping) */}
             <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <Button
                 type="button"
@@ -1833,24 +1931,13 @@ export const CartCheckoutPage: React.FC = () => {
         </div>
       )}
 
-      {/* Requirement #12: Polished Map-Based Delivery Picker Modal (Updates only coords & address) */}
+      {/* Full-Screen Touch Map Picker Modal */}
       <DeliveryMapModal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}
         initialCoords={sharedCoordinates || currentUzRegionObj.approxCenter}
         initialAddress={addressLine}
-        onConfirmLocation={({ coords, reverseGeocodedAddress }) => {
-          setSharedCoordinates(coords);
-          if (reverseGeocodedAddress) {
-            setAddressLine(reverseGeocodedAddress);
-            setErrors((prev) => ({ ...prev, address: undefined }));
-          }
-          addToast({
-            type: 'success',
-            title: t('cart.mapPinConfirmed'),
-            description: reverseGeocodedAddress || `${coords.lat}, ${coords.lng}`,
-          });
-        }}
+        onConfirmLocation={handleConfirmMapLocation}
       />
 
       {/* Clear-Cart Confirmation Dialog */}
