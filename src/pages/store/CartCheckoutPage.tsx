@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -60,6 +60,7 @@ const ALLOWED_RECEIPT_MIMES = [
   'application/pdf',
 ];
 const MAX_RECEIPT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const CHECKOUT_DRAFT_KEY = 'zaven_checkout_draft_v1';
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
 
@@ -81,20 +82,24 @@ export const CartCheckoutPage: React.FC = () => {
   const { t, language, getProductText } = useThemeLanguage();
 
   const isCheckoutRoute = location.pathname.startsWith('/checkout');
+  const isCustomerSignedIn = Boolean(currentCustomer?.emailVerified);
   const [activeStep, setActiveStep] = useState<CheckoutStep>(
-    isCheckoutRoute ? 'address' : 'cart'
+    isCheckoutRoute && isCustomerSignedIn ? 'address' : 'cart'
   );
+  const [isAuthPromptModalOpen, setIsAuthPromptModalOpen] = useState(false);
 
   useEffect(() => {
     if (location.pathname === '/cart') {
       setActiveStep('cart');
-    } else if (
-      location.pathname.startsWith('/checkout') &&
-      activeStep === 'cart'
-    ) {
-      setActiveStep('address');
+    } else if (location.pathname.startsWith('/checkout')) {
+      if (!isCustomerSignedIn) {
+        setActiveStep('cart');
+        setIsAuthPromptModalOpen(true);
+      } else {
+        setActiveStep((step) => (step === 'cart' ? 'address' : step));
+      }
     }
-  }, [location.pathname]);
+  }, [location.pathname, isCustomerSignedIn]);
 
   const enabledRegions = useMemo(
     () => storeSettings.delivery.regions.filter((r) => r.isEnabled),
@@ -182,8 +187,67 @@ export const CartCheckoutPage: React.FC = () => {
 
   const [isClearCartModalOpen, setIsClearCartModalOpen] =
     useState<boolean>(false);
+  const [hasRestoredCheckoutDraft, setHasRestoredCheckoutDraft] =
+    useState(false);
+  const hasSavedCheckoutDraftRef = useRef(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const savedDraft = sessionStorage.getItem(CHECKOUT_DRAFT_KEY);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft) as Record<string, unknown>;
+        hasSavedCheckoutDraftRef.current = true;
+        if (typeof parsed.customerName === 'string') setCustomerName(parsed.customerName);
+        if (typeof parsed.customerPhone === 'string') setCustomerPhone(parsed.customerPhone);
+        if (typeof parsed.customerEmail === 'string') setCustomerEmail(parsed.customerEmail);
+        if (typeof parsed.customerTelegram === 'string') setCustomerTelegram(parsed.customerTelegram);
+        if (typeof parsed.selectedUzRegionId === 'string') setSelectedUzRegionId(parsed.selectedUzRegionId);
+        if (typeof parsed.selectedDistrict === 'string') setSelectedDistrict(parsed.selectedDistrict);
+        if (typeof parsed.addressLine === 'string') setAddressLine(parsed.addressLine);
+        if (typeof parsed.customerNote === 'string') setCustomerNote(parsed.customerNote);
+        if (typeof parsed.appliedCouponCode === 'string') setAppliedCouponCode(parsed.appliedCouponCode);
+      }
+    } catch {
+      // Ignore an invalid or unavailable session draft.
+    } finally {
+      setHasRestoredCheckoutDraft(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredCheckoutDraft) return;
+    try {
+      sessionStorage.setItem(
+        CHECKOUT_DRAFT_KEY,
+        JSON.stringify({
+          customerName,
+          customerPhone,
+          customerEmail,
+          customerTelegram,
+          selectedUzRegionId,
+          selectedDistrict,
+          addressLine,
+          customerNote,
+          appliedCouponCode,
+        })
+      );
+    } catch {
+      // Checkout can continue if session storage is unavailable.
+    }
+  }, [
+    hasRestoredCheckoutDraft,
+    customerName,
+    customerPhone,
+    customerEmail,
+    customerTelegram,
+    selectedUzRegionId,
+    selectedDistrict,
+    addressLine,
+    customerNote,
+    appliedCouponCode,
+  ]);
 
   useEffect(() => {
     if (currentCustomer) {
@@ -202,7 +266,7 @@ export const CartCheckoutPage: React.FC = () => {
       const defaultAddr =
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
-      if (defaultAddr) {
+      if (defaultAddr && !hasSavedCheckoutDraftRef.current) {
         const matchedReg = UZBEKISTAN_REGIONS.find(
           (r) =>
             r.nameUz.toLowerCase() === defaultAddr.region.toLowerCase() ||
@@ -575,11 +639,18 @@ export const CartCheckoutPage: React.FC = () => {
     if (targetStep === 'cart') {
       setActiveStep('cart');
       navigate('/cart');
-    } else {
-      setActiveStep(targetStep);
-      if (!location.pathname.startsWith('/checkout')) {
-        navigate('/checkout');
-      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (!isCustomerSignedIn) {
+      setIsAuthPromptModalOpen(true);
+      return;
+    }
+
+    setActiveStep(targetStep);
+    if (!location.pathname.startsWith('/checkout')) {
+      navigate('/checkout');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -691,6 +762,11 @@ export const CartCheckoutPage: React.FC = () => {
       });
 
       setCompletedOrder(createdOrder);
+      try {
+        sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+      } catch {
+        // Order confirmation must not depend on session storage availability.
+      }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsSubmittingOrder(false);
@@ -1965,6 +2041,11 @@ export const CartCheckoutPage: React.FC = () => {
               leftIcon={<Trash2 className="w-4 h-4" />}
               onClick={() => {
                 clearCart();
+                try {
+                  sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+                } catch {
+                  // Clearing the cart should not depend on session storage.
+                }
                 setIsClearCartModalOpen(false);
               }}
             >
@@ -1985,6 +2066,58 @@ export const CartCheckoutPage: React.FC = () => {
               {shortStepLabels.clearCartWarn}
             </p>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isAuthPromptModalOpen && !isCustomerSignedIn}
+        onClose={() => {
+          setIsAuthPromptModalOpen(false);
+          if (location.pathname.startsWith('/checkout')) {
+            navigate('/cart', { replace: true });
+          }
+        }}
+        title={t('cart.authRequiredTitle')}
+        maxWidth="sm"
+        footer={
+          <div className="w-full flex flex-col sm:flex-row gap-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              fullWidth
+              onClick={() => {
+                setIsAuthPromptModalOpen(false);
+                if (location.pathname.startsWith('/checkout')) {
+                  navigate('/cart', { replace: true });
+                }
+              }}
+            >
+              {t('footer.cancelBtn')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              fullWidth
+              leftIcon={<User className="w-4 h-4 text-[#C89D54]" />}
+              onClick={() => {
+                setIsAuthPromptModalOpen(false);
+                navigate('/account?redirect=/checkout');
+              }}
+            >
+              {t('cart.signInToCheckoutBtn')}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 py-1 text-xs sm:text-sm">
+          <Badge variant="gold" size="sm">
+            {t('cart.authRequiredBadge')}
+          </Badge>
+          <p className="text-gray-700 dark:text-gray-200 leading-relaxed">
+            {t('cart.authRequiredDesc')}
+          </p>
         </div>
       </Modal>
     </div>

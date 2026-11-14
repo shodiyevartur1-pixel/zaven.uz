@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Search,
-  ShoppingBag,
   User,
   Grid,
   Phone,
@@ -13,7 +12,6 @@ import {
   Lock,
   Sun,
   Moon,
-  Heart,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -28,8 +26,7 @@ const COMPACT_LANGS: { code: Language; label: string }[] = [
 ];
 
 export const StoreHeader: React.FC = () => {
-  const { products, cart, favoriteIds, currentCustomer, storeSettings } =
-    useStore();
+  const { products, currentCustomer, storeSettings } = useStore();
   const {
     t,
     theme,
@@ -52,14 +49,6 @@ export const StoreHeader: React.FC = () => {
     location.pathname.startsWith('/cart/') ||
     location.pathname.startsWith('/checkout');
 
-  const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
-  const favoritesCount = favoriteIds.length;
-  const cartSubtotal = cart.reduce((total, item) => {
-    const product = products.find((p) => p.id === item.productId);
-    if (!product) return total;
-    const unitPrice = product.salePrice ?? product.price;
-    return total + unitPrice * item.quantity;
-  }, 0);
   const configuredSupportPhone =
     storeSettings.supportPhone?.trim() === '+998 78 113-45-67'
       ? ''
@@ -297,7 +286,7 @@ export const StoreHeader: React.FC = () => {
               </form>
             </div>
 
-            {/* Right Actions: Mobile Lang/Theme + Favorites + Account + Cart */}
+            {/* Right Actions: Language, Theme and Account */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <button
                 type="button"
@@ -324,32 +313,6 @@ export const StoreHeader: React.FC = () => {
                 )}
               </button>
 
-              {/* Favorites Entry */}
-              <Link
-                to="/favorites"
-                className="relative flex items-center gap-1.5 p-0 sm:px-2 sm:py-1.5 rounded-xl hover:bg-[#16533F] transition-colors text-white shrink-0"
-                title={t('header.favorites')}
-                aria-label={t('header.favorites')}
-              >
-                <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
-                  <Heart
-                    className={`w-4 h-4 ${
-                      favoritesCount > 0
-                        ? 'text-rose-400 fill-rose-400'
-                        : 'text-[#C89D54]'
-                    }`}
-                  />
-                  {favoritesCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center">
-                      {favoritesCount}
-                    </span>
-                  )}
-                </div>
-                <span className="hidden xl:inline text-xs font-bold text-white">
-                  {t('header.favorites')}
-                </span>
-              </Link>
-
               {/* Account Entry */}
               <Link
                 to="/account"
@@ -373,27 +336,6 @@ export const StoreHeader: React.FC = () => {
                 </div>
               </Link>
 
-              {/* Cart Entry */}
-              <Link
-                to="/cart"
-                className="relative flex items-center gap-2 px-1.5 sm:px-3 h-8 sm:h-10 rounded-xl bg-[#09261C] hover:bg-[#C89D54] hover:text-[#09261C] border border-[#C89D54]/60 transition-colors group shrink-0"
-                aria-label={t('header.cart')}
-              >
-                <div className="relative">
-                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] group-hover:text-[#09261C] transition-colors" />
-                  <span className="absolute -top-2 -right-2 min-w-[17px] h-[17px] px-1 rounded-full bg-[#C89D54] text-[#09261C] group-hover:bg-[#09261C] group-hover:text-white text-[10px] font-extrabold flex items-center justify-center">
-                    {cartItemCount}
-                  </span>
-                </div>
-                <div className="hidden sm:flex flex-col text-left pl-1">
-                  <span className="text-[10px] text-emerald-200 group-hover:text-[#09261C]/80 leading-none">
-                    {t('header.cart')}
-                  </span>
-                  <span className="text-xs font-extrabold text-white group-hover:text-[#09261C] mt-0.5 whitespace-nowrap">
-                    {formatUZS(cartSubtotal)}
-                  </span>
-                </div>
-              </Link>
             </div>
           </div>
 

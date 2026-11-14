@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   User,
   Phone,
@@ -87,6 +87,9 @@ const ORDER_STATUS_META: Record<
 
 export const AccountPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const safeRedirectPath =
+    searchParams.get('redirect') === '/checkout' ? '/checkout' : '';
   const {
     currentCustomer,
     orders,
@@ -182,6 +185,12 @@ export const AccountPage: React.FC = () => {
       setProfileTelegram(currentCustomer.telegramUsername || '');
     }
   }, [currentCustomer]);
+
+  useEffect(() => {
+    if (currentCustomer?.emailVerified && safeRedirectPath) {
+      navigate(safeRedirectPath, { replace: true });
+    }
+  }, [currentCustomer, navigate, safeRedirectPath]);
 
   // Match orders by customerId, verified email, or phone so existing orders are never detached
   const customerOrders = useMemo(() => {
@@ -316,7 +325,11 @@ export const AccountPage: React.FC = () => {
         email: cleanEmail,
         password: authPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/account`,
+          emailRedirectTo: `${window.location.origin}/account${
+            safeRedirectPath
+              ? `?redirect=${encodeURIComponent(safeRedirectPath)}`
+              : ''
+          }`,
           data: {
             full_name: authFullName.trim(),
             phone: authPhone.trim(),
@@ -358,7 +371,11 @@ export const AccountPage: React.FC = () => {
         type: 'signup',
         email: targetEmail,
         options: {
-          emailRedirectTo: `${window.location.origin}/account`,
+          emailRedirectTo: `${window.location.origin}/account${
+            safeRedirectPath
+              ? `?redirect=${encodeURIComponent(safeRedirectPath)}`
+              : ''
+          }`,
         },
       });
 
@@ -628,6 +645,13 @@ export const AccountPage: React.FC = () => {
           </div>
 
           <div className="p-5 sm:p-6 space-y-5">
+            {safeRedirectPath && (
+              <div className="p-3.5 rounded-xl bg-brand-green-light/70 dark:bg-[#162923] border border-brand-green/30 flex items-start gap-2.5 text-xs font-semibold text-brand-green">
+                <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{t('account.checkoutRedirectNotice')}</span>
+              </div>
+            )}
+
             {/* Mode Switcher Tabs */}
             {authMode !== 'verify_pending' &&
               authMode !== 'update_password' && (

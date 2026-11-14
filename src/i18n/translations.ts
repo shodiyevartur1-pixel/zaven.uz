@@ -169,6 +169,10 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.subtitle': 'Tanlangan mahsulotlar miqdorini tekshiring va xaridga oʻting',
     'cart.backToShop': 'Xaridga qaytish',
     'cart.clearCart': 'Tozalash',
+    'cart.authRequiredBadge': 'HISOB TALAB QILINADI',
+    'cart.authRequiredTitle': 'Xaridni davom ettirish uchun hisobingizga kiring',
+    'cart.authRequiredDesc': 'Buyurtmani rasmiylashtirishdan oldin tizimga kiring yoki yangi hisob yarating. Savatchangizdagi mahsulotlar saqlanadi.',
+    'cart.signInToCheckoutBtn': 'Kirish yoki roʻyxatdan oʻtish',
     'cart.emptyTitle': 'Savatchangiz hozircha boʻsh',
     'cart.emptyDesc': 'Katalogimizdan oʻzingizga yoqqan zamonaviy uy-roʻzgʻor buyumlari, gadjetlar yoki sovgʻalarni savatchaga qoʻshing.',
     'cart.step1Title': 'Savatchadagi mahsulotlar',
@@ -258,6 +262,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
 
     // Customer Email Verification Account Flow
     'account.emailAuthBadge': 'SHAXSIY KABINET (EMAIL TASDIQLASH)',
+    'account.checkoutRedirectNotice': 'Tizimga kirganingizdan soʻng buyurtmani rasmiylashtirishga qaytasiz.',
     'account.signInTab': 'Kirish',
     'account.signUpTab': 'Roʻyxatdan oʻtish',
     'account.resetTab': 'Parolni tiklash',
@@ -483,6 +488,10 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.subtitle': 'Проверьте выбранные товары и перейдите к оформлению',
     'cart.backToShop': 'К покупкам',
     'cart.clearCart': 'Очистить',
+    'cart.authRequiredBadge': 'ТРЕБУЕТСЯ АККАУНТ',
+    'cart.authRequiredTitle': 'Войдите в аккаунт, чтобы продолжить покупку',
+    'cart.authRequiredDesc': 'Перед оформлением заказа войдите или создайте аккаунт. Товары в корзине сохранятся.',
+    'cart.signInToCheckoutBtn': 'Войти или зарегистрироваться',
     'cart.emptyTitle': 'Ваша корзина пока пуста',
     'cart.emptyDesc': 'Добавьте понравившиеся товары для дома, гаджеты или подарки из нашего каталога.',
     'cart.step1Title': 'Товары в корзине',
@@ -572,6 +581,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
 
     // Customer Email Verification Account Flow
     'account.emailAuthBadge': 'ЛИЧНЫЙ КАБИНЕТ (ПОДТВЕРЖДЕНИЕ EMAIL)',
+    'account.checkoutRedirectNotice': 'После входа вы вернётесь к оформлению заказа.',
     'account.signInTab': 'Вход',
     'account.signUpTab': 'Регистрация',
     'account.resetTab': 'Сброс пароля',
@@ -797,6 +807,10 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.subtitle': 'Review your added products and proceed to checkout',
     'cart.backToShop': 'Back to Shop',
     'cart.clearCart': 'Clear',
+    'cart.authRequiredBadge': 'ACCOUNT REQUIRED',
+    'cart.authRequiredTitle': 'Sign in to continue your purchase',
+    'cart.authRequiredDesc': 'Sign in or create an account before checkout. Your cart items will be kept.',
+    'cart.signInToCheckoutBtn': 'Sign In or Create Account',
     'cart.emptyTitle': 'Your shopping cart is empty',
     'cart.emptyDesc': 'Explore our catalog to add modern home essentials, gadgets, or gifts to your cart.',
     'cart.step1Title': 'Items in Cart',
@@ -886,6 +900,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
 
     // Customer Email Verification Account Flow
     'account.emailAuthBadge': 'CUSTOMER ACCOUNT (EMAIL VERIFICATION)',
+    'account.checkoutRedirectNotice': 'After signing in, you will return to checkout.',
     'account.signInTab': 'Sign In',
     'account.signUpTab': 'Create Account',
     'account.resetTab': 'Reset Password',

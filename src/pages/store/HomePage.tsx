@@ -210,153 +210,156 @@ export const HomePage: React.FC = () => {
           onMouseLeave={() => setIsCarouselPaused(false)}
           className="zaven-page-container"
         >
-          {(() => {
-            const locProd = getProductText(currentCarouselProduct);
-            const catObj = categories.find(
-              (c) => c.id === currentCarouselProduct.categoryId
-            );
-            const locCat = catObj ? getCategoryText(catObj) : null;
-            const effectivePrice =
-              currentCarouselProduct.salePrice ?? currentCarouselProduct.price;
-            const discountPercent = calculateDiscountPercent(
-              currentCarouselProduct.price,
-              currentCarouselProduct.salePrice
-            );
+          <div
+            className="relative overflow-hidden rounded-2xl border border-[#1D4D3C] bg-[#0F3D2E] shadow-card"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div
+              className="flex motion-reduce:transition-none transition-transform duration-500 ease-in-out"
+              style={{
+                width: `${carouselProducts.length * 100}%`,
+                transform: `translate3d(-${safeSlideIdx * (100 / carouselProducts.length)}%, 0, 0)`,
+              }}
+            >
+              {carouselProducts.map((product, idx) => {
+                const localizedProduct = getProductText(product);
+                const category = categories.find(
+                  (item) => item.id === product.categoryId
+                );
+                const localizedCategory = category
+                  ? getCategoryText(category)
+                  : null;
+                const price = product.salePrice ?? product.price;
+                const discount = calculateDiscountPercent(
+                  product.price,
+                  product.salePrice
+                );
+                const isCurrent = idx === safeSlideIdx;
 
-            return (
-              <div
-                key={currentCarouselProduct.id}
-                onTouchStart={handleTouchStart}
-                onTouchEnd={handleTouchEnd}
-                className="relative min-h-[204px] sm:min-h-[232px] lg:min-h-[248px] flex flex-col bg-[#0F3D2E] rounded-2xl border border-[#1D4D3C] shadow-card overflow-hidden select-none animate-[zaven-carousel-enter_320ms_ease-out] motion-reduce:animate-none"
-              >
-                <div className="flex-1 p-3 sm:p-5 lg:p-6 flex items-center gap-3.5 sm:gap-6">
-                  {/* Product Image Thumbnail (1:1 aspect ratio, no stretching or layout shift) */}
-                  <Link
-                    to={`/product/${currentCarouselProduct.slug}`}
-                    onClick={() => {
-                      recordRecentlyViewed(currentCarouselProduct.id);
-                      window.scrollTo(0, 0);
-                    }}
-                    className="relative w-28 h-28 sm:w-40 sm:h-40 lg:w-44 lg:h-44 rounded-xl bg-white dark:bg-[#12211C] overflow-hidden border border-[#C89D54]/40 shrink-0 group"
+                return (
+                  <article
+                    key={product.id}
+                    aria-roledescription="slide"
+                    aria-label={`${idx + 1} / ${carouselProducts.length}`}
+                    aria-hidden={!isCurrent}
+                    className="box-border flex h-[204px] w-full shrink-0 items-center gap-3 p-3 sm:h-[232px] sm:gap-6 sm:p-5 lg:h-[248px] lg:p-6"
+                    style={{ width: `${100 / carouselProducts.length}%` }}
                   >
-                    <img
-                      src={currentCarouselProduct.images[0]}
-                      alt={locProd.name}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
-                    {discountPercent > 0 && (
-                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-extrabold bg-[#C89D54] text-[#09261C] shadow-sm">
-                        -{discountPercent}%
-                      </span>
-                    )}
-                  </Link>
-
-                  {/* Product Info: Category Badge, 2-Line Title, Price & Single Clear "Koʻrish" Action */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2 sm:space-y-3">
-                    <div className="space-y-1 min-w-0">
-                      {locCat ? (
-                        <span className="flex h-4 sm:h-5 items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#E5C992] truncate max-w-full">
-                          {locCat.name}
-                        </span>
-                      ) : (
-                        <span className="block h-4 sm:h-5" aria-hidden="true" />
-                      )}
-
-                      <Link
-                        to={`/product/${currentCarouselProduct.slug}`}
-                        onClick={() => {
-                          recordRecentlyViewed(currentCarouselProduct.id);
-                          window.scrollTo(0, 0);
-                        }}
-                        className="block h-[2.75rem] sm:h-[3.5rem] text-sm sm:text-xl lg:text-2xl font-extrabold text-white hover:text-[#E5C992] transition-colors line-clamp-2 leading-snug break-words overflow-hidden"
-                      >
-                        {locProd.name}
-                      </Link>
-                    </div>
-
-                    <div className="min-h-10 sm:min-h-12 flex flex-col justify-center gap-1">
-                      <span className="text-base sm:text-2xl font-extrabold text-[#C89D54] leading-none whitespace-nowrap">
-                        {formatUZS(effectivePrice)}
-                      </span>
-                      {currentCarouselProduct.salePrice && (
-                        <span className="text-[11px] sm:text-sm text-emerald-200/70 line-through leading-none">
-                          {formatUZS(currentCarouselProduct.price)}
+                    <Link
+                      to={`/product/${product.slug}`}
+                      tabIndex={isCurrent ? 0 : -1}
+                      onClick={() => {
+                        recordRecentlyViewed(product.id);
+                        window.scrollTo(0, 0);
+                      }}
+                      className="relative aspect-square w-[88px] shrink-0 overflow-hidden rounded-xl border border-[#C89D54]/40 bg-white sm:w-36 lg:w-40"
+                    >
+                      <img
+                        src={product.images[0]}
+                        alt={localizedProduct.name}
+                        className="block h-full w-full object-cover"
+                      />
+                      {discount > 0 && (
+                        <span className="absolute left-1 top-1 rounded-md bg-[#C89D54] px-1.5 py-0.5 text-[10px] font-extrabold text-[#09261C] shadow-sm">
+                          -{discount}%
                         </span>
                       )}
-                    </div>
+                    </Link>
 
-                    <div className="pt-0.5 flex items-center justify-between gap-2">
+                    <div className="flex h-full min-w-0 flex-1 flex-col justify-center gap-1.5 py-1 sm:gap-2">
+                      <span className="h-4 truncate text-[9px] font-bold uppercase tracking-wide text-[#E5C992] sm:h-5 sm:text-xs">
+                        {localizedCategory?.name || '\u00a0'}
+                      </span>
                       <Link
-                        to={`/product/${currentCarouselProduct.slug}`}
+                        to={`/product/${product.slug}`}
+                        tabIndex={isCurrent ? 0 : -1}
+                        title={localizedProduct.name}
                         onClick={() => {
-                          recordRecentlyViewed(currentCarouselProduct.id);
+                          recordRecentlyViewed(product.id);
                           window.scrollTo(0, 0);
                         }}
-                        className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs shadow-sm transition-colors shrink-0"
+                        className="line-clamp-3 min-h-[2.75rem] break-words text-xs font-extrabold leading-4 text-white hover:text-[#E5C992] sm:min-h-[3.5rem] sm:text-xl sm:leading-7 lg:text-2xl"
                       >
-                        <span>{t('home.carouselViewBtn')}</span>
-                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                        {localizedProduct.name}
                       </Link>
-
-                      {/* Accessible Previous / Next Controls */}
-                      {carouselProducts.length > 1 && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={handlePrevSlide}
-                            aria-label={t('home.carouselPrevAria')}
-                            className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-white flex items-center justify-center transition-colors"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleNextSlide}
-                            aria-label={t('home.carouselNextAria')}
-                            className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-white flex items-center justify-center transition-colors"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Accessible Pagination Dots */}
-                {carouselProducts.length > 1 && (
-                  <div
-                    role="tablist"
-                    aria-label="Carousel slides"
-                    className="px-3 pb-2.5 sm:px-5 sm:pb-3 flex items-center justify-center gap-1.5"
-                  >
-                    {carouselProducts.map((item, idx) => {
-                      const isCurrent = idx === safeSlideIdx;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="tab"
-                          aria-selected={isCurrent}
-                          aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
+                      <div className="flex min-h-9 min-w-0 flex-col justify-center gap-1 sm:min-h-11 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-2">
+                        <span className="truncate text-sm font-extrabold leading-tight text-[#C89D54] sm:text-2xl">
+                          {formatUZS(price)}
+                        </span>
+                        {product.salePrice && (
+                          <span className="truncate text-[10px] leading-tight text-emerald-200/70 line-through sm:text-sm">
+                            {formatUZS(product.price)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <Link
+                          to={`/product/${product.slug}`}
+                          tabIndex={isCurrent ? 0 : -1}
                           onClick={() => {
-                            pauseCarouselBriefly();
-                            setActiveSlideIdx(idx);
+                            recordRecentlyViewed(product.id);
+                            window.scrollTo(0, 0);
                           }}
-                          className={`h-1.5 rounded-full transition-all ${
-                            isCurrent
-                              ? 'w-6 bg-[#C89D54]'
-                              : 'w-2 bg-emerald-700/70 hover:bg-emerald-500'
-                          }`}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+                          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-[#C89D54] px-2.5 text-[11px] font-extrabold text-[#09261C] sm:h-9 sm:gap-1.5 sm:rounded-xl sm:px-4 sm:text-sm"
+                        >
+                          {t('home.carouselViewBtn')}
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                        </Link>
+                        {carouselProducts.length > 1 && isCurrent && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handlePrevSlide}
+                              aria-label={t('home.carouselPrevAria')}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/70 bg-[#09261C]/80 text-white transition-colors hover:bg-[#16533F]"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleNextSlide}
+                              aria-label={t('home.carouselNextAria')}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700/70 bg-[#09261C]/80 text-white transition-colors hover:bg-[#16533F]"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            {carouselProducts.length > 1 && (
+              <div
+                role="tablist"
+                aria-label={t('home.popularTitle')}
+                className="flex items-center justify-center gap-1.5 pb-2.5 sm:pb-3"
+              >
+                {carouselProducts.map((product, idx) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={idx === safeSlideIdx}
+                    aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
+                    onClick={() => {
+                      pauseCarouselBriefly();
+                      setActiveSlideIdx(idx);
+                    }}
+                    className={`h-1.5 rounded-full transition-all ${
+                      idx === safeSlideIdx
+                        ? 'w-6 bg-[#C89D54]'
+                        : 'w-2 bg-emerald-700/70 hover:bg-emerald-500'
+                    }`}
+                  />
+                ))}
               </div>
-            );
-          })()}
+            )}
+          </div>
         </section>
       )}
 
