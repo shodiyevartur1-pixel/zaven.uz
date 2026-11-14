@@ -18,14 +18,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'header.account': 'Kabinet',
     'header.signIn': 'Kirish',
     'header.cart': 'Savatcha',
-    'header.favorites': 'Yoqtirilganlar',
-    'header.favoritesShort': 'Saralangan',
+    'header.favorites': 'Istaklarim',
+    'header.favoritesShort': 'Istaklarim',
     'header.adminPanel': 'Admin panel',
     'header.secureCheckoutBadge': 'Xavfsiz xarid rasmiylashtirish',
     'nav.menu': 'Menyu',
     'nav.home': 'Bosh sahifa',
     'nav.catalog': 'Katalog',
-    'nav.favorites': 'Yoqtirilganlar',
+    'nav.favorites': 'Istaklarim',
     'nav.allProducts': 'Barcha mahsulotlar',
     'nav.allCategories': 'Barcha toifalar',
     'nav.discounts': 'Chegirmalar',
@@ -36,15 +36,15 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'theme.light': 'Yorugʻ rejim',
     'theme.dark': 'Tungi rejim',
 
-    // Favorites (Yoqtirilganlar)
-    'favorites.title': 'Yoqtirilgan mahsulotlar',
+    // Favorites (Istaklarim)
+    'favorites.title': 'Istaklarim',
     'favorites.subtitle': 'Siz saqlab qoʻygan mahsulotlar ushbu qurilmada saqlanadi',
     'favorites.clearAll': 'Roʻyxatni tozalash',
-    'favorites.emptyTitle': 'Yoqtirilgan mahsulotlar roʻyxati boʻsh',
+    'favorites.emptyTitle': 'Istaklar roʻyxati hozircha boʻsh',
     'favorites.emptyDesc': 'Mahsulot kartochkasidagi yurakcha tugmasini bosib, oʻzingizga yoqqan buyumlarni saqlab qoʻyishingiz mumkin.',
     'favorites.browseCatalog': 'Katalogga oʻtish',
-    'favorites.addAria': 'Yoqtirilganlarga qoʻshish',
-    'favorites.removeAria': 'Yoqtirilganlardan olib tashlash',
+    'favorites.addAria': 'Istaklarga qoʻshish',
+    'favorites.removeAria': 'Istaklardan olib tashlash',
 
     // Delivery Estimate
     'delivery.estimateLabel': 'Taxminiy yetkazib berish muddati:',
@@ -130,8 +130,11 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'product.notFoundTitle': 'Mahsulot topilmadi',
     'product.notFoundDesc': 'Siz qidirayotgan mahsulot oʻchirilgan yoki manzili oʻzgargan boʻlishi mumkin.',
 
-    // Catalog & Filters
+    // Catalog, Mobile Category Directory & Filters
     'catalog.titleAll': 'Barcha mahsulotlar katalogi',
+    'catalog.directoryTitle': 'Katalog',
+    'catalog.backToDirectory': 'Katalog boʻlimlari',
+    'catalog.openCategoryProducts': 'Barcha mahsulotlarni koʻrish',
     'catalog.searchResultsFor': 'boʻyicha qidiruv natijalari',
     'catalog.subtitleDefault': 'ZAVEN onlayn doʻkonidagi barcha zamonaviy uy-roʻzgʻor buyumlari, telefon aksessuarlari va foydali jihozlar.',
     'catalog.filtersAndSort': 'Saralash va filtrlar',
@@ -329,14 +332,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'header.account': 'Кабинет',
     'header.signIn': 'Войти',
     'header.cart': 'Корзина',
-    'header.favorites': 'Избранное',
-    'header.favoritesShort': 'Избранное',
+    'header.favorites': 'Мои желания',
+    'header.favoritesShort': 'Желания',
     'header.adminPanel': 'Админ-панель',
     'header.secureCheckoutBadge': 'Безопасное оформление заказа',
     'nav.menu': 'Меню',
     'nav.home': 'Главная',
     'nav.catalog': 'Каталог',
-    'nav.favorites': 'Избранное',
+    'nav.favorites': 'Мои желания',
     'nav.allProducts': 'Все товары',
     'nav.allCategories': 'Все категории',
     'nav.discounts': 'Скидки',
@@ -348,14 +351,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'theme.dark': 'Темная тема',
 
     // Favorites
-    'favorites.title': 'Избранные товары',
+    'favorites.title': 'Мои желания',
     'favorites.subtitle': 'Сохраненные вами товары доступны на этом устройстве без входа в аккаунт',
     'favorites.clearAll': 'Очистить список',
-    'favorites.emptyTitle': 'В избранном пока нет товаров',
+    'favorites.emptyTitle': 'В списке желаний пока нет товаров',
     'favorites.emptyDesc': 'Нажмите на иконку сердечка на карточке любого товара, чтобы сохранить его здесь.',
     'favorites.browseCatalog': 'Перейти в каталог',
-    'favorites.addAria': 'Добавить в избранное',
-    'favorites.removeAria': 'Удалить из избранного',
+    'favorites.addAria': 'Добавить в желания',
+    'favorites.removeAria': 'Удалить из желаний',
 
     // Delivery Estimate
     'delivery.estimateLabel': 'Ориентировочный срок доставки:',
@@ -441,8 +444,11 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'product.notFoundTitle': 'Товар не найден',
     'product.notFoundDesc': 'Запрашиваемый товар мог быть удален или перемещен.',
 
-    // Catalog & Filters
+    // Catalog, Mobile Category Directory & Filters
     'catalog.titleAll': 'Каталог всех товаров',
+    'catalog.directoryTitle': 'Каталог',
+    'catalog.backToDirectory': 'Разделы каталога',
+    'catalog.openCategoryProducts': 'Посмотреть все товары раздела',
     'catalog.searchResultsFor': '— результаты поиска',
     'catalog.subtitleDefault': 'Современные товары для дома, аксессуары для телефонов и полезные гаджеты в интернет-магазине ZAVEN.',
     'catalog.filtersAndSort': 'Сортировка и фильтры',
@@ -640,14 +646,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'header.account': 'Account',
     'header.signIn': 'Sign In',
     'header.cart': 'Cart',
-    'header.favorites': 'Favorites',
-    'header.favoritesShort': 'Saved',
+    'header.favorites': 'My Wishlist',
+    'header.favoritesShort': 'Wishlist',
     'header.adminPanel': 'Admin Panel',
     'header.secureCheckoutBadge': 'Secure Order Checkout',
     'nav.menu': 'Menu',
     'nav.home': 'Home',
     'nav.catalog': 'Catalog',
-    'nav.favorites': 'Favorites',
+    'nav.favorites': 'My Wishlist',
     'nav.allProducts': 'All Products',
     'nav.allCategories': 'All Categories',
     'nav.discounts': 'Deals',
@@ -659,14 +665,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'theme.dark': 'Dark Mode',
 
     // Favorites
-    'favorites.title': 'Saved Favorites',
+    'favorites.title': 'My Wishlist',
     'favorites.subtitle': 'Products you save with the heart icon stay available on this device',
     'favorites.clearAll': 'Clear All',
-    'favorites.emptyTitle': 'No saved favorite products yet',
+    'favorites.emptyTitle': 'Your wishlist is empty',
     'favorites.emptyDesc': 'Tap the heart button on any product card to save items here for quick comparison.',
     'favorites.browseCatalog': 'Browse Catalog',
-    'favorites.addAria': 'Add to favorites',
-    'favorites.removeAria': 'Remove from favorites',
+    'favorites.addAria': 'Add to wishlist',
+    'favorites.removeAria': 'Remove from wishlist',
 
     // Delivery Estimate
     'delivery.estimateLabel': 'Estimated Delivery Time:',
@@ -752,8 +758,11 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'product.notFoundTitle': 'Product Not Found',
     'product.notFoundDesc': 'The product you are looking for may have been removed or relocated.',
 
-    // Catalog & Filters
+    // Catalog, Mobile Category Directory & Filters
     'catalog.titleAll': 'All Products Catalog',
+    'catalog.directoryTitle': 'Catalog',
+    'catalog.backToDirectory': 'Catalog Categories',
+    'catalog.openCategoryProducts': 'View all products in category',
     'catalog.searchResultsFor': '— search results',
     'catalog.subtitleDefault': 'Browse all modern home goods, phone accessories, and everyday gadgets at ZAVEN.',
     'catalog.filtersAndSort': 'Sort & Filters',

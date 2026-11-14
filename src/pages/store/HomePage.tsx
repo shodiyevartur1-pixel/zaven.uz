@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -41,7 +41,7 @@ export const HomePage: React.FC = () => {
     'quality' | 'tariffs' | 'payments' | null
   >(null);
 
-  // Featured Product Carousel State (User-controlled, no autoplay)
+  // Featured product carousel state
   const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
@@ -63,6 +63,20 @@ export const HomePage: React.FC = () => {
     );
     return (featured.length > 0 ? featured : activeWithImages).slice(0, 5);
   }, [products]);
+
+  // Rotate featured products gently; respect reduced-motion and background tabs.
+  useEffect(() => {
+    if (carouselProducts.length < 2) return;
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (motionPreference.matches) return;
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        setActiveSlideIdx((current) => (current + 1) % carouselProducts.length);
+      }
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [carouselProducts.length]);
 
   const safeSlideIdx =
     carouselProducts.length > 0
@@ -193,9 +207,10 @@ export const HomePage: React.FC = () => {
                   {/* Product Image Thumbnail (1:1 aspect ratio, no stretching or layout shift) */}
                   <Link
                     to={`/product/${currentCarouselProduct.slug}`}
-                    onClick={() =>
-                      recordRecentlyViewed(currentCarouselProduct.id)
-                    }
+                    onClick={() => {
+                      recordRecentlyViewed(currentCarouselProduct.id);
+                      window.scrollTo(0, 0);
+                    }}
                     className="relative w-28 h-28 sm:w-40 sm:h-40 lg:w-44 lg:h-44 rounded-xl bg-white dark:bg-[#12211C] overflow-hidden border border-[#C89D54]/40 shrink-0 group"
                   >
                     <img
@@ -221,9 +236,10 @@ export const HomePage: React.FC = () => {
 
                       <Link
                         to={`/product/${currentCarouselProduct.slug}`}
-                        onClick={() =>
-                          recordRecentlyViewed(currentCarouselProduct.id)
-                        }
+                        onClick={() => {
+                          recordRecentlyViewed(currentCarouselProduct.id);
+                          window.scrollTo(0, 0);
+                        }}
                         className="block text-sm sm:text-xl lg:text-2xl font-extrabold text-white hover:text-[#E5C992] transition-colors line-clamp-2 leading-snug break-words"
                       >
                         {locProd.name}
@@ -244,9 +260,10 @@ export const HomePage: React.FC = () => {
                     <div className="pt-0.5 flex items-center justify-between gap-2">
                       <Link
                         to={`/product/${currentCarouselProduct.slug}`}
-                        onClick={() =>
-                          recordRecentlyViewed(currentCarouselProduct.id)
-                        }
+                        onClick={() => {
+                          recordRecentlyViewed(currentCarouselProduct.id);
+                          window.scrollTo(0, 0);
+                        }}
                         className="inline-flex items-center gap-1.5 h-8 sm:h-9 px-3.5 sm:px-4 rounded-xl bg-[#C89D54] hover:bg-[#B5893E] text-[#09261C] font-extrabold text-xs shadow-sm transition-colors shrink-0"
                       >
                         <span>{t('home.carouselViewBtn')}</span>

@@ -68,6 +68,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const handleNavigateToProduct = () => {
     recordRecentlyViewed(product.id);
     navigate(`/product/${product.slug}`);
+    window.scrollTo(0, 0);
+  };
+
+  const handleProductLinkClick = () => {
+    recordRecentlyViewed(product.id);
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -77,7 +83,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="relative aspect-square bg-gray-100 dark:bg-[#1A3028] overflow-hidden shrink-0">
           <Link
             to={`/product/${product.slug}`}
-            onClick={() => recordRecentlyViewed(product.id)}
+            onClick={handleProductLinkClick}
             className="block w-full h-full focus:outline-none"
             title={localizedProduct.name}
           >
@@ -168,6 +174,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 recordRecentlyViewed(product.id);
+                window.scrollTo(0, 0);
               }}
               title={localizedProduct.name}
               className="block text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 group-hover:text-brand-green transition-colors line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] leading-snug break-words"

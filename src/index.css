@@ -49,6 +49,17 @@ body.zaven-modal-open nav[aria-label="Mobile bottom navigation"] {
   visibility: hidden !important;
 }
 
+/* Netlify's injected badge overlaps the fixed mobile navigation on small screens. */
+@media (max-width: 767px) {
+  #nl-badge-frame,
+  iframe#nl-badge-frame,
+  [id="nl-badge-frame"] {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
 /* ============================================================================
    Consistent Mobile & Responsive Page Container
    - 16px (1rem) left/right gutters on narrow phones (< 390px)

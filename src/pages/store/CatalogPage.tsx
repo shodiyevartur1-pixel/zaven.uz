@@ -5,14 +5,24 @@ import {
   RotateCcw,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   SlidersHorizontal,
   X,
   Check,
   PackageSearch,
-  ChevronDown,
+  Home,
+  Smartphone,
+  Zap,
+  Gift,
+  Compass,
+  Tag,
+  Sparkles,
+  Grid,
+  ArrowLeft,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { Language } from '../../types';
 import { ProductCard } from '../../components/product/ProductCard';
 import {
   QuickFilterBar,
@@ -33,15 +43,112 @@ const PRICE_PRESETS = [
   { label: '≥ 200 000 soʻm', min: '200000', max: '' },
 ];
 
+/**
+ * Curated subcategory links per ZAVEN category so tapping a category in the
+ * mobile vertical directory expands its subcategories or opens the category's products.
+ */
+const CATEGORY_SUBCATEGORIES: Record<
+  string,
+  Array<{
+    id: string;
+    label: Record<Language, string>;
+    query?: string;
+  }>
+> = {
+  'cat-home': [
+    {
+      id: 'sub-home-kitchen',
+      label: {
+        uz: 'Oshxona jihozlari va maydalagichlar',
+        ru: 'Кухонные приборы и измельчители',
+        en: 'Kitchen Helpers & Mini Choppers',
+      },
+      query: 'oshxona',
+    },
+    {
+      id: 'sub-home-organizers',
+      label: {
+        uz: 'Aylanuvchi organayzer va patnislar',
+        ru: 'Вращающиеся органайзеры и подносы',
+        en: 'Rotating Trays & Pantry Organizers',
+      },
+      query: 'organayzer',
+    },
+  ],
+  'cat-phone': [
+    {
+      id: 'sub-phone-powerbank',
+      label: {
+        uz: 'Magnitli va simsiz Powerbanklar',
+        ru: 'Магнитные и беспроводные повербанки',
+        en: 'Magnetic & Wireless Powerbanks',
+      },
+      query: 'powerbank',
+    },
+    {
+      id: 'sub-phone-chargers',
+      label: {
+        uz: 'GaN tezkor quvvatlagich bloklari',
+        ru: 'Быстрые зарядные устройства GaN',
+        en: 'GaN Fast Chargers & Adapters',
+      },
+      query: 'gan',
+    },
+  ],
+  'cat-gadgets': [
+    {
+      id: 'sub-gadgets-lamps',
+      label: {
+        uz: 'Sensorli LED stol chiroqlari',
+        ru: 'Сенсорные настольные LED-лампы',
+        en: 'Touch LED Desk Lamps',
+      },
+      query: 'led',
+    },
+    {
+      id: 'sub-gadgets-humidifiers',
+      label: {
+        uz: 'Havo namlagich va aromadiffuzorlar',
+        ru: 'Увлажнители воздуха и диффузоры',
+        en: 'Air Humidifiers & Diffusers',
+      },
+      query: 'namlagich',
+    },
+  ],
+  'cat-gifts': [
+    {
+      id: 'sub-gifts-thermos',
+      label: {
+        uz: 'Aqlli LED ekranli termoslar',
+        ru: 'Умные термосы с LED-дисплеем',
+        en: 'Smart LED Temperature Thermoses',
+      },
+      query: 'termos',
+    },
+  ],
+  'cat-auto': [
+    {
+      id: 'sub-auto-vacuum',
+      label: {
+        uz: 'Simsiz avto va uy changyutgichlari',
+        ru: 'Беспроводные автопылесосы',
+        en: 'Cordless Car & Home Vacuums',
+      },
+      query: 'changyutgich',
+    },
+  ],
+};
+
 export const CatalogPage: React.FC = () => {
   const { products, categories } = useStore();
-  const { t, getProductText, getCategoryText } = useThemeLanguage();
+  const { t, language, getProductText, getCategoryText } = useThemeLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const initialCategory = searchParams.get('category') || '';
   const initialQuery = searchParams.get('q') || '';
   const initialFilter = searchParams.get('filter') || '';
   const initialSort = (searchParams.get('sort') as SortOption) || 'popular';
+  const viewModeParam = searchParams.get('view') || '';
 
   const [selectedCategorySlug, setSelectedCategorySlug] =
     useState<string>(initialCategory);
@@ -55,21 +162,37 @@ export const CatalogPage: React.FC = () => {
   const [onlyInStock, setOnlyInStock] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<SortOption>(initialSort);
 
+  // Mobile vertical category directory accordion state
+  const [expandedMobileCatId, setExpandedMobileCatId] = useState<string | null>(
+    null
+  );
+
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [visibleMultiplier, setVisibleMultiplier] = useState<number>(1);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    if (isMobileFilterOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.classList.add('zaven-modal-open');
-    } else {
-      document.body.style.overflow = '';
-      document.body.classList.remove('zaven-modal-open');
-    }
+    if (!isMobileFilterOpen) return;
+    const savedScrollY = window.scrollY;
+    const previous = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('zaven-modal-open');
     return () => {
-      document.body.style.overflow = '';
+      Object.assign(document.body.style, previous);
       document.body.classList.remove('zaven-modal-open');
+      window.scrollTo(0, savedScrollY);
     };
   }, [isMobileFilterOpen]);
 
@@ -93,6 +216,7 @@ export const CatalogPage: React.FC = () => {
     q?: string;
     filter?: string;
     sort?: SortOption;
+    view?: string;
   }) => {
     const nextParams = new URLSearchParams(searchParams);
 
@@ -112,6 +236,10 @@ export const CatalogPage: React.FC = () => {
       if (updates.sort && updates.sort !== 'popular')
         nextParams.set('sort', updates.sort);
       else nextParams.delete('sort');
+    }
+    if (updates.view !== undefined) {
+      if (updates.view) nextParams.set('view', updates.view);
+      else nextParams.delete('view');
     }
 
     setSearchParams(nextParams, { replace: true });
@@ -269,6 +397,12 @@ export const CatalogPage: React.FC = () => {
     onlyInStock,
   ]);
 
+  // On mobile/tablet (< xl), show the vertical Category Directory when no category/search/filter is active
+  const isMobileDirectoryMode =
+    activeFilterCount === 0 &&
+    viewModeParam !== 'products' &&
+    !searchParams.get('sort');
+
   const totalPages = Math.max(
     1,
     Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
@@ -280,10 +414,36 @@ export const CatalogPage: React.FC = () => {
 
   const handleSelectCategory = (slug: string) => {
     setSelectedCategorySlug(slug);
-    syncUrlParams({ category: slug });
+    syncUrlParams({
+      category: slug,
+      q: '',
+      view: slug ? 'products' : '',
+    });
+  };
+
+  const handleOpenSubcategory = (categorySlug: string, subQuery?: string) => {
+    setSelectedCategorySlug(categorySlug);
+    setSearchQuery(subQuery || '');
+    syncUrlParams({
+      category: categorySlug,
+      q: subQuery || '',
+      view: 'products',
+    });
   };
 
   const handleResetAllFilters = () => {
+    setSelectedCategorySlug('');
+    setSearchQuery('');
+    setMinPrice('');
+    setMaxPrice('');
+    setOnlyDiscounted(false);
+    setOnlyNew(false);
+    setOnlyInStock(false);
+    setSortBy('popular');
+    setSearchParams({ view: 'products' }, { replace: true });
+  };
+
+  const handleReturnToMobileDirectory = () => {
     setSelectedCategorySlug('');
     setSearchQuery('');
     setMinPrice('');
@@ -305,6 +465,21 @@ export const CatalogPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const renderCategoryIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Home':
+        return <Home className="w-5 h-5 text-brand-green" />;
+      case 'Smartphone':
+        return <Smartphone className="w-5 h-5 text-brand-green" />;
+      case 'Zap':
+        return <Zap className="w-5 h-5 text-brand-green" />;
+      case 'Gift':
+        return <Gift className="w-5 h-5 text-brand-green" />;
+      default:
+        return <Compass className="w-5 h-5 text-brand-green" />;
+    }
+  };
+
   const renderFilterSidebarContent = () => (
     <div className="space-y-4">
       <div>
@@ -316,7 +491,7 @@ export const CatalogPage: React.FC = () => {
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
-            syncUrlParams({ q: e.target.value });
+            syncUrlParams({ q: e.target.value, view: 'products' });
           }}
           placeholder={t('header.searchMobilePlaceholder')}
           leftIcon={<Search className="w-4 h-4" />}
@@ -473,7 +648,10 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => {
               const checked = e.target.checked;
               setOnlyDiscounted(checked);
-              syncUrlParams({ filter: checked ? 'discounted' : '' });
+              syncUrlParams({
+                filter: checked ? 'discounted' : '',
+                view: 'products',
+              });
             }}
             className="w-4 h-4 rounded text-brand-green border-gray-300 shrink-0"
           />
@@ -501,7 +679,10 @@ export const CatalogPage: React.FC = () => {
             onChange={(e) => {
               const checked = e.target.checked;
               setOnlyNew(checked);
-              syncUrlParams({ filter: checked ? 'new' : '' });
+              syncUrlParams({
+                filter: checked ? 'new' : '',
+                view: 'products',
+              });
             }}
             className="w-4 h-4 rounded text-brand-green border-gray-300 shrink-0"
           />
@@ -512,160 +693,340 @@ export const CatalogPage: React.FC = () => {
 
   return (
     <>
-      <div className="zaven-page-container py-3.5 sm:py-5 space-y-3.5 sm:space-y-4">
-        {/* Requirement 2: Compact Single-Line Catalog Title (Large bordered card removed) */}
-        <h1 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 px-0.5 break-words">
-          {localizedSelectedCategory
-            ? localizedSelectedCategory.name
-            : searchQuery.trim()
-            ? `«${searchQuery.trim()}» ${t('catalog.searchResultsFor')}`
-            : t('catalog.titleAll')}
-        </h1>
-
-        {/* Main Catalog Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-          <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-24">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
-              <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
-                <SlidersHorizontal className="w-4 h-4 text-brand-green" />
-                <span>{t('catalog.filtersAndSort')}</span>
-              </div>
-              {activeFilterCount > 0 && (
-                <Badge variant="green" size="sm">
-                  {activeFilterCount} {t('catalog.activeCount')}
-                </Badge>
-              )}
-            </div>
-            {renderFilterSidebarContent()}
-            {activeFilterCount > 0 && (
-              <div className="pt-3 mt-3 border-t border-gray-200 dark:border-[#28453B]">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  fullWidth
-                  leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-                  onClick={handleResetAllFilters}
-                >
-                  {t('catalog.clearAllFilters')}
-                </Button>
-              </div>
-            )}
-          </aside>
-
-          <div className="xl:col-span-9 space-y-3.5 min-w-0">
-            <QuickFilterBar
-              categories={activeCategories}
-              selectedCategorySlug={selectedCategorySlug}
-              onSelectCategory={handleSelectCategory}
-              searchQuery={searchQuery}
-              onClearSearch={() => {
-                setSearchQuery('');
-                syncUrlParams({ q: '' });
-              }}
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-              onClearPrice={() => {
-                setMinPrice('');
-                setMaxPrice('');
-              }}
-              onlyDiscounted={onlyDiscounted}
-              onToggleDiscounted={() => {
-                const next = !onlyDiscounted;
-                setOnlyDiscounted(next);
-                syncUrlParams({ filter: next ? 'discounted' : '' });
-              }}
-              onlyInStock={onlyInStock}
-              onToggleInStock={() => setOnlyInStock((prev) => !prev)}
-              onlyNew={onlyNew}
-              onToggleNew={() => {
-                const next = !onlyNew;
-                setOnlyNew(next);
-                syncUrlParams({ filter: next ? 'new' : '' });
-              }}
-              sortBy={sortBy}
-              onChangeSort={(nextSort) => {
-                setSortBy(nextSort);
-                syncUrlParams({ sort: nextSort });
-              }}
-              activeFilterCount={activeFilterCount}
-              onResetAll={handleResetAllFilters}
-              onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
-            />
-
-            {displayedProducts.length > 0 ? (
-              <>
-                <div className="zaven-product-grid">
-                  {displayedProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
+      <div className="zaven-page-container py-3 sm:py-5 space-y-3.5 sm:space-y-4">
+        {/* =================================================================== */}
+        {/* MOBILE & TABLET VERTICAL CATEGORY DIRECTORY (< xl)                  */}
+        {/* Inspired by Screenshot 1: Clean vertical list with ZAVEN green/gold */}
+        {/* icons, subtle dividers, and expandable subcategories.               */}
+        {/* =================================================================== */}
+        {isMobileDirectoryMode && (
+          <div className="xl:hidden space-y-3">
+            <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] shadow-card overflow-hidden divide-y divide-gray-100 dark:divide-[#28453B]">
+              {/* Special Promotions Row */}
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyDiscounted(true);
+                  syncUrlParams({ filter: 'discounted', view: 'products' });
+                }}
+                className="w-full min-h-[56px] px-4 py-3 flex items-center justify-between gap-3.5 text-left hover:bg-brand-gold-light/30 dark:hover:bg-[#162923] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-brand-gold-light dark:bg-[#1D352D] border border-brand-gold-border/60 flex items-center justify-center shrink-0">
+                    <Tag className="w-5 h-5 text-[#C89D54]" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                    {t('nav.specialDiscounts')}
+                  </span>
                 </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
 
-                {(hasMoreToLoad || totalPages > 1) && (
-                  <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-center gap-3">
-                    {hasMoreToLoad && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        rightIcon={<ChevronDown className="w-4 h-4" />}
-                        onClick={handleShowMore}
-                      >
-                        {t('catalog.showMore')}
-                      </Button>
-                    )}
+              {/* New Arrivals Row */}
+              <button
+                type="button"
+                onClick={() => {
+                  setOnlyNew(true);
+                  syncUrlParams({ filter: 'new', view: 'products' });
+                }}
+                className="w-full min-h-[56px] px-4 py-3 flex items-center justify-between gap-3.5 text-left hover:bg-gray-50 dark:hover:bg-[#162923] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-brand-green-light/70 dark:bg-[#162923] border border-brand-green/20 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-5 h-5 text-[#C89D54]" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
+                    {t('nav.newArrivals')}
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
 
-                    {totalPages > 1 && (
-                      <div className="flex items-center gap-1.5">
+              {/* Store Categories with Expandable Subcategories */}
+              {activeCategories.map((category) => {
+                const locCat = getCategoryText(category);
+                const subcategories = CATEGORY_SUBCATEGORIES[category.id] || [];
+                const isExpanded = expandedMobileCatId === category.id;
+
+                return (
+                  <div key={category.id} className="bg-white dark:bg-[#12211C]">
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      onClick={() => {
+                        if (subcategories.length > 0) {
+                          setExpandedMobileCatId((prev) =>
+                            prev === category.id ? null : category.id
+                          );
+                        } else {
+                          handleSelectCategory(category.slug);
+                        }
+                      }}
+                      className="w-full min-h-[58px] px-4 py-3 flex items-center justify-between gap-3.5 text-left hover:bg-gray-50 dark:hover:bg-[#162923] transition-colors"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-green-light/70 dark:bg-[#162923] border border-brand-green/20 flex items-center justify-center shrink-0">
+                          {renderCategoryIcon(category.iconName)}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-sm font-bold text-gray-900 dark:text-gray-100 block truncate">
+                            {locCat.name}
+                          </span>
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400 block truncate mt-0.5">
+                            {locCat.description}
+                          </span>
+                        </div>
+                      </div>
+
+                      {subcategories.length > 0 ? (
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${
+                            isExpanded ? 'rotate-180 text-brand-green' : ''
+                          }`}
+                        />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Expanded Subcategory List */}
+                    {isExpanded && subcategories.length > 0 && (
+                      <div className="bg-[#F8F9FA] dark:bg-[#0D1915] border-t border-gray-100 dark:border-[#28453B] pl-14 pr-4 py-2 space-y-1">
                         <button
                           type="button"
-                          disabled={currentPage <= 1}
-                          onClick={() => handlePageSelect(currentPage - 1)}
-                          className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                          aria-label="Previous page"
+                          onClick={() => handleSelectCategory(category.slug)}
+                          className="w-full min-h-[42px] py-2 px-3 rounded-xl text-left text-xs font-extrabold text-brand-green hover:bg-brand-green-light/50 dark:hover:bg-[#162923] flex items-center justify-between gap-2 transition-colors"
                         >
-                          <ChevronLeft className="w-4 h-4" />
+                          <span>{t('catalog.openCategoryProducts')}</span>
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                         </button>
 
-                        {Array.from(
-                          { length: totalPages },
-                          (_, idx) => idx + 1
-                        ).map((page) => (
+                        {subcategories.map((sub) => (
                           <button
-                            key={page}
+                            key={sub.id}
                             type="button"
-                            onClick={() => handlePageSelect(page)}
-                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
-                              currentPage === page
-                                ? 'bg-[#0F3D2E] text-white'
-                                : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
-                            }`}
+                            onClick={() =>
+                              handleOpenSubcategory(category.slug, sub.query)
+                            }
+                            className="w-full min-h-[42px] py-2 px-3 rounded-xl text-left text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-[#162923] flex items-center justify-between gap-2 transition-colors"
                           >
-                            {page}
+                            <span className="truncate">
+                              {sub.label[language]}
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           </button>
                         ))}
-
-                        <button
-                          type="button"
-                          disabled={currentPage >= totalPages}
-                          onClick={() => handlePageSelect(currentPage + 1)}
-                          className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                          aria-label="Next page"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
                       </div>
                     )}
                   </div>
+                );
+              })}
+
+              {/* Browse All Products Row */}
+              <button
+                type="button"
+                onClick={() => syncUrlParams({ view: 'products' })}
+                className="w-full min-h-[56px] px-4 py-3 flex items-center justify-between gap-3.5 text-left hover:bg-gray-50 dark:hover:bg-[#162923] transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#0F3D2E] text-[#C89D54] flex items-center justify-center shrink-0">
+                    <Grid className="w-5 h-5" />
+                  </div>
+                  <span className="text-sm font-extrabold text-brand-green truncate">
+                    {t('nav.allProducts')}
+                  </span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-brand-green shrink-0" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* =================================================================== */}
+        {/* PRODUCT LISTING & FILTER VIEW (Always on xl+, or when a category /  */}
+        {/* subcategory / search / filter is selected on mobile)                */}
+        {/* =================================================================== */}
+        <div
+          className={
+            isMobileDirectoryMode ? 'hidden xl:block space-y-4' : 'space-y-3.5'
+          }
+        >
+          {/* Mobile Back-to-Directory Button + Compact Title */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={handleReturnToMobileDirectory}
+                className="xl:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#28453B] text-xs font-bold text-gray-800 dark:text-gray-100 hover:border-brand-green shadow-sm shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-brand-green" />
+                <span>{t('catalog.backToDirectory')}</span>
+              </button>
+
+              <h1 className="text-sm sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
+                {localizedSelectedCategory
+                  ? localizedSelectedCategory.name
+                  : searchQuery.trim()
+                  ? `«${searchQuery.trim()}»`
+                  : onlyDiscounted
+                  ? t('nav.specialDiscounts')
+                  : onlyNew
+                  ? t('nav.newArrivals')
+                  : t('catalog.titleAll')}
+              </h1>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+            <aside className="hidden xl:block xl:col-span-3 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card sticky top-24">
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100 dark:border-[#28453B]">
+                <div className="flex items-center gap-2 font-bold text-gray-900 text-sm">
+                  <SlidersHorizontal className="w-4 h-4 text-brand-green" />
+                  <span>{t('catalog.filtersAndSort')}</span>
+                </div>
+                {activeFilterCount > 0 && (
+                  <Badge variant="green" size="sm">
+                    {activeFilterCount} {t('catalog.activeCount')}
+                  </Badge>
                 )}
-              </>
-            ) : (
-              <EmptyState
-                icon={<PackageSearch className="w-7 h-7" />}
-                title={t('catalog.emptyTitle')}
-                description={t('catalog.emptyDesc')}
-                actionLabel={t('catalog.clearAllFilters')}
-                onAction={handleResetAllFilters}
+              </div>
+              {renderFilterSidebarContent()}
+              {activeFilterCount > 0 && (
+                <div className="pt-3 mt-3 border-t border-gray-200 dark:border-[#28453B]">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    fullWidth
+                    leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                    onClick={handleResetAllFilters}
+                  >
+                    {t('catalog.clearAllFilters')}
+                  </Button>
+                </div>
+              )}
+            </aside>
+
+            <div className="xl:col-span-9 space-y-3.5 min-w-0">
+              <QuickFilterBar
+                categories={activeCategories}
+                selectedCategorySlug={selectedCategorySlug}
+                onSelectCategory={handleSelectCategory}
+                searchQuery={searchQuery}
+                onClearSearch={() => {
+                  setSearchQuery('');
+                  syncUrlParams({ q: '' });
+                }}
+                minPrice={minPrice}
+                maxPrice={maxPrice}
+                onClearPrice={() => {
+                  setMinPrice('');
+                  setMaxPrice('');
+                }}
+                onlyDiscounted={onlyDiscounted}
+                onToggleDiscounted={() => {
+                  const next = !onlyDiscounted;
+                  setOnlyDiscounted(next);
+                  syncUrlParams({
+                    filter: next ? 'discounted' : '',
+                    view: 'products',
+                  });
+                }}
+                onlyInStock={onlyInStock}
+                onToggleInStock={() => setOnlyInStock((prev) => !prev)}
+                onlyNew={onlyNew}
+                onToggleNew={() => {
+                  const next = !onlyNew;
+                  setOnlyNew(next);
+                  syncUrlParams({
+                    filter: next ? 'new' : '',
+                    view: 'products',
+                  });
+                }}
+                sortBy={sortBy}
+                onChangeSort={(nextSort) => {
+                  setSortBy(nextSort);
+                  syncUrlParams({ sort: nextSort, view: 'products' });
+                }}
+                activeFilterCount={activeFilterCount}
+                onResetAll={handleResetAllFilters}
+                onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
               />
-            )}
+
+              {displayedProducts.length > 0 ? (
+                <>
+                  <div className="zaven-product-grid">
+                    {displayedProducts.map((product) => (
+                      <ProductCard key={product.id} product={product} />
+                    ))}
+                  </div>
+
+                  {(hasMoreToLoad || totalPages > 1) && (
+                    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card flex flex-col sm:flex-row items-center justify-center gap-3">
+                      {hasMoreToLoad && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          rightIcon={<ChevronDown className="w-4 h-4" />}
+                          onClick={handleShowMore}
+                        >
+                          {t('catalog.showMore')}
+                        </Button>
+                      )}
+
+                      {totalPages > 1 && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={currentPage <= 1}
+                            onClick={() => handlePageSelect(currentPage - 1)}
+                            className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                            aria-label="Previous page"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+
+                          {Array.from(
+                            { length: totalPages },
+                            (_, idx) => idx + 1
+                          ).map((page) => (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => handlePageSelect(page)}
+                              className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
+                                currentPage === page
+                                  ? 'bg-[#0F3D2E] text-white'
+                                  : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+
+                          <button
+                            type="button"
+                            disabled={currentPage >= totalPages}
+                            onClick={() => handlePageSelect(currentPage + 1)}
+                            className="p-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                            aria-label="Next page"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <EmptyState
+                  icon={<PackageSearch className="w-7 h-7" />}
+                  title={t('catalog.emptyTitle')}
+                  description={t('catalog.emptyDesc')}
+                  actionLabel={t('catalog.clearAllFilters')}
+                  onAction={handleResetAllFilters}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -905,7 +905,7 @@ export const CartCheckoutPage: React.FC = () => {
         aria-label="Checkout progress"
         className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-2.5 sm:p-4 shadow-card"
       >
-        <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           {(
             [
               {
@@ -969,9 +969,9 @@ export const CartCheckoutPage: React.FC = () => {
                   </span>
                 )}
                 <span className="sm:hidden text-[11px] leading-tight">
-                  {step.shortLabel}
+                  {step.fullLabel.replace(/^\d+\.\s*/, '')}
                 </span>
-                <span className="hidden sm:inline text-xs truncate">
+                <span className="hidden sm:inline text-xs">
                   {step.fullLabel.replace(/^\d+\.\s*/, '')}
                 </span>
               </button>

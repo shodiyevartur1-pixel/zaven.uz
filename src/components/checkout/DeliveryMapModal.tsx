@@ -8,6 +8,7 @@ import {
   Plus,
   Minus,
   RefreshCw,
+  LocateFixed,
 } from 'lucide-react';
 import {
   UZBEKISTAN_REGIONS,
@@ -46,6 +47,10 @@ interface LeafletMapInstance {
   remove: () => void;
 }
 
+interface LeafletMarkerInstance {
+  remove: () => void;
+}
+
 declare global {
   interface Window {
     L?: {
@@ -57,6 +62,11 @@ declare global {
         url: string,
         opts: Record<string, unknown>
       ) => { addTo: (map: LeafletMapInstance) => void };
+      divIcon: (opts: Record<string, unknown>) => unknown;
+      marker: (
+        coords: [number, number],
+        opts?: Record<string, unknown>
+      ) => { addTo: (map: LeafletMapInstance) => LeafletMarkerInstance };
     };
   }
 }
@@ -101,6 +111,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
 
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
   const [isSearchingPlace, setIsSearchingPlace] = useState<boolean>(false);
+  const [isLocatingUser, setIsLocatingUser] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{
     type: 'info' | 'warning';
     text: string;
@@ -110,6 +121,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
   const leafletMapRef = useRef<LeafletMapInstance | null>(null);
   const reverseGeocodeTimerRef = useRef<number | null>(null);
   const isProgrammaticMoveRef = useRef<boolean>(false);
+  const userGpsMarkerRef = useRef<LeafletMarkerInstance | null>(null);
 
   const getRegionName = useCallback(
     (reg: UzbekistanRegionOption) => {
@@ -230,14 +242,29 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       }
     };
 
+    const savedScrollY = window.scrollY;
+    const previousBodyStyles = {
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      right: document.body.style.right,
+      width: document.body.style.width,
+      overflow: document.body.style.overflow,
+    };
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
     document.body.style.overflow = 'hidden';
     document.body.classList.add('zaven-modal-open');
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.body.style.overflow = '';
+      Object.assign(document.body.style, previousBodyStyles);
       document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
+      window.scrollTo(0, savedScrollY);
     };
   }, [isOpen, onClose]);
 
@@ -356,6 +383,10 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       if (reverseGeocodeTimerRef.current) {
         window.clearTimeout(reverseGeocodeTimerRef.current);
       }
+      if (userGpsMarkerRef.current) {
+        userGpsMarkerRef.current.remove();
+        userGpsMarkerRef.current = null;
+      }
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
@@ -378,6 +409,54 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
     }
 
     runReverseGeocode(roundedLat, roundedLng);
+  };
+
+  const handleLocateMe = () => {
+    setStatusMessage(null);
+    if (!navigator.geolocation) {
+      setStatusMessage({
+        type: 'warning',
+        text: language === 'ru'
+          ? 'Браузер не поддерживает геолокацию.'
+          : language === 'en'
+          ? 'This browser does not support location.'
+          : 'Brauzer joylashuvni aniqlashni qo‘llab-quvvatlamaydi.',
+      });
+      return;
+    }
+
+    setIsLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setIsLocatingUser(false);
+        const lat = Number(coords.latitude.toFixed(5));
+        const lng = Number(coords.longitude.toFixed(5));
+        moveMapToCoords(lat, lng, 17);
+        if (window.L && leafletMapRef.current) {
+          userGpsMarkerRef.current?.remove();
+          const icon = window.L.divIcon({
+            className: 'zaven-user-location-marker',
+            html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:4px solid #fff;box-shadow:0 1px 8px #2563eb99"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10],
+          });
+          userGpsMarkerRef.current = window.L.marker([lat, lng], { icon })
+            .addTo(leafletMapRef.current);
+        }
+      },
+      () => {
+        setIsLocatingUser(false);
+        setStatusMessage({
+          type: 'warning',
+          text: language === 'ru'
+            ? 'Не удалось определить местоположение. Проверьте разрешение браузера.'
+            : language === 'en'
+            ? 'Could not get your location. Check browser permission.'
+            : 'Joylashuv aniqlanmadi. Brauzer ruxsatini tekshiring.',
+        });
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+    );
   };
 
   const handlePlaceSearch = async (e: React.FormEvent) => {
@@ -613,6 +692,16 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
               <Minus className="w-5 h-5" />
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            disabled={isLocatingUser}
+            aria-label={language === 'ru' ? 'Моё местоположение' : language === 'en' ? 'My location' : 'Turgan joyimni aniqlash'}
+            className="absolute bottom-3 right-3 z-20 w-11 h-11 rounded-2xl bg-white/95 dark:bg-[#12211C]/95 text-blue-600 border border-gray-200 dark:border-[#2F5246] shadow-lg flex items-center justify-center disabled:opacity-60"
+          >
+            {isLocatingUser ? <RefreshCw className="w-5 h-5 animate-spin" /> : <LocateFixed className="w-5 h-5" />}
+          </button>
         </div>
 
         {/* Bottom Sheet: "Tanlangan manzil" Preview + Editable Street Input + Confirm CTA */}

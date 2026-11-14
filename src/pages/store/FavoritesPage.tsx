@@ -1,15 +1,21 @@
 import React, { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Trash2, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Heart } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { ProductCard } from '../../components/product/ProductCard';
-import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/EmptyState';
 
+/**
+ * Compact "Istaklarim" Favorites screen:
+ * - Replaces the large bordered "Yoqtirilgan mahsulotlar" title card & description
+ *   with a compact "Istaklarim" heading in the top-left corner.
+ * - Removes the "Roʻyxatni tozalash" button.
+ * - Preserves all saved products, heart buttons, and navigation.
+ */
 export const FavoritesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { products, favoriteIds, clearFavorites } = useStore();
+  const { products, favoriteIds } = useStore();
   const { t } = useThemeLanguage();
 
   const favoriteProducts = useMemo(
@@ -28,46 +34,12 @@ export const FavoritesPage: React.FC = () => {
   );
 
   return (
-    <div className="zaven-page-container py-4 sm:py-7 space-y-5">
-      {/* Header Row */}
-      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-start sm:items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-800/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-            <Heart className="w-5 h-5 fill-current" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 break-words">
-              {t('favorites.title')}
-            </h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {t('favorites.subtitle')}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Link to="/catalog">
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<ArrowLeft className="w-3.5 h-3.5" />}
-            >
-              {t('nav.catalog')}
-            </Button>
-          </Link>
-
-          {favoriteProducts.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFavorites}
-              leftIcon={<Trash2 className="w-3.5 h-3.5 text-red-600" />}
-              className="text-red-600 hover:bg-red-50"
-            >
-              {t('favorites.clearAll')}
-            </Button>
-          )}
-        </div>
+    <div className="zaven-page-container py-3.5 sm:py-6 space-y-3.5 sm:space-y-4">
+      {/* Compact "Istaklarim" Label in the Top-Left Corner */}
+      <div className="flex items-center px-0.5">
+        <h1 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 tracking-tight">
+          {t('favorites.title')}
+        </h1>
       </div>
 
       {/* Saved Products Grid or Helpful Empty State */}
