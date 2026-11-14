@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import {
   SlidersHorizontal,
   X,
@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ArrowUpDown,
   ChevronDown,
-  Check,
   RotateCcw,
 } from 'lucide-react';
 import { Category } from '../../types';
@@ -43,6 +42,14 @@ export interface QuickFilterBarProps {
   onOpenMobileFilters: () => void;
 }
 
+/**
+ * PART 2 FIX:
+ * - Places "Filtrlar" button and a responsive themed native <select> sort control
+ *   in one balanced row (stacking cleanly only on ultra-narrow <340px screens),
+ *   so the sort menu never renders off-screen or behind the sticky bottom nav.
+ * - Aligns compact filter chips ("Chegirmalar", "Yangi kelganlar", "Omborda mavjud")
+ *   with consistent h-9 height and even gap-2 spacing.
+ */
 export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   categories,
   selectedCategorySlug,
@@ -65,8 +72,6 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
   onOpenMobileFilters,
 }) => {
   const { t, getCategoryText } = useThemeLanguage();
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedCategory = categories.find(
     (c) => c.slug === selectedCategorySlug || c.id === selectedCategorySlug
@@ -85,38 +90,14 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
     { value: 'discount', label: t('catalog.sortDiscount') },
   ];
 
-  const activeSortLabel =
-    sortOptions.find((o) => o.value === sortBy)?.label ||
-    t('catalog.sortPopular');
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        sortMenuRef.current &&
-        !sortMenuRef.current.contains(e.target as Node)
-      ) {
-        setIsSortMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsSortMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
   return (
-    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-3.5 shadow-card space-y-2.5">
-      {/* Row 1: Filters Button + Readable Sort Control (Never awkwardly truncated) */}
-      <div className="flex items-center justify-between gap-2">
+    <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card space-y-2.5">
+      {/* Row 1: Balanced Filter Trigger + Accessible Viewport-Safe Sort Selector */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={onOpenMobileFilters}
-          className="xl:hidden h-9 px-3 rounded-xl bg-[#0F3D2E] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center gap-1.5 shadow-sm shrink-0"
+          className="xl:hidden h-10 px-3.5 rounded-xl bg-[#0F3D2E] hover:bg-[#16533F] text-white border border-emerald-500/30 text-xs font-bold inline-flex items-center justify-center gap-1.5 shadow-sm shrink-0"
         >
           <SlidersHorizontal className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
           <span>{t('catalog.filtersAndPrice')}</span>
@@ -132,134 +113,103 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
           <button
             type="button"
             onClick={onToggleDiscounted}
-            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
+            className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
               onlyDiscounted
                 ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-gold'
             }`}
           >
-            <Tag className="w-3 h-3 shrink-0" />
+            <Tag className="w-3.5 h-3.5 shrink-0" />
             <span>{t('nav.discounts')}</span>
           </button>
 
           <button
             type="button"
             onClick={onToggleNew}
-            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
+            className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
               onlyNew
                 ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-brand-green'
             }`}
           >
-            <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
+            <Sparkles className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
             <span>{t('nav.newArrivals')}</span>
           </button>
 
           <button
             type="button"
             onClick={onToggleInStock}
-            className={`h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors ${
+            className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
               onlyInStock
                 ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
                 : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246] hover:border-emerald-400'
             }`}
           >
-            <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
             <span>{t('product.inStock')}</span>
           </button>
         </div>
 
-        {/* Readable Sort Trigger + Compact Anchored Menu */}
-        <div ref={sortMenuRef} className="relative ml-auto">
-          <button
-            type="button"
-            onClick={() => setIsSortMenuOpen((prev) => !prev)}
-            aria-haspopup="listbox"
-            aria-expanded={isSortMenuOpen}
-            className="h-9 px-3 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] hover:border-brand-green dark:hover:border-brand-gold text-xs font-bold text-gray-800 dark:text-gray-100 inline-flex items-center gap-1.5 transition-colors shadow-sm"
+        {/* Responsive Styled Native Select Sort Control (Never renders off-screen or behind bottom nav) */}
+        <div className="relative flex-1 min-w-[165px] sm:flex-initial sm:w-auto ml-auto">
+          <ArrowUpDown className="w-3.5 h-3.5 text-brand-green absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <select
+            aria-label={t('catalog.sortLabel')}
+            value={sortBy}
+            onChange={(e) => onChangeSort(e.target.value as SortOption)}
+            className="w-full h-10 pl-8 pr-8 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-xs font-bold text-gray-800 dark:text-gray-100 appearance-none cursor-pointer focus:border-brand-green focus:outline-none shadow-sm"
           >
-            <ArrowUpDown className="w-3.5 h-3.5 text-brand-green shrink-0" />
-            <span className="whitespace-nowrap">{activeSortLabel}</span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 text-gray-400 transition-transform shrink-0 ${
-                isSortMenuOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-
-          {isSortMenuOpen && (
-            <ul
-              role="listbox"
-              aria-label={t('catalog.filtersAndSort')}
-              className="absolute right-0 top-full mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl bg-white dark:bg-[#12211C] border border-gray-200 dark:border-[#2F5246] shadow-xl py-1 z-30 divide-y divide-gray-100 dark:divide-[#28453B]"
-            >
-              {sortOptions.map((opt) => {
-                const isSelected = sortBy === opt.value;
-                return (
-                  <li key={opt.value} role="option" aria-selected={isSelected}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onChangeSort(opt.value);
-                        setIsSortMenuOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between gap-2 transition-colors ${
-                        isSelected
-                          ? 'bg-brand-green-light dark:bg-[#1D352D] text-brand-green font-extrabold'
-                          : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#162923]'
-                      }`}
-                    >
-                      <span>{opt.label}</span>
-                      {isSelected && (
-                        <Check className="w-3.5 h-3.5 text-brand-green shrink-0" />
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+            {sortOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
       </div>
 
-      {/* Row 2 on Mobile/Tablet (<xl): Neatly Wrapped Promotion & Stock Chips (Zero Clipping) */}
-      <div className="xl:hidden flex flex-wrap items-center gap-1.5 pt-2 border-t border-gray-100 dark:border-[#28453B]">
+      {/* Row 2 on Mobile/Tablet (<xl): Compact, Consistently Sized Filter Chips */}
+      <div className="xl:hidden flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 dark:border-[#28453B]">
         <button
           type="button"
           onClick={onToggleDiscounted}
-          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+          aria-pressed={onlyDiscounted}
+          className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
             onlyDiscounted
               ? 'bg-[#C89D54] text-[#09261C] border-[#C89D54] font-extrabold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
           }`}
         >
-          <Tag className="w-3 h-3 shrink-0" />
+          <Tag className="w-3.5 h-3.5 shrink-0" />
           <span>{t('nav.discounts')}</span>
         </button>
 
         <button
           type="button"
           onClick={onToggleNew}
-          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+          aria-pressed={onlyNew}
+          className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
             onlyNew
               ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
           }`}
         >
-          <Sparkles className="w-3 h-3 text-[#C89D54] shrink-0" />
+          <Sparkles className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
           <span>{t('nav.newArrivals')}</span>
         </button>
 
         <button
           type="button"
           onClick={onToggleInStock}
-          className={`h-8 inline-flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-semibold border transition-colors ${
+          aria-pressed={onlyInStock}
+          className={`h-9 inline-flex items-center gap-1.5 px-3 rounded-xl text-xs font-semibold border transition-colors ${
             onlyInStock
               ? 'bg-[#0F3D2E] text-white border-emerald-500/40 font-bold shadow-sm'
               : 'bg-surface-page dark:bg-[#162923] text-gray-700 dark:text-gray-200 border-gray-200 dark:border-[#2F5246]'
           }`}
         >
-          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
           <span>{t('product.inStock')}</span>
         </button>
       </div>
@@ -269,7 +219,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-[#28453B]">
           <div className="flex flex-wrap items-center gap-1.5">
             {localizedSelectedCategory && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-brand-green-light text-brand-green">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-green-light text-brand-green">
                 <span>{localizedSelectedCategory.name}</span>
                 <button
                   type="button"
@@ -282,7 +232,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             )}
 
             {searchQuery.trim() && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-brand-green-light text-brand-green">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-green-light text-brand-green">
                 <span>«{searchQuery.trim()}»</span>
                 <button
                   type="button"
@@ -295,7 +245,7 @@ export const QuickFilterBar: React.FC<QuickFilterBarProps> = ({
             )}
 
             {hasPriceFilter && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-gray-100 dark:bg-[#1D352D] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-[#2F5246]">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-gray-100 dark:bg-[#1D352D] text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-[#2F5246]">
                 <span>
                   {minPrice ? formatUZS(Number(minPrice)) : '0'} —{' '}
                   {maxPrice ? formatUZS(Number(maxPrice)) : '∞'}

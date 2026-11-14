@@ -63,7 +63,6 @@ export const ProductDetailPage: React.FC = () => {
   const [isZoomedInLightbox, setIsZoomedInLightbox] = useState<boolean>(false);
   const [selectedQty, setSelectedQty] = useState<number>(1);
 
-  // Expandable Accordion Sections (Secondary information kept compact)
   const [openSection, setOpenSection] = useState<
     'description' | 'specs' | 'delivery' | null
   >('description');
@@ -258,11 +257,11 @@ export const ProductDetailPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Primary Product Card: Image Gallery + Title + Price + Delivery Badge + Single Clear Add-to-Cart */}
+      {/* Primary Product Card */}
       <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 lg:p-8 shadow-card">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
-          {/* Left Column: Multi-Image Gallery & Thumbnail Switcher */}
-          <div className="lg:col-span-6 space-y-3">
+          {/* Left Column: Multi-Image Gallery & Evenly Sized Square Thumbnails */}
+          <div className="lg:col-span-6 space-y-3 min-w-0">
             <div className="relative aspect-square rounded-2xl bg-gray-100 dark:bg-[#1A3028] border border-gray-200 dark:border-[#28453B] overflow-hidden group">
               <img
                 src={currentImage}
@@ -306,7 +305,7 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
                     aria-label="Previous image"
                   >
                     <ChevronLeft className="w-5 h-5" />
@@ -314,7 +313,7 @@ export const ProductDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 dark:bg-[#12211C]/95 hover:bg-[#0F3D2E] text-gray-800 dark:text-gray-100 hover:text-white border border-gray-200 dark:border-[#2F5246] flex items-center justify-center shadow-md transition-colors"
                     aria-label="Next image"
                   >
                     <ChevronRight className="w-5 h-5" />
@@ -323,44 +322,53 @@ export const ProductDetailPage: React.FC = () => {
               )}
             </div>
 
+            {/* PART 1 FIX: Consistent Square Thumbnails with Equal Spacing & Clear Selection State */}
             {images.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1">
-                {images.map((imgUrl, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setSelectedImageIdx(idx)}
-                    className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
-                      selectedImageIdx === idx
-                        ? 'border-brand-green ring-2 ring-brand-gold/50'
-                        : 'border-gray-200 opacity-75 hover:opacity-100'
-                    }`}
-                    aria-label={`Rasm ${idx + 1}`}
-                  >
-                    <img
-                      src={imgUrl}
-                      alt={`${localizedProduct.name} ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
+              <div
+                role="tablist"
+                aria-label="Product image thumbnails"
+                className="flex items-center gap-2.5 overflow-x-auto scrollbar-thin py-1 px-0.5"
+              >
+                {images.map((imgUrl, idx) => {
+                  const isSelected = selectedImageIdx === idx;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      aria-label={`Rasm ${idx + 1}`}
+                      onClick={() => setSelectedImageIdx(idx)}
+                      className={`relative w-16 h-16 sm:w-20 sm:h-20 flex-none aspect-square rounded-xl overflow-hidden border-2 transition-all focus:outline-none ${
+                        isSelected
+                          ? 'border-[#C89D54] opacity-100 shadow-sm scale-[1.02]'
+                          : 'border-gray-200 dark:border-[#28453B] opacity-65 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`${localizedProduct.name} — ${idx + 1}`}
+                        className="w-full h-full object-cover block"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Right Column: Concise Core Purchase Panel + Expandable Secondary Accordions */}
           <div className="lg:col-span-6 space-y-5 min-w-0">
-            {/* Category, Small Delivery-Time Badge (Strictly Time Only) & Share */}
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {category && localizedCategory && (
                   <Link to={`/catalog?category=${category.slug}`}>
                     <Badge variant="neutral" size="sm">
-                      {localizedCategory.name}</Badge>
-                    </Link>
+                      {localizedCategory.name}
+                    </Badge>
+                  </Link>
                 )}
 
-                {/* Small Delivery-Time Badge containing ONLY the estimate */}
                 <Badge variant="gold" size="sm">
                   <Clock className="w-3 h-3 mr-1 shrink-0" />
                   <span>{t('delivery.estimateValue')}</span>
@@ -377,7 +385,6 @@ export const ProductDetailPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Product Title & Brief Summary */}
             <div className="space-y-1.5">
               <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100 leading-snug break-words">
                 {localizedProduct.name}
@@ -408,7 +415,6 @@ export const ProductDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Compact Stock Pill */}
               <div>
                 {isOutOfStock ? (
                   <Badge variant="danger" size="md">
@@ -429,11 +435,10 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Clear Quantity Controls & Single Primary "Savatchaga qoʻshish" Action (No competing oversized buttons) */}
+            {/* Clear Quantity Controls & Single Primary "Savatchaga qoʻshish" Action */}
             <div ref={purchaseActionsRef} className="space-y-3 pt-1">
               {!isOutOfStock ? (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  {/* Quantity Stepper */}
                   <div className="flex items-center justify-between sm:justify-start border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] px-2.5 py-1.5 shrink-0">
                     <span className="text-xs font-semibold text-gray-500 sm:hidden mr-2">
                       Miqdor:
@@ -469,7 +474,6 @@ export const ProductDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Single Primary Purchase CTA */}
                   <Button
                     variant="primary"
                     size="lg"
@@ -505,11 +509,8 @@ export const ProductDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* =============================================================== */}
-            {/* COMPACT EXPANDABLE ACCORDION SECTIONS FOR SECONDARY DETAILS     */}
-            {/* =============================================================== */}
+            {/* Expandable Accordion Sections */}
             <div className="pt-2 divide-y divide-gray-200 dark:divide-[#28453B] border-t border-b border-gray-200 dark:border-[#28453B]">
-              {/* Accordion 1: Full Description, Key Benefits & Stock/Sold Counts */}
               <div>
                 <button
                   type="button"
@@ -572,7 +573,6 @@ export const ProductDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Accordion 2: Technical Specifications */}
               <div>
                 <button
                   type="button"
@@ -631,7 +631,6 @@ export const ProductDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Accordion 3: Shipping & Payment Explanations */}
               {showDeliveryBlock && (
                 <div>
                   <button

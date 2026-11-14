@@ -114,44 +114,49 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   };
 
   // ============================================================================
-  // COMPACT TASK-FOCUSED HEADER FOR CART & CHECKOUT ROUTES
+  // PART 1 FIX: NON-OVERLAPPING COMPACT HEADER FOR /cart AND /checkout
+  // - Uses a dedicated 40x40px back icon button on narrow phones (< sm)
+  // - Hides secondary tagline on narrow phones so ZAVEN logo never clips
+  // - Keeps language, theme, and account controls in distinct 40x40px touch areas
   // ============================================================================
   if (isCompactCheckoutRoute) {
     return (
       <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
-        <div className="zaven-page-container h-14 flex items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+        <div className="zaven-page-container h-14 flex items-center justify-between gap-2">
+          {/* Left: Back to Shop Button + Brand Identity */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link
+              to="/catalog"
+              aria-label={t('cart.backToShop')}
+              title={t('cart.backToShop')}
+              className="w-10 h-10 sm:w-auto sm:h-9 sm:px-3 rounded-xl bg-[#09261C]/85 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 inline-flex items-center justify-center gap-1.5 text-xs font-bold transition-colors shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">{t('cart.backToShop')}</span>
+            </Link>
+
             <Link
               to="/"
               className="flex items-center gap-2 group focus:outline-none shrink-0"
               aria-label="ZAVEN"
             >
-              <div className="w-8 h-8 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-base tracking-tight shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-base tracking-tight shadow-sm shrink-0">
                 Z
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-base sm:text-lg tracking-wider text-white leading-none">
                   {storeSettings.storeName}
                 </span>
-                <span className="text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5 flex items-center gap-1">
+                <span className="hidden md:flex text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5 items-center gap-1">
                   <Lock className="w-2.5 h-2.5 shrink-0" />
-                  <span className="truncate max-w-[120px] sm:max-w-none">
-                    {t('header.secureCheckoutBadge')}
-                  </span>
+                  <span>{t('header.secureCheckoutBadge')}</span>
                 </span>
               </div>
             </Link>
-
-            <Link
-              to="/catalog"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#09261C]/80 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 text-xs font-bold transition-colors truncate"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{t('cart.backToShop')}</span>
-            </Link>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right: Distinct Non-Overlapping Touch Controls */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <div className="hidden sm:block">
               <ThemeLanguageControls variant="header-dark" />
             </div>
@@ -159,8 +164,8 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             <button
               type="button"
               onClick={cycleLanguageMobile}
-              className="sm:hidden h-8 px-2.5 rounded-lg bg-[#09261C]/80 border border-emerald-700 text-[11px] font-extrabold text-[#C89D54]"
-              aria-label="Switch language"
+              className="sm:hidden min-w-[40px] h-10 px-2.5 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 text-xs font-extrabold text-[#C89D54] flex items-center justify-center shrink-0"
+              aria-label="Tilni almashtirish / Switch language"
             >
               {COMPACT_LANGS.find((l) => l.code === language)?.label || 'OʻZ'}
             </button>
@@ -168,7 +173,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
             <button
               type="button"
               onClick={toggleTheme}
-              className="sm:hidden w-8 h-8 rounded-lg bg-[#09261C]/80 border border-emerald-700 flex items-center justify-center text-[#C89D54]"
+              className="sm:hidden w-10 h-10 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 flex items-center justify-center text-[#C89D54] shrink-0"
               aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
             >
               {theme === 'dark' ? (
@@ -180,7 +185,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
             <Link
               to="/account"
-              className="w-8 h-8 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-[#C89D54]/40 text-white flex items-center justify-center transition-colors"
+              className="w-10 h-10 rounded-xl bg-[#09261C]/85 hover:bg-[#16533F] border border-[#C89D54]/40 text-white flex items-center justify-center transition-colors shrink-0"
               title={t('header.account')}
               aria-label={t('header.account')}
             >
@@ -193,8 +198,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
   }
 
   // ============================================================================
-  // Requirement 1: Clean Storefront Header (No horizontal category ribbon on
-  // mobile OR desktop; focused on Logo, Menu, Lang/Theme, Favorites, Account, Cart & 1 Search Bar)
+  // STANDARD STOREFRONT HEADER
   // ============================================================================
   return (
     <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
@@ -232,7 +236,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenMobileMenu}
-                className="lg:hidden w-9 h-9 -ml-1 rounded-lg text-white hover:bg-[#16533F] flex items-center justify-center focus:outline-none"
+                className="lg:hidden w-10 h-10 -ml-1 rounded-xl text-white hover:bg-[#16533F] flex items-center justify-center focus:outline-none shrink-0"
                 aria-label={t('nav.menu')}
               >
                 <Menu className="w-5 h-5" />
@@ -240,14 +244,14 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
 
               <Link
                 to="/"
-                className="flex items-center gap-2 group focus:outline-none"
+                className="flex items-center gap-2 group focus:outline-none shrink-0"
                 aria-label="ZAVEN"
               >
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-lg sm:text-xl tracking-tight shadow-sm shrink-0">
                   Z
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-extrabold text-lg sm:text-xl tracking-wider text-white leading-none">
+                  <span className="font-extrabold text-base sm:text-xl tracking-wider text-white leading-none">
                     {storeSettings.storeName}
                   </span>
                   <span className="hidden sm:block text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5">
@@ -305,7 +309,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               <button
                 type="button"
                 onClick={cycleLanguageMobile}
-                className="md:hidden h-8 px-2 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54]"
+                className="md:hidden min-w-[38px] h-9 px-2 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 text-[11px] font-extrabold text-[#C89D54] flex items-center justify-center shrink-0"
                 title="Til / Язык / Language"
                 aria-label="Switch language"
               >
@@ -315,7 +319,7 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="md:hidden w-8 h-8 rounded-lg bg-[#09261C]/80 border border-emerald-700/80 flex items-center justify-center text-[#C89D54]"
+                className="md:hidden w-9 h-9 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 flex items-center justify-center text-[#C89D54] shrink-0"
                 aria-label={
                   theme === 'dark' ? t('theme.light') : t('theme.dark')
                 }
@@ -330,11 +334,11 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               {/* Favorites Entry */}
               <Link
                 to="/favorites"
-                className="relative flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
+                className="relative flex items-center gap-1.5 p-1 sm:px-2 sm:py-1.5 rounded-xl hover:bg-[#16533F] transition-colors text-white shrink-0"
                 title={t('header.favorites')}
                 aria-label={t('header.favorites')}
               >
-                <div className="relative w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
+                <div className="relative w-9 h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
                   <Heart
                     className={`w-4 h-4 ${
                       favoritesCount > 0
@@ -356,10 +360,10 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               {/* Account Entry */}
               <Link
                 to="/account"
-                className="hidden sm:flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#16533F] transition-colors text-white"
+                className="hidden sm:flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-[#16533F] transition-colors text-white shrink-0"
                 title={t('header.account')}
               >
-                <div className="w-8 h-8 rounded-lg bg-[#09261C]/80 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 flex items-center justify-center shrink-0">
                   <User className="w-4 h-4 text-[#C89D54]" />
                 </div>
                 <div className="hidden xl:flex flex-col text-left">
@@ -379,12 +383,12 @@ export const StoreHeader: React.FC<StoreHeaderProps> = ({
               {/* Cart Entry */}
               <Link
                 to="/cart"
-                className="relative flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#09261C] hover:bg-[#C89D54] hover:text-[#09261C] border border-[#C89D54]/60 transition-colors group"
+                className="relative flex items-center gap-2 px-2.5 sm:px-3 h-9 sm:h-10 rounded-xl bg-[#09261C] hover:bg-[#C89D54] hover:text-[#09261C] border border-[#C89D54]/60 transition-colors group shrink-0"
                 aria-label={t('header.cart')}
               >
                 <div className="relative">
                   <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5 text-[#C89D54] group-hover:text-[#09261C] transition-colors" />
-                  <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C89D54] text-[#09261C] group-hover:bg-[#09261C] group-hover:text-white text-[10px] font-extrabold flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 min-w-[17px] h-[17px] px-1 rounded-full bg-[#C89D54] text-[#09261C] group-hover:bg-[#09261C] group-hover:text-white text-[10px] font-extrabold flex items-center justify-center">
                     {cartItemCount}
                   </span>
                 </div>

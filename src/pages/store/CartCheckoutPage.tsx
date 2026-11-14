@@ -26,8 +26,8 @@ import {
   CheckCircle2,
   Sparkles,
   Map as MapIcon,
-  Navigation,
   AlertTriangle,
+  Search,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -41,10 +41,10 @@ import {
 } from '../../utils/format';
 import {
   UZBEKISTAN_REGIONS,
-  detectUzbekistanRegionFromCoords,
   resolveRegionTariffRule,
 } from '../../utils/uzbekistanLocations';
 import { ProductCard } from '../../components/product/ProductCard';
+import { DeliveryMapModal } from '../../components/checkout/DeliveryMapModal';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Input, Select } from '../../components/ui/Input';
@@ -60,11 +60,6 @@ const ALLOWED_RECEIPT_MIMES = [
 const MAX_RECEIPT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
-
-const UZ_LAT_MIN = 37.0;
-const UZ_LAT_MAX = 45.6;
-const UZ_LNG_MIN = 55.8;
-const UZ_LNG_MAX = 73.2;
 
 export const CartCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
@@ -109,7 +104,6 @@ export const CartCheckoutPage: React.FC = () => {
     [storeSettings.paymentMethods]
   );
 
-  // Customer Contact Fields (Full Name -> Phone -> Email -> Optional Telegram Username)
   const [customerName, setCustomerName] = useState<string>(
     currentCustomer?.fullName || ''
   );
@@ -131,11 +125,13 @@ export const CartCheckoutPage: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState<string>(
     UZBEKISTAN_REGIONS[0].districts[0]
   );
+  const [districtSearchFilter, setDistrictSearchFilter] = useState<string>('');
   const [addressLine, setAddressLine] = useState<string>(
     currentCustomer?.addresses.find((a) => a.isDefault)?.addressLine || ''
   );
   const [customerNote, setCustomerNote] = useState<string>('');
 
+  // Never automatically detect or save location on page load
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [geoStatusMessage, setGeoStatusMessage] = useState<{
     type: 'success' | 'warning';
@@ -148,11 +144,6 @@ export const CartCheckoutPage: React.FC = () => {
   } | null>(null);
 
   const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
-  const [draftPinCoords, setDraftPinCoords] = useState<{
-    lat: number;
-    lng: number;
-  }>(UZBEKISTAN_REGIONS[0].approxCenter);
-  const [draftMapAddressNote, setDraftMapAddressNote] = useState<string>('');
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
     enabledPayments[0]?.id || 'pay-card'
@@ -195,7 +186,6 @@ export const CartCheckoutPage: React.FC = () => {
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
 
-  // Prefill from verified customer account when available
   useEffect(() => {
     if (currentCustomer) {
       setCustomerName((prev) => prev || currentCustomer.fullName);
@@ -237,6 +227,15 @@ export const CartCheckoutPage: React.FC = () => {
     [selectedUzRegionId]
   );
 
+  const filteredDistricts = useMemo(() => {
+    const q = districtSearchFilter.trim().toLowerCase();
+    if (!q) return currentUzRegionObj.districts;
+    const matches = currentUzRegionObj.districts.filter((d) =>
+      d.toLowerCase().includes(q)
+    );
+    return matches.length > 0 ? matches : currentUzRegionObj.districts;
+  }, [currentUzRegionObj.districts, districtSearchFilter]);
+
   const getRegionDisplayName = (reg: (typeof UZBEKISTAN_REGIONS)[number]) => {
     if (language === 'ru') return reg.nameRu;
     if (language === 'en') return reg.nameEn;
@@ -245,6 +244,7 @@ export const CartCheckoutPage: React.FC = () => {
 
   const handleRegionChange = (newRegionId: string) => {
     setSelectedUzRegionId(newRegionId);
+    setDistrictSearchFilter('');
     const found = UZBEKISTAN_REGIONS.find((r) => r.id === newRegionId);
     if (found && found.districts.length > 0) {
       setSelectedDistrict(found.districts[0]);
@@ -258,69 +258,7 @@ export const CartCheckoutPage: React.FC = () => {
     }));
   };
 
-  const handleOpenMapPicker = () => {
-    const startCoords = sharedCoordinates || currentUzRegionObj.approxCenter;
-    setDraftPinCoords({
-      lat: Number(startCoords.lat.toFixed(5)),
-      lng: Number(startCoords.lng.toFixed(5)),
-    });
-    setDraftMapAddressNote(addressLine);
-    setIsMapModalOpen(true);
-  };
-
-  const draftDetectedRegion = useMemo(
-    () =>
-      detectUzbekistanRegionFromCoords(draftPinCoords.lat, draftPinCoords.lng) ||
-      currentUzRegionObj,
-    [draftPinCoords, currentUzRegionObj]
-  );
-
-  const handleMapCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const relX = Math.max(
-      0,
-      Math.min(1, (e.clientX - rect.left) / rect.width)
-    );
-    const relY = Math.max(
-      0,
-      Math.min(1, (e.clientY - rect.top) / rect.height)
-    );
-
-    const nextLng = Number(
-      (UZ_LNG_MIN + relX * (UZ_LNG_MAX - UZ_LNG_MIN)).toFixed(5)
-    );
-    const nextLat = Number(
-      (UZ_LAT_MAX - relY * (UZ_LAT_MAX - UZ_LAT_MIN)).toFixed(5)
-    );
-    setDraftPinCoords({ lat: nextLat, lng: nextLng });
-  };
-
-  const handleConfirmMapPin = () => {
-    setSharedCoordinates({
-      lat: draftPinCoords.lat,
-      lng: draftPinCoords.lng,
-    });
-
-    if (
-      draftDetectedRegion &&
-      draftDetectedRegion.id !== selectedUzRegionId
-    ) {
-      setSelectedUzRegionId(draftDetectedRegion.id);
-      setSelectedDistrict(draftDetectedRegion.districts[0] || '');
-    }
-
-    if (draftMapAddressNote.trim()) {
-      setAddressLine(draftMapAddressNote.trim());
-      setErrors((prev) => ({ ...prev, address: undefined }));
-    }
-
-    setGeoStatusMessage({
-      type: 'success',
-      text: `${getRegionDisplayName(draftDetectedRegion)} (${draftPinCoords.lat}, ${draftPinCoords.lng})`,
-    });
-    setIsMapModalOpen(false);
-  };
-
+  // Optional Browser Geolocation — never auto-selects region/district silently
   const handleUseMyLocation = () => {
     setGeoStatusMessage(null);
 
@@ -334,7 +272,7 @@ export const CartCheckoutPage: React.FC = () => {
 
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         setIsLocating(false);
         const { latitude, longitude, accuracy } = position.coords;
         const roundedLat = Number(latitude.toFixed(5));
@@ -345,15 +283,26 @@ export const CartCheckoutPage: React.FC = () => {
           lng: roundedLng,
           accuracyMeters: accuracy ? Math.round(accuracy) : undefined,
         });
-        setDraftPinCoords({ lat: roundedLat, lng: roundedLng });
 
-        const detectedRegion = detectUzbekistanRegionFromCoords(
-          roundedLat,
-          roundedLng
-        );
-        if (detectedRegion) {
-          setSelectedUzRegionId(detectedRegion.id);
-          setSelectedDistrict(detectedRegion.districts[0] || '');
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${roundedLat}&lon=${roundedLng}&accept-language=uz,ru`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const streetParts = [
+              data?.address?.suburb || data?.address?.neighbourhood,
+              data?.address?.road,
+              data?.address?.house_number
+                ? `${data.address.house_number}-uy`
+                : undefined,
+            ].filter(Boolean);
+            if (streetParts.length > 0 && !addressLine.trim()) {
+              setAddressLine(streetParts.join(', '));
+            }
+          }
+        } catch {
+          // Ignore reverse geocode network error; manual entry remains active
         }
 
         setGeoStatusMessage({
@@ -484,38 +433,36 @@ export const CartCheckoutPage: React.FC = () => {
       ? 'Confirmed by operator'
       : 'Operator bilan aniqlashtiriladi';
 
-  const mapLabels = {
+  // PART 3 FIX: Short, readable mobile step labels so no step is ever cut off on 320px-390px phones
+  const shortStepLabels = {
     uz: {
+      cart: 'Savat',
+      address: 'Manzil',
+      payment: 'Toʻlov',
+      confirm: 'Tasdiq',
       openMapBtn: 'Xaritadan belgilash',
-      modalTitle: 'Yetkazib berish nuqtasini xaritadan tanlang',
-      mapInstruction:
-        'Xarita ustiga bosing yoki viloyatni tanlab pin joylashuvini suring, soʻng tasdiqlang.',
-      selectedRegion: 'Tanlangan hudud:',
-      pinCoords: 'Pin koordinatalari:',
-      confirmPinBtn: 'Nuqtani tasdiqlash',
       clearCartWarn:
         'Savatchadagi barcha tanlangan mahsulotlarni olib tashlamoqchimisiz?',
+      districtFilterPlaceholder: 'Tumanni tez qidirish...',
     },
     ru: {
+      cart: 'Корзина',
+      address: 'Адрес',
+      payment: 'Оплата',
+      confirm: 'Готово',
       openMapBtn: 'Выбрать на карте',
-      modalTitle: 'Выберите точку доставки на карте',
-      mapInstruction:
-        'Нажмите на карту или выберите регион, чтобы переместить пин, затем подтвердите.',
-      selectedRegion: 'Выбранный регион:',
-      pinCoords: 'Координаты точки:',
-      confirmPinBtn: 'Подтвердить точку',
       clearCartWarn: 'Вы действительно хотите удалить все товары из корзины?',
+      districtFilterPlaceholder: 'Быстрый поиск района...',
     },
     en: {
+      cart: 'Cart',
+      address: 'Address',
+      payment: 'Payment',
+      confirm: 'Confirm',
       openMapBtn: 'Choose on Map',
-      modalTitle: 'Place Delivery Pin on Map',
-      mapInstruction:
-        'Tap anywhere on the map or select a region to move the pin, review your address, and confirm.',
-      selectedRegion: 'Selected Region:',
-      pinCoords: 'Pin Coordinates:',
-      confirmPinBtn: 'Confirm Pin Location',
       clearCartWarn:
         'Are you sure you want to remove all items from your shopping cart?',
+      districtFilterPlaceholder: 'Filter districts...',
     },
   }[language];
 
@@ -626,6 +573,15 @@ export const CartCheckoutPage: React.FC = () => {
     });
   };
 
+  // PART 3 FIX: Pressing minus at quantity === 1 removes the item immediately
+  const handleDecreaseCartItem = (productId: string, currentQty: number) => {
+    if (currentQty <= 1) {
+      removeFromCart(productId);
+    } else {
+      updateCartQuantity(productId, currentQty - 1);
+    }
+  };
+
   const goToStep = (targetStep: CheckoutStep) => {
     if (targetStep === 'cart') {
       setActiveStep('cart');
@@ -648,7 +604,6 @@ export const CartCheckoutPage: React.FC = () => {
     if (!isValidUzbekPhone(customerPhone)) {
       nextErrors.phone = '+998 XX XXX-XX-XX';
     }
-    // Gentle validation for optional Telegram username (empty is always valid)
     if (!isValidTelegramUsername(customerTelegram)) {
       nextErrors.telegram = t('cart.telegramInvalidError');
     }
@@ -800,18 +755,16 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-5 sm:p-8 space-y-5">
-            {/* Separate Section A: Delivery Time Estimate Badge Only */}
             <div className="p-3.5 rounded-xl bg-brand-green-light/60 border border-brand-green/20 flex items-center justify-between gap-3 text-xs sm:text-sm">
               <span className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-green shrink-0" />
                 <span>{t('delivery.estimateLabel')}</span>
               </span>
-              <Badge variant="gold" size="md">
+              <Badge variant="gold" size="sm">
                 {t('delivery.estimateValue')}
               </Badge>
             </div>
 
-            {/* Separate Section B: Delivery Address & Contact Details */}
             <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1.5 text-xs sm:text-sm">
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
                 {t('cart.step2Title')}
@@ -950,17 +903,45 @@ export const CartCheckoutPage: React.FC = () => {
   const normalizedPreviewTelegram = normalizeTelegramUsername(customerTelegram);
 
   return (
-    <div className="zaven-page-container py-4 sm:py-8 space-y-6">
-      {/* 4-Step Sequential Progress Bar */}
-      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-3 sm:p-4 shadow-card">
+    <div className="zaven-page-container py-4 sm:py-8 space-y-5 sm:space-y-6">
+      {/* PART 3 FIX: Non-Truncated Step Indicator (Short mobile labels + full desktop labels) */}
+      <nav
+        aria-label="Checkout progress"
+        className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-2.5 sm:p-4 shadow-card"
+      >
         <div className="grid grid-cols-4 gap-1.5 sm:gap-3">
           {(
             [
-              { id: 'cart', num: 1, label: t('cart.stepIndicatorCart') },
-              { id: 'address', num: 2, label: t('cart.stepIndicatorAddress') },
-              { id: 'payment', num: 3, label: t('cart.stepIndicatorPayment') },
-              { id: 'confirm', num: 4, label: t('cart.stepIndicatorConfirm') },
-            ] as { id: CheckoutStep; num: number; label: string }[]
+              {
+                id: 'cart',
+                num: 1,
+                shortLabel: shortStepLabels.cart,
+                fullLabel: t('cart.stepIndicatorCart'),
+              },
+              {
+                id: 'address',
+                num: 2,
+                shortLabel: shortStepLabels.address,
+                fullLabel: t('cart.stepIndicatorAddress'),
+              },
+              {
+                id: 'payment',
+                num: 3,
+                shortLabel: shortStepLabels.payment,
+                fullLabel: t('cart.stepIndicatorPayment'),
+              },
+              {
+                id: 'confirm',
+                num: 4,
+                shortLabel: shortStepLabels.confirm,
+                fullLabel: t('cart.stepIndicatorConfirm'),
+              },
+            ] as {
+              id: CheckoutStep;
+              num: number;
+              shortLabel: string;
+              fullLabel: string;
+            }[]
           ).map((step) => {
             const isCurrent = activeStep === step.id;
             const isCompleted = currentStepNumber > step.num;
@@ -968,13 +949,15 @@ export const CartCheckoutPage: React.FC = () => {
               <button
                 key={step.id}
                 type="button"
+                aria-label={step.fullLabel}
+                aria-current={isCurrent ? 'step' : undefined}
                 disabled={step.num > currentStepNumber}
                 onClick={() => {
                   if (step.num <= currentStepNumber) {
                     goToStep(step.id);
                   }
                 }}
-                className={`min-h-[38px] py-2 px-2 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1.5 min-w-0 ${
+                className={`min-h-[40px] py-1.5 px-1.5 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1 min-w-0 ${
                   isCurrent
                     ? 'bg-[#0F3D2E] text-white border-[#0F3D2E] font-extrabold shadow-sm'
                     : isCompleted
@@ -982,17 +965,24 @@ export const CartCheckoutPage: React.FC = () => {
                     : 'bg-surface-page text-gray-400 border-gray-200 cursor-not-allowed'
                 }`}
               >
-                {isCompleted && (
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 hidden sm:inline" />
+                {isCompleted ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <span className="text-[11px] font-extrabold shrink-0">
+                    {step.num}.
+                  </span>
                 )}
-                <span className="text-[11px] sm:text-xs truncate">
-                  {step.label}
+                <span className="sm:hidden text-[11px] leading-tight">
+                  {step.shortLabel}
+                </span>
+                <span className="hidden sm:inline text-xs truncate">
+                  {step.fullLabel.replace(/^\d+\.\s*/, '')}
                 </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </nav>
 
       {/* ===================================================================== */}
       {/* STEP 1: CART-FOCUSED VIEW (/cart)                                     */}
@@ -1002,9 +992,9 @@ export const CartCheckoutPage: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-7 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
               <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-brand-green" />
-                  <h1 className="text-sm sm:text-base font-extrabold text-gray-900">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShoppingBag className="w-4 h-4 text-brand-green shrink-0" />
+                  <h1 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
                     {t('cart.step1Title')} ({totalItemsCount}{' '}
                     {t('product.units')})
                   </h1>
@@ -1012,7 +1002,7 @@ export const CartCheckoutPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsClearCartModalOpen(true)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition-colors shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>{t('cart.clearCart')}</span>
@@ -1053,7 +1043,7 @@ export const CartCheckoutPage: React.FC = () => {
                             >
                               {localized.name}
                             </Link>
-                            <div className="flex items-baseline gap-2 pt-0.5">
+                            <div className="flex flex-wrap items-baseline gap-2 pt-0.5">
                               <span className="text-xs sm:text-sm font-extrabold text-brand-green">
                                 {formatUZS(unitPrice)}
                               </span>
@@ -1066,19 +1056,24 @@ export const CartCheckoutPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-4 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                          <div className="flex items-center border border-gray-300 rounded-xl bg-white p-0.5">
+                        {/* PART 3 FIX: Aligned Plus/Minus Controls where Minus at Quantity 1 removes the item */}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                          <div className="inline-flex items-center border border-gray-300 dark:border-[#2F5246] rounded-xl bg-white dark:bg-[#0D1915] p-0.5 h-10">
                             <button
                               type="button"
                               onClick={() =>
-                                updateCartQuantity(product.id, quantity - 1)
+                                handleDecreaseCartItem(product.id, quantity)
                               }
-                              className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-700 font-bold"
-                              aria-label="Decrease quantity"
+                              className="w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-[#162923] flex items-center justify-center text-gray-700 dark:text-gray-200 font-bold transition-colors"
+                              aria-label={
+                                quantity === 1
+                                  ? 'Mahsulotni olib tashlash / Remove item'
+                                  : 'Miqdorni kamaytirish / Decrease quantity'
+                              }
                             >
                               <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="w-8 text-center text-xs font-extrabold text-gray-900">
+                            <span className="w-8 text-center text-xs font-extrabold text-gray-900 dark:text-gray-100">
                               {quantity}
                             </span>
                             <button
@@ -1087,24 +1082,24 @@ export const CartCheckoutPage: React.FC = () => {
                                 updateCartQuantity(product.id, quantity + 1)
                               }
                               disabled={isAtMaxStock}
-                              className="w-8 h-8 rounded-lg hover:bg-gray-100 disabled:opacity-40 flex items-center justify-center text-gray-700 font-bold"
-                              aria-label="Increase quantity"
+                              className="w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-[#162923] disabled:opacity-40 flex items-center justify-center text-gray-700 dark:text-gray-200 font-bold transition-colors"
+                              aria-label="Miqdorni oshirish / Increase quantity"
                             >
                               <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
 
-                          <div className="text-right min-w-[105px]">
-                            <div className="text-xs sm:text-sm font-extrabold text-gray-900">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs sm:text-sm font-extrabold text-gray-900 dark:text-gray-100 whitespace-nowrap">
                               {formatUZS(lineTotal)}
-                            </div>
+                            </span>
                             <button
                               type="button"
                               onClick={() => removeFromCart(product.id)}
-                              className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline mt-0.5 font-medium"
-                              aria-label="Remove item"
+                              className="w-9 h-9 rounded-xl text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors shrink-0"
+                              aria-label="Mahsulotni oʻchirish / Remove item"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -1115,26 +1110,31 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
-            <aside className="lg:col-span-5 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card space-y-5 lg:sticky lg:top-24">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <h2 className="text-base sm:text-lg font-extrabold text-gray-900">
+            {/* PART 3 FIX: Order Summary with Separate Delivery Estimate Line & Concise Normal-Case Promo Label */}
+            <aside className="lg:col-span-5 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card space-y-4 lg:sticky lg:top-24">
+              <div className="space-y-1.5 border-b border-gray-100 dark:border-[#28453B] pb-3">
+                <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.summaryTitle')}
                 </h2>
-                <Badge variant="gold" size="sm">
-                  <Clock className="w-3 h-3 mr-1" />
-                  {t('delivery.estimateValue')}
-                </Badge>
+                <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                  <Clock className="w-3.5 h-3.5 text-[#C89D54] shrink-0" />
+                  <span>{t('delivery.estimateLabel')}</span>
+                  <strong className="text-brand-green font-bold">
+                    {t('delivery.estimateValue')}
+                  </strong>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+              {/* Normal-case concise promo-code label and single-row input + button */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
                   {t('cart.promoLabel')}
                 </label>
                 {appliedCoupon ? (
                   <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Tag className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <span className="text-xs font-extrabold text-emerald-900">
+                      <span className="text-xs font-extrabold text-emerald-900 truncate">
                         {appliedCoupon.code} (-
                         {formatUZS(couponDiscountAmount)})
                       </span>
@@ -1142,13 +1142,16 @@ export const CartCheckoutPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setAppliedCouponCode(null)}
-                      className="text-xs font-bold text-red-600 hover:underline"
+                      className="text-xs font-bold text-red-600 hover:underline shrink-0"
                     >
                       ×
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handleApplyCoupon} className="flex gap-2">
+                  <form
+                    onSubmit={handleApplyCoupon}
+                    className="flex flex-wrap sm:flex-nowrap items-center gap-2"
+                  >
                     <input
                       type="text"
                       value={couponInput}
@@ -1157,7 +1160,7 @@ export const CartCheckoutPage: React.FC = () => {
                         setCouponError('');
                       }}
                       placeholder="ZAVEN10"
-                      className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs font-semibold uppercase"
+                      className="flex-1 min-w-[140px] h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs font-semibold uppercase"
                     />
                     <Button type="submit" variant="secondary" size="sm">
                       {t('cart.applyBtn')}
@@ -1171,13 +1174,13 @@ export const CartCheckoutPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="space-y-2.5 pt-2 border-t border-gray-100 text-sm">
-                <div className="flex items-center justify-between text-gray-700">
+              <div className="space-y-2.5 pt-2 border-t border-gray-100 dark:border-[#28453B] text-sm">
+                <div className="flex items-center justify-between text-gray-700 dark:text-gray-300">
                   <span>
                     {t('cart.productsSubtotal')} ({totalItemsCount}{' '}
                     {t('product.units')}):
                   </span>
-                  <span className="font-bold text-gray-900">
+                  <span className="font-bold text-gray-900 dark:text-gray-100">
                     {formatUZS(productsSubtotal)}
                   </span>
                 </div>
@@ -1191,8 +1194,8 @@ export const CartCheckoutPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="pt-3 border-t border-gray-200 flex items-baseline justify-between">
-                  <span className="text-sm sm:text-base font-extrabold text-gray-900">
+                <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex items-baseline justify-between gap-2">
+                  <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                     {t('cart.totalAmount')}
                   </span>
                   <span className="text-xl sm:text-2xl font-extrabold text-brand-green">
@@ -1233,8 +1236,7 @@ export const CartCheckoutPage: React.FC = () => {
       )}
 
       {/* ===================================================================== */}
-      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & CUSTOMER CONTACT FIELDS         */}
-      {/* Order: 1. Full Name -> 2. Phone -> 3. Email -> 4. Telegram (Optional) */}
+      {/* STEP 2: SEQUENTIAL DELIVERY ADDRESS & MAP-BASED LOCATION PICKER       */}
       {/* ===================================================================== */}
       {activeStep === 'address' && (
         <form
@@ -1323,7 +1325,7 @@ export const CartCheckoutPage: React.FC = () => {
               />
             </div>
 
-            {/* Uzbekistan Region/District Selectors + Manual Map Pin Picker + Optional Geolocation */}
+            {/* Uzbekistan Region/District Selectors + Customer-Initiated Map Picker */}
             <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
                 <div>
@@ -1341,9 +1343,9 @@ export const CartCheckoutPage: React.FC = () => {
                     variant="outline"
                     size="sm"
                     leftIcon={<MapIcon className="w-4 h-4 text-brand-green" />}
-                    onClick={handleOpenMapPicker}
+                    onClick={() => setIsMapModalOpen(true)}
                   >
-                    {mapLabels.openMapBtn}
+                    {shortStepLabels.openMapBtn}
                   </Button>
 
                   <Button
@@ -1414,24 +1416,48 @@ export const CartCheckoutPage: React.FC = () => {
                   }
                 />
 
-                <Select
-                  label={t('cart.district')}
-                  required
-                  value={selectedDistrict}
-                  onChange={(e) => {
-                    setSelectedDistrict(e.target.value);
-                    if (errors.district)
-                      setErrors((prev) => ({
-                        ...prev,
-                        district: undefined,
-                      }));
-                  }}
-                  options={currentUzRegionObj.districts.map((dist) => ({
-                    value: dist,
-                    label: dist,
-                  }))}
-                  error={errors.district}
-                />
+                <div className="space-y-1.5">
+                  <Select
+                    label={t('cart.district')}
+                    required
+                    value={selectedDistrict}
+                    onChange={(e) => {
+                      setSelectedDistrict(e.target.value);
+                      if (errors.district)
+                        setErrors((prev) => ({
+                          ...prev,
+                          district: undefined,
+                        }));
+                    }}
+                    options={filteredDistricts.map((dist) => ({
+                      value: dist,
+                      label: dist,
+                    }))}
+                    error={errors.district}
+                  />
+                  {currentUzRegionObj.districts.length > 6 && (
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={districtSearchFilter}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDistrictSearchFilter(val);
+                          const firstMatch =
+                            currentUzRegionObj.districts.find((d) =>
+                              d.toLowerCase().includes(val.trim().toLowerCase())
+                            );
+                          if (firstMatch) {
+                            setSelectedDistrict(firstMatch);
+                          }
+                        }}
+                        placeholder={shortStepLabels.districtFilterPlaceholder}
+                        className="w-full h-8 pl-8 pr-2.5 rounded-lg border border-gray-200 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-[11px] text-gray-700 dark:text-gray-200"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <Input
@@ -1926,242 +1952,24 @@ export const CartCheckoutPage: React.FC = () => {
         </div>
       )}
 
-      {/* Interactive Uzbekistan Map Pin Picker Modal */}
-      <Modal
+      {/* PART 3 FIX: Real Interactive Map-Based Delivery Picker Modal */}
+      <DeliveryMapModal
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}
-        title={mapLabels.modalTitle}
-        maxWidth="xl"
-        footer={
-          <div className="w-full grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              fullWidth
-              onClick={() => setIsMapModalOpen(false)}
-            >
-              {t('footer.cancelBtn')}
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              fullWidth
-              leftIcon={<Check className="w-4 h-4 text-[#C89D54]" />}
-              onClick={handleConfirmMapPin}
-            >
-              {mapLabels.confirmPinBtn}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4 text-xs sm:text-sm">
-          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-            {mapLabels.mapInstruction}
-          </p>
-
-          <div className="relative rounded-2xl overflow-hidden border-2 border-[#0F3D2E] dark:border-[#2F5246] bg-[#0B221A] select-none">
-            <svg
-              viewBox="0 0 600 300"
-              onClick={handleMapCanvasClick}
-              className="w-full h-52 sm:h-64 cursor-crosshair block"
-              role="application"
-              aria-label={mapLabels.modalTitle}
-            >
-              <defs>
-                <pattern
-                  id="uz-map-grid"
-                  width="30"
-                  height="30"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M 30 0 L 0 0 0 30"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.07)"
-                    strokeWidth="1"
-                  />
-                </pattern>
-              </defs>
-
-              <rect width="600" height="300" fill="#0D281E" />
-              <rect width="600" height="300" fill="url(#uz-map-grid)" />
-
-              {UZBEKISTAN_REGIONS.map((reg) => {
-                const cx =
-                  ((reg.approxCenter.lng - UZ_LNG_MIN) /
-                    (UZ_LNG_MAX - UZ_LNG_MIN)) *
-                  600;
-                const cy =
-                  ((UZ_LAT_MAX - reg.approxCenter.lat) /
-                    (UZ_LAT_MAX - UZ_LAT_MIN)) *
-                  300;
-                const isSelectedReg = draftDetectedRegion.id === reg.id;
-
-                return (
-                  <g
-                    key={reg.id}
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      setDraftPinCoords({
-                        lat: reg.approxCenter.lat,
-                        lng: reg.approxCenter.lng,
-                      });
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <circle
-                      cx={cx}
-                      cy={cy}
-                      r={isSelectedReg ? 8 : 5}
-                      fill={isSelectedReg ? '#C89D54' : '#34D399'}
-                      stroke="#09261C"
-                      strokeWidth="2"
-                    />
-                    <text
-                      x={cx}
-                      y={cy - 10}
-                      textAnchor="middle"
-                      fill={isSelectedReg ? '#FDE68A' : '#A7F3D0'}
-                      fontSize="10"
-                      fontWeight={isSelectedReg ? '800' : '600'}
-                    >
-                      {reg.nameUz
-                        .replace(' viloyati', '')
-                        .replace(' Respublikasi', '')}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {(() => {
-                const pinX = Math.max(
-                  14,
-                  Math.min(
-                    586,
-                    ((draftPinCoords.lng - UZ_LNG_MIN) /
-                      (UZ_LNG_MAX - UZ_LNG_MIN)) *
-                      600
-                  )
-                );
-                const pinY = Math.max(
-                  20,
-                  Math.min(
-                    286,
-                    ((UZ_LAT_MAX - draftPinCoords.lat) /
-                      (UZ_LAT_MAX - UZ_LAT_MIN)) *
-                      300
-                  )
-                );
-                return (
-                  <g transform={`translate(${pinX}, ${pinY})`}>
-                    <circle
-                      cx="0"
-                      cy="0"
-                      r="16"
-                      fill="rgba(200, 157, 84, 0.28)"
-                    />
-                    <path
-                      d="M0 -18 C-7 -18 -12 -13 -12 -6 C-12 3 0 14 0 14 C0 14 12 3 12 -6 C12 -13 7 -18 0 -18 Z"
-                      fill="#C89D54"
-                      stroke="#09261C"
-                      strokeWidth="2"
-                    />
-                    <circle cx="0" cy="-7" r="4" fill="#09261C" />
-                  </g>
-                );
-              })()}
-            </svg>
-
-            <div className="px-3 py-2 bg-[#09261C] border-t border-emerald-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-100">
-              <div className="flex items-center gap-1.5">
-                <Navigation className="w-3.5 h-3.5 text-[#C89D54]" />
-                <span>
-                  {mapLabels.pinCoords}{' '}
-                  <strong className="font-mono text-[#C89D54]">
-                    {draftPinCoords.lat}, {draftPinCoords.lng}
-                  </strong>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftPinCoords((p) => ({
-                      ...p,
-                      lat: Number((p.lat + 0.01).toFixed(5)),
-                    }))
-                  }
-                  className="px-2 py-0.5 rounded bg-[#0F3D2E] hover:bg-[#16533F] font-bold"
-                  aria-label="Move pin north"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftPinCoords((p) => ({
-                      ...p,
-                      lat: Number((p.lat - 0.01).toFixed(5)),
-                    }))
-                  }
-                  className="px-2 py-0.5 rounded bg-[#0F3D2E] hover:bg-[#16533F] font-bold"
-                  aria-label="Move pin south"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftPinCoords((p) => ({
-                      ...p,
-                      lng: Number((p.lng - 0.01).toFixed(5)),
-                    }))
-                  }
-                  className="px-2 py-0.5 rounded bg-[#0F3D2E] hover:bg-[#16533F] font-bold"
-                  aria-label="Move pin west"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDraftPinCoords((p) => ({
-                      ...p,
-                      lng: Number((p.lng + 0.01).toFixed(5)),
-                    }))
-                  }
-                  className="px-2 py-0.5 rounded bg-[#0F3D2E] hover:bg-[#16533F] font-bold"
-                  aria-label="Move pin east"
-                >
-                  →
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                {mapLabels.selectedRegion}
-              </span>
-              <Badge variant="green" size="md">
-                {getRegionDisplayName(draftDetectedRegion)}
-              </Badge>
-            </div>
-
-            <Input
-              label={t('cart.address')}
-              value={draftMapAddressNote}
-              onChange={(e) => setDraftMapAddressNote(e.target.value)}
-              placeholder={t('cart.addressPlaceholder')}
-              leftIcon={<MapPin className="w-4 h-4" />}
-            />
-          </div>
-        </div>
-      </Modal>
+        initialCoords={sharedCoordinates || currentUzRegionObj.approxCenter}
+        initialAddress={addressLine}
+        onConfirmLocation={({ coords, reverseGeocodedAddress }) => {
+          setSharedCoordinates(coords);
+          if (reverseGeocodedAddress) {
+            setAddressLine(reverseGeocodedAddress);
+            setErrors((prev) => ({ ...prev, address: undefined }));
+          }
+          setGeoStatusMessage({
+            type: 'success',
+            text: `Xarita nuqtasi tasdiqlandi (${coords.lat}, ${coords.lng})`,
+          });
+        }}
+      />
 
       {/* Restyled Clear-Cart Confirmation Dialog */}
       <Modal
@@ -2205,7 +2013,7 @@ export const CartCheckoutPage: React.FC = () => {
               {t('cart.clearCart')} ({totalItemsCount} {t('product.units')})
             </p>
             <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-              {mapLabels.clearCartWarn}
+              {shortStepLabels.clearCartWarn}
             </p>
           </div>
         </div>
