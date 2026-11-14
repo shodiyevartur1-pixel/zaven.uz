@@ -379,7 +379,7 @@ export const INITIAL_BANNERS: HomepageBanner[] = [
 export const INITIAL_STORE_SETTINGS: StoreSettings = {
   storeName: 'ZAVEN',
   tagline: 'Zamonaviy, foydali va hamyonbop mahsulotlar onlayn doʻkoni',
-  supportPhone: '+998 78 113-45-67',
+  supportPhone: '',
   supportTelegram: '@zaven_uz_support',
   instagramUrl: 'https://instagram.com/zaven.uz',
   instagramHandle: '@zaven.uz',

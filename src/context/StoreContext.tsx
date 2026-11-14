@@ -398,6 +398,12 @@ function mapRowToInquiry(row: Record<string, unknown>): CustomerInquiry {
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
+const LEGACY_DEMO_SUPPORT_PHONE = '+998 78 113-45-67';
+
+const normalizeSupportPhone = (phone: unknown): string =>
+  typeof phone === 'string' && phone.trim() !== LEGACY_DEMO_SUPPORT_PHONE
+    ? phone
+    : '';
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -445,6 +451,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       return {
         ...INITIAL_STORE_SETTINGS,
         ...savedState.storeSettings,
+        supportPhone: normalizeSupportPhone(savedState.storeSettings.supportPhone),
         bankTransfer: {
           ...INITIAL_STORE_SETTINGS.bankTransfer,
           ...(savedState.storeSettings.bankTransfer || {}),
@@ -644,6 +651,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           ...INITIAL_STORE_SETTINGS,
           ...prev,
           ...(restSettings as Partial<StoreSettings>),
+          supportPhone: normalizeSupportPhone(
+            restSettings.supportPhone ?? prev.supportPhone
+          ),
           bankTransfer: {
             ...INITIAL_STORE_SETTINGS.bankTransfer,
             ...((restSettings.bankTransfer as StoreSettings['bankTransfer']) ||

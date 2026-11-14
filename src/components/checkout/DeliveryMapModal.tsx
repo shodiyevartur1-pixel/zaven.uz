@@ -71,6 +71,39 @@ declare global {
   }
 }
 
+const GPS_MESSAGES = {
+  uz: {
+    btnIdle: 'Turgan joyimni aniqlash',
+    btnLoading: 'Joylashuv aniqlanmoqda…',
+    insecure: 'Joylashuvni aniqlash uchun sayt HTTPS ulanishda ochilishi kerak. Manzilni xaritadan qo‘lda tanlashingiz mumkin.',
+    unsupported: 'Brauzer joylashuvni aniqlashni qo‘llab-quvvatlamaydi. Xaritadan nuqtani qo‘lda tanlang.',
+    denied: 'Joylashuvga ruxsat berilmadi. Brauzer manzillar panelidagi qulf belgisidan sayt sozlamalarini ochib, Location ruxsatini yoqing. Qo‘lda xaritadan tanlashingiz ham mumkin.',
+    unavailable: 'Kompyuter joylashuvni aniqlay olmadi. Tizim sozlamalarida Location Services va Wi-Fi yoqilganini tekshiring yoki nuqtani xaritadan qo‘lda tanlang.',
+    timeout: 'Joylashuvni aniqlash uzoq davom etdi. Qayta urinib ko‘ring yoki xaritadan nuqtani qo‘lda tanlang.',
+    found: 'Turgan joyingiz aniqlandi. Kerak bo‘lsa xaritani surib nuqtani to‘g‘rilang.',
+  },
+  ru: {
+    btnIdle: 'Определить моё местоположение',
+    btnLoading: 'Определяем местоположение…',
+    insecure: 'Геолокация требует защищённого HTTPS-соединения. Выберите точку на карте вручную.',
+    unsupported: 'Браузер не поддерживает геолокацию. Выберите точку на карте вручную.',
+    denied: 'Доступ к геолокации запрещён. Откройте настройки сайта через значок замка в адресной строке и разрешите Location. Можно выбрать точку на карте вручную.',
+    unavailable: 'Компьютер не смог определить местоположение. Проверьте системные службы геолокации и Wi-Fi либо выберите точку на карте вручную.',
+    timeout: 'Истекло время ожидания геолокации. Попробуйте ещё раз или выберите точку на карте вручную.',
+    found: 'Местоположение определено. При необходимости передвиньте карту, чтобы уточнить точку.',
+  },
+  en: {
+    btnIdle: 'Find my location',
+    btnLoading: 'Locating…',
+    insecure: 'Geolocation requires a secure HTTPS connection. Select a point on the map manually.',
+    unsupported: 'This browser does not support geolocation. Select a point on the map manually.',
+    denied: 'Location access was denied. Open this site’s settings from the lock icon in the address bar and allow Location, or select a point on the map manually.',
+    unavailable: 'Your computer could not determine its location. Check system Location Services and Wi-Fi, or select a point on the map manually.',
+    timeout: 'The location request timed out. Try again or select a point on the map manually.',
+    found: 'Your location was found. Move the map to fine-tune the selected point if needed.',
+  },
+} as const;
+
 /**
  * Full-screen mobile-first Touch Map Picker inspired by the reference screenshot:
  * - Fills ~92dvh on phones with a floating search header, touch-draggable / pinch-zoomable
@@ -89,6 +122,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
   onConfirmLocation,
 }) => {
   const { t, language } = useThemeLanguage();
+  const gpsText = GPS_MESSAGES[language];
 
   const [pinCoords, setPinCoords] = useState<{ lat: number; lng: number }>(
     initialCoords
@@ -120,8 +154,11 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<LeafletMapInstance | null>(null);
   const reverseGeocodeTimerRef = useRef<number | null>(null);
+  const reverseGeocodeRequestIdRef = useRef(0);
   const isProgrammaticMoveRef = useRef<boolean>(false);
   const userGpsMarkerRef = useRef<LeafletMarkerInstance | null>(null);
+  const locateRequestIdRef = useRef(0);
+  const userMovedManuallyDuringLocateRef = useRef(false);
 
   const getRegionName = useCallback(
     (reg: UzbekistanRegionOption) => {
@@ -134,9 +171,10 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
 
   // Reverse-geocode the exact pin coordinates and match against real Uzbekistan region/district data
   const runReverseGeocode = useCallback(
-    async (lat: number, lng: number) => {
+    async (lat: number, lng: number, preserveStatusMessage = false) => {
+      const requestId = ++reverseGeocodeRequestIdRef.current;
       setIsReverseGeocoding(true);
-      setStatusMessage(null);
+      if (!preserveStatusMessage) setStatusMessage(null);
 
       try {
         const res = await fetch(
@@ -151,6 +189,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
         }
 
         const data = await res.json();
+        if (requestId !== reverseGeocodeRequestIdRef.current) return;
         const addressObj = (data?.address || {}) as Record<
           string,
           string | undefined
@@ -211,6 +250,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
           });
         }
       } catch {
+        if (requestId !== reverseGeocodeRequestIdRef.current) return;
         const fallbackMatch = matchUzbekistanRegionAndDistrictFromGeocode(
           undefined,
           undefined,
@@ -221,12 +261,16 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
         setMatchedDistrict(fallbackMatch.matchedDistrict);
         setDetectedPlaceSummary(`${lat}, ${lng}`);
         setHasSelectedPoint(true);
-        setStatusMessage({
-          type: 'warning',
-          text: t('cart.mapNetworkError'),
-        });
+        if (!preserveStatusMessage) {
+          setStatusMessage({
+            type: 'warning',
+            text: t('cart.mapNetworkError'),
+          });
+        }
       } finally {
-        setIsReverseGeocoding(false);
+        if (requestId === reverseGeocodeRequestIdRef.current) {
+          setIsReverseGeocoding(false);
+        }
       }
     },
     [t]
@@ -261,6 +305,8 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
+      locateRequestIdRef.current += 1;
+      setIsLocatingUser(false);
       Object.assign(document.body.style, previousBodyStyles);
       document.body.classList.remove('zaven-modal-open');
       window.removeEventListener('keydown', handleKeyDown);
@@ -345,6 +391,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       // Tap anywhere on the map to move the center pin to that exact point
       map.on('click', (e) => {
         if (!e?.latlng) return;
+        userMovedManuallyDuringLocateRef.current = true;
         const nextLat = Number(e.latlng.lat.toFixed(5));
         const nextLng = Number(e.latlng.lng.toFixed(5));
         isProgrammaticMoveRef.current = true;
@@ -359,6 +406,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       // Drag the map under the fixed center pin and reverse-geocode on release
       map.on('moveend', () => {
         if (isProgrammaticMoveRef.current) return;
+        userMovedManuallyDuringLocateRef.current = true;
         const center = map.getCenter();
         const nextLat = Number(center.lat.toFixed(5));
         const nextLng = Number(center.lng.toFixed(5));
@@ -380,6 +428,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
 
     return () => {
       isCancelled = true;
+      reverseGeocodeRequestIdRef.current += 1;
       if (reverseGeocodeTimerRef.current) {
         window.clearTimeout(reverseGeocodeTimerRef.current);
       }
@@ -394,7 +443,14 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
     };
   }, [isOpen]);
 
-  const moveMapToCoords = (nextLat: number, nextLng: number, zoom = 15) => {
+  const moveMapToCoords = (
+    nextLat: number,
+    nextLng: number,
+    zoom = 15,
+    preserveStatusMessage = false,
+    isGpsSelection = false
+  ) => {
+    if (!isGpsSelection) userMovedManuallyDuringLocateRef.current = true;
     const roundedLat = Number(nextLat.toFixed(5));
     const roundedLng = Number(nextLng.toFixed(5));
     setPinCoords({ lat: roundedLat, lng: roundedLng });
@@ -408,55 +464,103 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       }, 220);
     }
 
-    runReverseGeocode(roundedLat, roundedLng);
+    runReverseGeocode(roundedLat, roundedLng, preserveStatusMessage);
   };
 
-  const handleLocateMe = () => {
+  const drawUserLocation = (lat: number, lng: number, heading: number | null) => {
+    if (!window.L || !leafletMapRef.current) return;
+    userGpsMarkerRef.current?.remove();
+    const rotation = heading === null ? 0 : heading;
+    const icon = window.L.divIcon({
+      className: 'zaven-user-location-marker',
+      html: `<div style="position:relative;width:42px;height:42px;display:flex;align-items:center;justify-content:center"><div style="position:absolute;inset:2px;border-radius:50%;background:rgba(37,99,235,.18)"></div><svg width="42" height="42" viewBox="0 0 42 42" style="position:absolute;transform:rotate(${rotation}deg)"><path d="M21 2 L29 18 L21 14 L13 18 Z" fill="#2563eb" opacity=".9"/></svg><div style="position:relative;width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid white;box-shadow:0 1px 8px #2563eb99"></div></div>`,
+      iconSize: [42, 42],
+      iconAnchor: [21, 21],
+    });
+    userGpsMarkerRef.current = window.L.marker([lat, lng], {
+      icon,
+      interactive: false,
+    }).addTo(leafletMapRef.current);
+  };
+
+  const handleLocateMe = async () => {
+    if (isLocatingUser) return;
     setStatusMessage(null);
-    if (!navigator.geolocation) {
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
       setStatusMessage({
         type: 'warning',
-        text: language === 'ru'
-          ? 'Браузер не поддерживает геолокацию.'
-          : language === 'en'
-          ? 'This browser does not support location.'
-          : 'Brauzer joylashuvni aniqlashni qo‘llab-quvvatlamaydi.',
+        text: gpsText.insecure,
       });
       return;
     }
+    if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      setStatusMessage({ type: 'warning', text: gpsText.unsupported });
+      return;
+    }
 
+    const requestId = ++locateRequestIdRef.current;
+    userMovedManuallyDuringLocateRef.current = false;
     setIsLocatingUser(true);
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setIsLocatingUser(false);
-        const lat = Number(coords.latitude.toFixed(5));
-        const lng = Number(coords.longitude.toFixed(5));
-        moveMapToCoords(lat, lng, 17);
-        if (window.L && leafletMapRef.current) {
-          userGpsMarkerRef.current?.remove();
-          const icon = window.L.divIcon({
-            className: 'zaven-user-location-marker',
-            html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:4px solid #fff;box-shadow:0 1px 8px #2563eb99"></div>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10],
-          });
-          userGpsMarkerRef.current = window.L.marker([lat, lng], { icon })
-            .addTo(leafletMapRef.current);
-        }
-      },
-      () => {
-        setIsLocatingUser(false);
-        setStatusMessage({
-          type: 'warning',
-          text: language === 'ru'
-            ? 'Не удалось определить местоположение. Проверьте разрешение браузера.'
-            : language === 'en'
-            ? 'Could not get your location. Check browser permission.'
-            : 'Joylashuv aniqlanmadi. Brauzer ruxsatini tekshiring.',
+    const requestPosition = (
+      highAccuracy: boolean,
+      timeout: number,
+      maximumAge: number
+    ) =>
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: highAccuracy,
+          timeout,
+          maximumAge,
         });
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-    );
+      });
+
+    try {
+      try {
+        if (navigator.permissions?.query) {
+          const permission = await navigator.permissions.query({
+            name: 'geolocation' as PermissionName,
+          });
+          if (permission.state === 'denied') {
+            const deniedError = new Error('Location permission denied') as Error & { code: number };
+            deniedError.code = 1;
+            throw deniedError;
+          }
+        }
+      } catch (error) {
+        if ((error as { code?: number }).code === 1) throw error;
+        // Some browsers do not expose the Permissions API; getCurrentPosition remains authoritative.
+      }
+
+      let position: GeolocationPosition;
+      try {
+        position = await requestPosition(true, 7000, 0);
+      } catch (error) {
+        if ((error as { code?: number }).code === 1) throw error;
+        position = await requestPosition(false, 12000, 60000);
+      }
+      if (requestId !== locateRequestIdRef.current) return;
+
+      const { latitude, longitude, heading } = position.coords;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw { code: 2 };
+      }
+      const lat = Number(latitude.toFixed(5));
+      const lng = Number(longitude.toFixed(5));
+      drawUserLocation(lat, lng, Number.isFinite(heading) ? heading : null);
+      if (!userMovedManuallyDuringLocateRef.current) {
+        setStatusMessage({ type: 'info', text: gpsText.found });
+        moveMapToCoords(lat, lng, 16, true, true);
+      }
+    } catch (error) {
+      if (requestId !== locateRequestIdRef.current) return;
+      const code = (error as { code?: number }).code;
+      setStatusMessage({
+        type: 'warning',
+        text: code === 1 ? gpsText.denied : code === 3 ? gpsText.timeout : gpsText.unavailable,
+      });
+    } finally {
+      if (requestId === locateRequestIdRef.current) setIsLocatingUser(false);
+    }
   };
 
   const handlePlaceSearch = async (e: React.FormEvent) => {
@@ -697,7 +801,8 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
             type="button"
             onClick={handleLocateMe}
             disabled={isLocatingUser}
-            aria-label={language === 'ru' ? 'Моё местоположение' : language === 'en' ? 'My location' : 'Turgan joyimni aniqlash'}
+            aria-label={isLocatingUser ? gpsText.btnLoading : gpsText.btnIdle}
+            title={isLocatingUser ? gpsText.btnLoading : gpsText.btnIdle}
             className="absolute bottom-3 right-3 z-20 w-11 h-11 rounded-2xl bg-white/95 dark:bg-[#12211C]/95 text-blue-600 border border-gray-200 dark:border-[#2F5246] shadow-lg flex items-center justify-center disabled:opacity-60"
           >
             {isLocatingUser ? <RefreshCw className="w-5 h-5 animate-spin" /> : <LocateFixed className="w-5 h-5" />}

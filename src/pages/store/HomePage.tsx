@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -44,6 +44,28 @@ export const HomePage: React.FC = () => {
   // Featured product carousel state
   const [activeSlideIdx, setActiveSlideIdx] = useState<number>(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const carouselPauseTimeoutRef = useRef<number | null>(null);
+
+  const pauseCarouselBriefly = () => {
+    setIsCarouselPaused(true);
+    if (carouselPauseTimeoutRef.current !== null) {
+      window.clearTimeout(carouselPauseTimeoutRef.current);
+    }
+    carouselPauseTimeoutRef.current = window.setTimeout(() => {
+      setIsCarouselPaused(false);
+      carouselPauseTimeoutRef.current = null;
+    }, 5000);
+  };
+
+  useEffect(
+    () => () => {
+      if (carouselPauseTimeoutRef.current !== null) {
+        window.clearTimeout(carouselPauseTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   const visibleProducts = useMemo(
     () =>
@@ -66,7 +88,7 @@ export const HomePage: React.FC = () => {
 
   // Rotate featured products gently; respect reduced-motion and background tabs.
   useEffect(() => {
-    if (carouselProducts.length < 2) return;
+    if (carouselProducts.length < 2 || isCarouselPaused) return;
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (motionPreference.matches) return;
 
@@ -76,7 +98,7 @@ export const HomePage: React.FC = () => {
       }
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [carouselProducts.length]);
+  }, [carouselProducts.length, isCarouselPaused]);
 
   const safeSlideIdx =
     carouselProducts.length > 0
@@ -86,6 +108,7 @@ export const HomePage: React.FC = () => {
 
   const handlePrevSlide = () => {
     if (carouselProducts.length <= 1) return;
+    pauseCarouselBriefly();
     setActiveSlideIdx((prev) =>
       prev === 0 ? carouselProducts.length - 1 : prev - 1
     );
@@ -93,6 +116,7 @@ export const HomePage: React.FC = () => {
 
   const handleNextSlide = () => {
     if (carouselProducts.length <= 1) return;
+    pauseCarouselBriefly();
     setActiveSlideIdx((prev) =>
       prev === carouselProducts.length - 1 ? 0 : prev + 1
     );
@@ -182,6 +206,8 @@ export const HomePage: React.FC = () => {
         <section
           aria-roledescription="carousel"
           aria-label={t('home.popularTitle')}
+          onMouseEnter={() => setIsCarouselPaused(true)}
+          onMouseLeave={() => setIsCarouselPaused(false)}
           className="zaven-page-container"
         >
           {(() => {
@@ -199,11 +225,12 @@ export const HomePage: React.FC = () => {
 
             return (
               <div
+                key={currentCarouselProduct.id}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
-                className="relative bg-[#0F3D2E] rounded-2xl border border-[#1D4D3C] shadow-card overflow-hidden select-none"
+                className="relative min-h-[204px] sm:min-h-[232px] lg:min-h-[248px] flex flex-col bg-[#0F3D2E] rounded-2xl border border-[#1D4D3C] shadow-card overflow-hidden select-none animate-[zaven-carousel-enter_320ms_ease-out] motion-reduce:animate-none"
               >
-                <div className="p-3 sm:p-5 lg:p-6 flex items-center gap-3.5 sm:gap-6">
+                <div className="flex-1 p-3 sm:p-5 lg:p-6 flex items-center gap-3.5 sm:gap-6">
                   {/* Product Image Thumbnail (1:1 aspect ratio, no stretching or layout shift) */}
                   <Link
                     to={`/product/${currentCarouselProduct.slug}`}
@@ -228,10 +255,12 @@ export const HomePage: React.FC = () => {
                   {/* Product Info: Category Badge, 2-Line Title, Price & Single Clear "Koʻrish" Action */}
                   <div className="flex-1 min-w-0 flex flex-col justify-between space-y-2 sm:space-y-3">
                     <div className="space-y-1 min-w-0">
-                      {locCat && (
-                        <span className="inline-block text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#E5C992] truncate max-w-full">
+                      {locCat ? (
+                        <span className="flex h-4 sm:h-5 items-center text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#E5C992] truncate max-w-full">
                           {locCat.name}
                         </span>
+                      ) : (
+                        <span className="block h-4 sm:h-5" aria-hidden="true" />
                       )}
 
                       <Link
@@ -240,18 +269,18 @@ export const HomePage: React.FC = () => {
                           recordRecentlyViewed(currentCarouselProduct.id);
                           window.scrollTo(0, 0);
                         }}
-                        className="block text-sm sm:text-xl lg:text-2xl font-extrabold text-white hover:text-[#E5C992] transition-colors line-clamp-2 leading-snug break-words"
+                        className="block h-[2.75rem] sm:h-[3.5rem] text-sm sm:text-xl lg:text-2xl font-extrabold text-white hover:text-[#E5C992] transition-colors line-clamp-2 leading-snug break-words overflow-hidden"
                       >
                         {locProd.name}
                       </Link>
                     </div>
 
-                    <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="text-base sm:text-2xl font-extrabold text-[#C89D54] leading-none">
+                    <div className="min-h-10 sm:min-h-12 flex flex-col justify-center gap-1">
+                      <span className="text-base sm:text-2xl font-extrabold text-[#C89D54] leading-none whitespace-nowrap">
                         {formatUZS(effectivePrice)}
                       </span>
                       {currentCarouselProduct.salePrice && (
-                        <span className="text-[11px] sm:text-sm text-emerald-200/70 line-through">
+                        <span className="text-[11px] sm:text-sm text-emerald-200/70 line-through leading-none">
                           {formatUZS(currentCarouselProduct.price)}
                         </span>
                       )}
@@ -311,7 +340,10 @@ export const HomePage: React.FC = () => {
                           role="tab"
                           aria-selected={isCurrent}
                           aria-label={`${t('home.carouselSlideAria')} ${idx + 1}`}
-                          onClick={() => setActiveSlideIdx(idx)}
+                          onClick={() => {
+                            pauseCarouselBriefly();
+                            setActiveSlideIdx(idx);
+                          }}
                           className={`h-1.5 rounded-full transition-all ${
                             isCurrent
                               ? 'w-6 bg-[#C89D54]'

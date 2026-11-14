@@ -49,6 +49,17 @@ body.zaven-modal-open nav[aria-label="Mobile bottom navigation"] {
   visibility: hidden !important;
 }
 
+@keyframes zaven-carousel-enter {
+  from {
+    opacity: 0.35;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Netlify's injected badge overlaps the fixed mobile navigation on small screens. */
 @media (max-width: 767px) {
   #nl-badge-frame,

@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Grid, Heart, ShoppingBag, User } from 'lucide-react';
 import { StoreHeader } from './StoreHeader';
-import { MobileDrawer } from './MobileDrawer';
 import { StoreFooter } from './StoreFooter';
 import { ToastContainer } from '../ui/ToastContainer';
 import { useStore } from '../../context/StoreContext';
@@ -13,7 +12,6 @@ interface StoreLayoutProps {
 }
 
 export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { cart, favoriteIds } = useStore();
   const { t } = useThemeLanguage();
   const location = useLocation();
@@ -26,12 +24,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 pb-20 md:pb-8 transition-colors">
-      <StoreHeader onOpenMobileMenu={() => setIsMobileMenuOpen(true)} />
-
-      <MobileDrawer
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-      />
+      <StoreHeader />
 
       <main className="flex-1 bg-transparent">{children}</main>
 

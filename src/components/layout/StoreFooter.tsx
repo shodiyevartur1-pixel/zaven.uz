@@ -20,6 +20,10 @@ export const StoreFooter: React.FC = () => {
   const { categories, storeSettings, submitCustomerInquiry, currentCustomer } =
     useStore();
   const { t, getCategoryText } = useThemeLanguage();
+  const configuredSupportPhone =
+    storeSettings.supportPhone?.trim() === '+998 78 113-45-67'
+      ? ''
+      : storeSettings.supportPhone?.trim() || '';
 
   const [isInquiryModalOpen, setIsInquiryModalOpen] = useState(false);
   const [customerName, setCustomerName] = useState(
@@ -96,13 +100,15 @@ export const StoreFooter: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <a
-              href={`tel:${storeSettings.supportPhone.replace(/\s+/g, '')}`}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#16533F] border border-emerald-700 text-xs font-bold text-white transition-colors"
-            >
-              <Phone className="w-3.5 h-3.5 text-[#C89D54]" />
-              <span>{storeSettings.supportPhone}</span>
-            </a>
+            {configuredSupportPhone && (
+              <a
+                href={`tel:${configuredSupportPhone.replace(/\s+/g, '')}`}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#16533F] border border-emerald-700 text-xs font-bold text-white transition-colors"
+              >
+                <Phone className="w-3.5 h-3.5 text-[#C89D54]" />
+                <span>{configuredSupportPhone}</span>
+              </a>
+            )}
 
             <a
               href={storeSettings.instagramUrl}
