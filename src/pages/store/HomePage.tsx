@@ -303,7 +303,7 @@ export const HomePage: React.FC = () => {
                   <div
                     key={`${slideProduct.id}-slide-${idx}`}
                     aria-hidden={!isLogicalActive}
-                    className="relative h-[250px] w-full shrink-0 overflow-hidden bg-[#07110D] sm:h-[340px] lg:h-[440px]"
+                    className="relative h-[160px] w-full shrink-0 overflow-hidden bg-[#07110D] sm:h-[220px] lg:h-[280px]"
                   >
                     <Link
                       to={`/product/${slideProduct.slug}`}

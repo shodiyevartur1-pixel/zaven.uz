@@ -32,7 +32,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
       {/* Mobile navigation: wishlist is in the header, so the four main destinations stay clear. */}
       <nav
         aria-label="Mobile bottom navigation"
-        className="md:hidden fixed bottom-0 left-2 right-2 z-40 bg-white/95 dark:bg-[#12211C]/95 backdrop-blur-md border border-gray-200 dark:border-[#28453B] shadow-[0_-8px_28px_rgba(0,0,0,0.16)] grid grid-cols-4 items-center h-[calc(4.25rem+env(safe-area-inset-bottom))] px-1 pb-[env(safe-area-inset-bottom)] rounded-t-2xl rounded-b-xl transition-opacity duration-150"
+        className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 bg-white/95 dark:bg-[#12211C]/95 backdrop-blur-md border border-gray-200 dark:border-[#28453B] shadow-[0_-8px_28px_rgba(0,0,0,0.16)] grid grid-cols-4 items-center h-[4.25rem] px-1 rounded-2xl transition-opacity duration-150"
       >
         <Link
           to="/"
