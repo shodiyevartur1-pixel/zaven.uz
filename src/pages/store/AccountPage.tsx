@@ -21,6 +21,8 @@ import {
   Send,
   RefreshCw,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -85,6 +87,14 @@ const ORDER_STATUS_META: Record<
   },
 };
 
+const getFriendlyAuthError = (error: unknown, fallback: string): string => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/failed to fetch|networkerror|load failed|request cannot be|fetch.*window/i.test(message)) {
+    return fallback;
+  }
+  return message || fallback;
+};
+
 export const AccountPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -110,6 +120,7 @@ export const AccountPage: React.FC = () => {
   const [authEmail, setAuthEmail] = useState<string>('');
   const [authPassword, setAuthPassword] = useState<string>('');
   const [authNewPassword, setAuthNewPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [authFullName, setAuthFullName] = useState<string>('');
   const [authPhone, setAuthPhone] = useState<string>('+998 ');
   const [pendingEmail, setPendingEmail] = useState<string>('');
@@ -276,6 +287,8 @@ export const AccountPage: React.FC = () => {
           description: data.user.email,
         });
       }
+    } catch (error) {
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -330,7 +343,7 @@ export const AccountPage: React.FC = () => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
         return;
       }
 
@@ -341,6 +354,8 @@ export const AccountPage: React.FC = () => {
         setPendingEmail(cleanEmail);
         setAuthMode('verify_pending');
       }
+    } catch (error) {
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -726,12 +741,23 @@ export const AccountPage: React.FC = () => {
                 <Input
                   label={t('account.passwordLabel')}
                   required
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
                   placeholder="••••••••"
                   leftIcon={<KeyRound className="w-4 h-4" />}
+                  rightElement={(
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      aria-label={showPassword ? t('account.hidePassword') : t('account.showPassword')}
+                      aria-pressed={showPassword}
+                      className="rounded-md p-1 text-gray-500 hover:text-brand-green dark:text-gray-400 dark:hover:text-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-green"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  )}
                 />
 
                 <div className="flex items-center justify-end">
@@ -798,12 +824,23 @@ export const AccountPage: React.FC = () => {
                 <Input
                   label={t('account.passwordLabel')}
                   required
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
                   placeholder="••••••••"
                   leftIcon={<KeyRound className="w-4 h-4" />}
+                  rightElement={(
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      aria-label={showPassword ? t('account.hidePassword') : t('account.showPassword')}
+                      aria-pressed={showPassword}
+                      className="rounded-md p-1 text-gray-500 hover:text-brand-green dark:text-gray-400 dark:hover:text-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-green"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  )}
                 />
 
                 <Button
@@ -865,12 +902,23 @@ export const AccountPage: React.FC = () => {
                 <Input
                   label={t('account.newPasswordLabel')}
                   required
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   value={authNewPassword}
                   onChange={(e) => setAuthNewPassword(e.target.value)}
                   placeholder="••••••••"
                   leftIcon={<KeyRound className="w-4 h-4" />}
+                  rightElement={(
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((visible) => !visible)}
+                      aria-label={showPassword ? t('account.hidePassword') : t('account.showPassword')}
+                      aria-pressed={showPassword}
+                      className="rounded-md p-1 text-gray-500 hover:text-brand-green dark:text-gray-400 dark:hover:text-brand-gold focus:outline-none focus:ring-2 focus:ring-brand-green"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  )}
                 />
 
                 <Button
