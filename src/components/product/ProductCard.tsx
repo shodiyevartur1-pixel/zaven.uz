@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -33,6 +33,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     recordRecentlyViewed,
   } = useStore();
   const { t, getProductText, getCategoryText } = useThemeLanguage();
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   const category = categories.find((c) => c.id === product.categoryId);
   const localizedProduct = getProductText(product);
@@ -68,12 +69,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const handleNavigateToProduct = () => {
     recordRecentlyViewed(product.id);
     navigate(`/product/${product.slug}`);
-    window.scrollTo(0, 0);
   };
 
   const handleProductLinkClick = () => {
     recordRecentlyViewed(product.id);
-    window.scrollTo(0, 0);
   };
 
   return (
@@ -88,7 +87,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             title={localizedProduct.name}
           >
             <img
-              src={images[0]}
+              src={images[activeImageIndex] || images[0]}
               alt={localizedProduct.name}
               loading="lazy"
               className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
@@ -96,6 +95,35 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               }`}
             />
           </Link>
+
+          {images.length > 1 && (
+            <div
+              className="absolute bottom-2 left-1/2 z-20 flex max-w-[calc(100%-5rem)] -translate-x-1/2 items-center justify-center gap-1.5"
+              role="group"
+              aria-label="Mahsulot rasmlari"
+            >
+              {images.map((_, index) => (
+                <button
+                  key={`${product.id}-image-${index}`}
+                  type="button"
+                  onMouseEnter={() => setActiveImageIndex(index)}
+                  onFocus={() => setActiveImageIndex(index)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setActiveImageIndex(index);
+                  }}
+                  aria-label={`${index + 1}-rasmni ko‘rsatish`}
+                  aria-pressed={activeImageIndex === index}
+                  className={`h-1.5 rounded-full shadow-sm transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${
+                    activeImageIndex === index
+                      ? 'w-6 bg-white'
+                      : 'w-3 bg-white/65 hover:bg-white/90'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Requirements #3 & #5: Top-Left Badges with guaranteed right clearance (right-12 pr-1.5) so they never touch or overlap the heart button */}
           <div className="absolute top-2 left-2 right-12 pr-1.5 flex flex-wrap items-center gap-1 pointer-events-none z-10">
@@ -174,7 +202,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 recordRecentlyViewed(product.id);
-                window.scrollTo(0, 0);
               }}
               title={localizedProduct.name}
               className="block text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 group-hover:text-brand-green transition-colors line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] leading-snug break-words"

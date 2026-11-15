@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useLayoutEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -35,8 +35,10 @@ const RouteEffectsManager: React.FC = () => {
   const { storeSettings } = useStore();
   const { t, language } = useThemeLanguage();
 
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  useLayoutEffect(() => {
+    // Route changes should start at the top immediately, not animate the old
+    // page through its content before the new route appears.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
 
     const baseName = storeSettings.storeName || 'ZAVEN';
     let pageTitle = `${baseName} — ${t('header.onlineStore')}`;

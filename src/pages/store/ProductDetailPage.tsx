@@ -75,7 +75,7 @@ export const ProductDetailPage: React.FC = () => {
     useState<boolean>(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
     setSelectedImageIdx(0);
     setPendingQty(1);
     setIsZoomedInLightbox(false);
