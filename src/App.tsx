@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -34,6 +34,28 @@ const RouteEffectsManager: React.FC = () => {
   const location = useLocation();
   const { storeSettings } = useStore();
   const { t, language } = useThemeLanguage();
+  const [isRouteLoading, setIsRouteLoading] = useState(false);
+  const [routeProgress, setRouteProgress] = useState(0);
+
+  useEffect(() => {
+    setIsRouteLoading(true);
+    setRouteProgress(14);
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      setRouteProgress(78);
+    });
+    const completeTimer = window.setTimeout(() => setRouteProgress(100), 320);
+    const hideTimer = window.setTimeout(() => {
+      setIsRouteLoading(false);
+      setRouteProgress(0);
+    }, 620);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(completeTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [location.key]);
 
   useLayoutEffect(() => {
     // Route changes should start at the top immediately, not animate the old
@@ -74,7 +96,14 @@ const RouteEffectsManager: React.FC = () => {
     t,
   ]);
 
-  return null;
+  return (
+    <div
+      className={`zaven-route-progress ${isRouteLoading ? 'is-visible' : ''}`}
+      aria-hidden="true"
+    >
+      <span style={{ transform: `scaleX(${routeProgress / 100})` }} />
+    </div>
+  );
 };
 
 const NotFoundPage: React.FC = () => {
