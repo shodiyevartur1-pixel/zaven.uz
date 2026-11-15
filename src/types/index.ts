@@ -169,6 +169,7 @@ export interface CustomerAddress {
   region: string;
   district?: string;
   addressLine: string;
+  locationCoordinates?: { lat: number; lng: number };
   isDefault: boolean;
 }
 

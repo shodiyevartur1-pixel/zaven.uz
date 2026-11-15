@@ -103,27 +103,14 @@ export const StoreHeader: React.FC = () => {
   };
 
   // ============================================================================
-  // PART 1 FIX: NON-OVERLAPPING COMPACT HEADER FOR /cart AND /checkout
-  // - Uses a dedicated 40x40px back icon button on narrow phones (< sm)
-  // - Hides secondary tagline on narrow phones so ZAVEN logo never clips
-  // - Keeps language, theme, and account controls in distinct 40x40px touch areas
+  // Compact checkout header follows the current storefront navigation: brand,
+  // favorites, language, and theme, with no duplicate account/back controls.
   // ============================================================================
   if (isCompactCheckoutRoute) {
     return (
       <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
         <div className="zaven-page-container h-14 flex items-center justify-between gap-2">
-          {/* Left: Back to Shop Button + Brand Identity */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link
-              to="/catalog"
-              aria-label={t('cart.backToShop')}
-              title={t('cart.backToShop')}
-              className="w-10 h-10 sm:w-auto sm:h-9 sm:px-3 rounded-xl bg-[#09261C]/85 hover:bg-[#C89D54] text-emerald-100 hover:text-[#09261C] border border-emerald-700/70 inline-flex items-center justify-center gap-1.5 text-xs font-bold transition-colors shrink-0"
-            >
-              <ArrowLeft className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">{t('cart.backToShop')}</span>
-            </Link>
-
+          <div className="flex items-center min-w-0">
             <Link
               to="/"
               className="flex items-center gap-2 group focus:outline-none shrink-0"
@@ -144,8 +131,22 @@ export const StoreHeader: React.FC = () => {
             </Link>
           </div>
 
-          {/* Right: Distinct Non-Overlapping Touch Controls */}
+          {/* Compact controls match the updated storefront header */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <Link
+              to="/favorites"
+              className="relative w-9 h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 text-[#E5C992] hover:bg-[#16533F] flex items-center justify-center transition-colors shrink-0"
+              aria-label={`${t('header.favoritesShort')}${favoriteIds.length ? ` (${favoriteIds.length})` : ''}`}
+              title={t('header.favoritesShort')}
+            >
+              <Heart className="w-4 h-4" />
+              {favoriteIds.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                  {favoriteIds.length > 99 ? '99+' : favoriteIds.length}
+                </span>
+              )}
+            </Link>
+
             <div className="hidden sm:block">
               <ThemeLanguageControls variant="header-dark" />
             </div>
@@ -153,7 +154,7 @@ export const StoreHeader: React.FC = () => {
             <button
               type="button"
               onClick={cycleLanguageMobile}
-              className="sm:hidden min-w-[40px] h-10 px-2.5 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 text-xs font-extrabold text-[#C89D54] flex items-center justify-center shrink-0"
+              className="sm:hidden min-w-[36px] h-9 px-2 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 text-[10px] font-extrabold text-[#C89D54] flex items-center justify-center shrink-0"
               aria-label="Tilni almashtirish / Switch language"
             >
               {COMPACT_LANGS.find((l) => l.code === language)?.label || 'OʻZ'}
@@ -162,7 +163,7 @@ export const StoreHeader: React.FC = () => {
             <button
               type="button"
               onClick={toggleTheme}
-              className="sm:hidden w-10 h-10 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 flex items-center justify-center text-[#C89D54] shrink-0"
+              className="sm:hidden w-9 h-9 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 flex items-center justify-center text-[#C89D54] shrink-0"
               aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
             >
               {theme === 'dark' ? (
@@ -172,14 +173,6 @@ export const StoreHeader: React.FC = () => {
               )}
             </button>
 
-            <Link
-              to="/account"
-              className="w-10 h-10 rounded-xl bg-[#09261C]/85 hover:bg-[#16533F] border border-[#C89D54]/40 text-white flex items-center justify-center transition-colors shrink-0"
-              title={t('header.account')}
-              aria-label={t('header.account')}
-            >
-              <User className="w-4 h-4 text-[#C89D54]" />
-            </Link>
           </div>
         </div>
       </header>

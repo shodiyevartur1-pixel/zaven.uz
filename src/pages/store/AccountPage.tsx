@@ -41,6 +41,11 @@ import { Badge } from '../../components/ui/Badge';
 import { Input, Select } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import { EmptyState } from '../../components/ui/EmptyState';
+import {
+  ConfirmedMapLocationPayload,
+  DeliveryMapModal,
+} from '../../components/checkout/DeliveryMapModal';
+import { UZBEKISTAN_REGIONS } from '../../utils/uzbekistanLocations';
 
 type AccountTab = 'orders' | 'addresses' | 'profile';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'verify_pending' | 'update_password';
@@ -87,8 +92,15 @@ const ORDER_STATUS_META: Record<
   },
 };
 
-const getFriendlyAuthError = (error: unknown, fallback: string): string => {
+const getFriendlyAuthError = (
+  error: unknown,
+  fallback: string,
+  rateLimitMessage = fallback
+): string => {
   const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/email rate limit exceeded|over_email_send_rate_limit|too many requests/i.test(message)) {
+    return rateLimitMessage;
+  }
   if (/failed to fetch|networkerror|load failed|request cannot be|fetch.*window/i.test(message)) {
     return fallback;
   }
@@ -140,7 +152,13 @@ export const AccountPage: React.FC = () => {
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
   const [addrTitle, setAddrTitle] = useState<string>('');
   const [addrRegion, setAddrRegion] = useState<string>('Toshkent shahri');
+  const [addrDistrict, setAddrDistrict] = useState<string | undefined>();
   const [addrLine, setAddrLine] = useState<string>('');
+  const [addrCoordinates, setAddrCoordinates] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [isAddressMapOpen, setIsAddressMapOpen] = useState(false);
   const [addrDefault, setAddrDefault] = useState<boolean>(false);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -269,7 +287,7 @@ export const AccountPage: React.FC = () => {
           setAuthFeedback(t('account.notVerifiedYet'));
           return;
         }
-        setAuthError(error.message);
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
         return;
       }
 
@@ -288,7 +306,7 @@ export const AccountPage: React.FC = () => {
         });
       }
     } catch (error) {
-      setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -343,7 +361,7 @@ export const AccountPage: React.FC = () => {
       });
 
       if (error) {
-        setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
         return;
       }
 
@@ -355,7 +373,7 @@ export const AccountPage: React.FC = () => {
         setAuthMode('verify_pending');
       }
     } catch (error) {
-      setAuthError(getFriendlyAuthError(error, t('account.connectionError')));
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -386,7 +404,7 @@ export const AccountPage: React.FC = () => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
         return;
       }
 
@@ -395,6 +413,8 @@ export const AccountPage: React.FC = () => {
         type: 'success',
         title: t('account.resendSuccess'),
       });
+    } catch (error) {
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -457,7 +477,7 @@ export const AccountPage: React.FC = () => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
         return;
       }
 
@@ -466,6 +486,8 @@ export const AccountPage: React.FC = () => {
         type: 'info',
         title: t('account.resetSentSuccess'),
       });
+    } catch (error) {
+      setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -490,7 +512,7 @@ export const AccountPage: React.FC = () => {
       });
 
       if (error) {
-        setAuthError(error.message);
+        setAuthError(getFriendlyAuthError(error, t('account.connectionError'), t('account.emailRateLimit')));
         return;
       }
 
@@ -538,13 +560,17 @@ export const AccountPage: React.FC = () => {
       setEditingAddressId(address.id);
       setAddrTitle(address.title);
       setAddrRegion(address.region);
+      setAddrDistrict(address.district);
       setAddrLine(address.addressLine);
+      setAddrCoordinates(address.locationCoordinates || null);
       setAddrDefault(address.isDefault);
     } else {
       setEditingAddressId(null);
       setAddrTitle('');
       setAddrRegion(enabledRegions[0]?.regionName || 'Toshkent shahri');
+      setAddrDistrict(undefined);
       setAddrLine('');
+      setAddrCoordinates(null);
       setAddrDefault(
         !currentCustomer || currentCustomer.addresses.length === 0
       );
@@ -566,7 +592,9 @@ export const AccountPage: React.FC = () => {
               ...item,
               title: addrTitle.trim(),
               region: addrRegion,
+              district: addrDistrict,
               addressLine: addrLine.trim(),
+              locationCoordinates: addrCoordinates || undefined,
               isDefault: addrDefault,
             }
           : addrDefault
@@ -578,7 +606,9 @@ export const AccountPage: React.FC = () => {
         id: `addr-${Date.now()}`,
         title: addrTitle.trim(),
         region: addrRegion,
+        district: addrDistrict,
         addressLine: addrLine.trim(),
+        locationCoordinates: addrCoordinates || undefined,
         isDefault: addrDefault || existingList.length === 0,
       };
       updatedAddresses = newAddress.isDefault
@@ -591,6 +621,20 @@ export const AccountPage: React.FC = () => {
 
     updateCustomerProfile({ addresses: updatedAddresses });
     setIsAddressModalOpen(false);
+    setIsAddressMapOpen(false);
+  };
+
+  const handleAddressMapConfirm = ({
+    coords,
+    reverseGeocodedAddress,
+    matchedRegion,
+    matchedDistrict,
+  }: ConfirmedMapLocationPayload) => {
+    setAddrCoordinates(coords);
+    if (reverseGeocodedAddress) setAddrLine(reverseGeocodedAddress);
+    if (matchedRegion) setAddrRegion(matchedRegion.nameUz);
+    setAddrDistrict(matchedDistrict || undefined);
+    setIsAddressMapOpen(false);
   };
 
   const handleDeleteAddress = (addressId: string) => {
@@ -1218,13 +1262,12 @@ export const AccountPage: React.FC = () => {
                   {t('account.savedAddresses')}
                 </h2>
                 <Button
+                  type="button"
                   variant="primary"
                   size="sm"
                   leftIcon={<Plus className="w-4 h-4" />}
                   onClick={() => handleOpenAddressModal()}
-                >
-                  +
-                </Button>
+                />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1322,7 +1365,7 @@ export const AccountPage: React.FC = () => {
 
       {/* Address Modal */}
       <Modal
-        isOpen={isAddressModalOpen}
+        isOpen={isAddressModalOpen && !isAddressMapOpen}
         onClose={() => setIsAddressModalOpen(false)}
         title={t('account.savedAddresses')}
         maxWidth="md"
@@ -1354,7 +1397,7 @@ export const AccountPage: React.FC = () => {
           className="space-y-4"
         >
           <Input
-            label="Title"
+            label={t('account.addressTitle')}
             required
             value={addrTitle}
             onChange={(e) => setAddrTitle(e.target.value)}
@@ -1363,12 +1406,26 @@ export const AccountPage: React.FC = () => {
             label={t('cart.region')}
             required
             value={addrRegion}
-            onChange={(e) => setAddrRegion(e.target.value)}
+            onChange={(e) => {
+              setAddrRegion(e.target.value);
+              setAddrDistrict(undefined);
+              setAddrCoordinates(null);
+            }}
             options={enabledRegions.map((r) => ({
               value: r.regionName,
               label: r.regionName,
             }))}
           />
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            fullWidth
+            leftIcon={<MapPin className="w-4 h-4 text-brand-green" />}
+            onClick={() => setIsAddressMapOpen(true)}
+          >
+            {t('cart.openMapBtn')}
+          </Button>
           <Input
             label={t('cart.address')}
             required
@@ -1377,6 +1434,19 @@ export const AccountPage: React.FC = () => {
           />
         </form>
       </Modal>
+
+      <DeliveryMapModal
+        isOpen={isAddressMapOpen}
+        onClose={() => setIsAddressMapOpen(false)}
+        initialCoords={
+          addrCoordinates ||
+          UZBEKISTAN_REGIONS.find((region) => region.nameUz === addrRegion)
+            ?.approxCenter ||
+          UZBEKISTAN_REGIONS[0].approxCenter
+        }
+        initialAddress={addrLine}
+        onConfirmLocation={handleAddressMapConfirm}
+      />
 
       {/* Structured Order Details Modal */}
       <Modal

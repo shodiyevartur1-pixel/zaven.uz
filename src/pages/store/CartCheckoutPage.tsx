@@ -11,8 +11,6 @@ import {
   MapPin,
   Phone,
   User,
-  Mail,
-  Send,
   ShieldCheck,
   Copy,
   Check,
@@ -35,7 +33,6 @@ import {
   formatUzbekPhone,
   isValidUzbekPhone,
   normalizeTelegramUsername,
-  isValidTelegramUsername,
 } from '../../utils/format';
 import {
   UZBEKISTAN_REGIONS,
@@ -663,9 +660,6 @@ export const CartCheckoutPage: React.FC = () => {
     }
     if (!isValidUzbekPhone(customerPhone)) {
       nextErrors.phone = '+998 XX XXX-XX-XX';
-    }
-    if (!isValidTelegramUsername(customerTelegram)) {
-      nextErrors.telegram = t('cart.telegramInvalidError');
     }
     if (!currentUzRegionObj) {
       nextErrors.region = t('cart.region');
@@ -1345,39 +1339,6 @@ export const CartCheckoutPage: React.FC = () => {
                 leftIcon={<Phone className="w-4 h-4" />}
                 error={errors.phone}
                 helperText={t('cart.phoneHelper')}
-              />
-            </div>
-
-            {/* 3. Email & 4. Optional Telegram Username */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label={t('cart.emailOptional')}
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="namuna@mail.uz"
-                leftIcon={<Mail className="w-4 h-4" />}
-                helperText={
-                  currentCustomer?.emailVerified &&
-                  currentCustomer.email === customerEmail
-                    ? t('cart.emailPrefilledHelper')
-                    : undefined
-                }
-              />
-
-              <Input
-                label={t('cart.telegramOptional')}
-                type="text"
-                value={customerTelegram}
-                onChange={(e) => {
-                  setCustomerTelegram(e.target.value);
-                  if (errors.telegram)
-                    setErrors((prev) => ({ ...prev, telegram: undefined }));
-                }}
-                placeholder={t('cart.telegramPlaceholder')}
-                leftIcon={<Send className="w-4 h-4" />}
-                error={errors.telegram}
-                helperText={t('cart.telegramHelper')}
               />
             </div>
 

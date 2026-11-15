@@ -133,6 +133,68 @@ interface StoreContextType {
 }
 
 const STORAGE_KEY = 'zaven_store_state_v2';
+const FAVORITES_STORAGE_PREFIX = 'zaven_favorites_v1:';
+const CART_STORAGE_PREFIX = 'zaven_cart_v1:';
+
+const getFavoritesStorageKey = (customer: Customer | null | undefined) =>
+  `${FAVORITES_STORAGE_PREFIX}${customer?.authUserId || customer?.id || 'guest'}`;
+const getCartStorageKey = (customer: Customer | null | undefined) =>
+  `${CART_STORAGE_PREFIX}${customer?.authUserId || customer?.id || 'guest'}`;
+
+const loadFavoritesForKey = (key: string): string[] => {
+  try {
+    const saved = localStorage.getItem(key);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveFavoritesForCustomer = (
+  customer: Customer | null | undefined,
+  favoriteIds: string[]
+) => {
+  try {
+    localStorage.setItem(
+      getFavoritesStorageKey(customer),
+      JSON.stringify(favoriteIds)
+    );
+  } catch {
+    // Keep favorites available in memory if browser storage is unavailable.
+  }
+};
+
+const loadCartForKey = (key: string, fallback: CartItem[] = []): CartItem[] => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved === null) return fallback;
+    const parsed: unknown = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return fallback;
+    return parsed.filter((item): item is CartItem => {
+      if (!item || typeof item !== 'object') return false;
+      const candidate = item as Partial<CartItem>;
+      return (
+        typeof candidate.productId === 'string' &&
+        typeof candidate.quantity === 'number' &&
+        Number.isFinite(candidate.quantity) &&
+        candidate.quantity > 0
+      );
+    });
+  } catch {
+    return fallback;
+  }
+};
+
+const saveCartForKey = (key: string, cart: CartItem[]) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(cart));
+  } catch {
+    // Keep the cart available in memory if browser storage is unavailable.
+  }
+};
 
 function mapRowToCategory(row: Record<string, unknown>): Category {
   return {
@@ -460,11 +522,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     return INITIAL_STORE_SETTINGS;
   });
-  const [cart, setCart] = useState<CartItem[]>(
-    savedState?.cart || [{ productId: 'prod-1', quantity: 1 }]
+  const initialFavoriteOwner = savedState?.currentCustomer || null;
+  const initialCartOwnerKey = getCartStorageKey(initialFavoriteOwner);
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    loadCartForKey(
+      initialCartOwnerKey,
+      initialFavoriteOwner
+        ? []
+        : savedState?.cart || [{ productId: 'prod-1', quantity: 1 }]
+    )
   );
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(
-    Array.isArray(savedState?.favoriteIds) ? savedState.favoriteIds : []
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
+    loadFavoritesForKey(getFavoritesStorageKey(initialFavoriteOwner))
   );
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(
     Array.isArray(savedState?.recentlyViewedIds)
@@ -476,6 +545,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       ? savedState.currentCustomer
       : null
   );
+  const favoriteOwnerKey = getFavoritesStorageKey(currentCustomer);
+  const cartOwnerKey = getCartStorageKey(currentCustomer);
+  const favoriteOwnerKeyRef = useRef(
+    getFavoritesStorageKey(initialFavoriteOwner)
+  );
+  const cartOwnerKeyRef = useRef(initialCartOwnerKey);
+  const skipCartSaveRef = useRef(false);
+
+  useEffect(() => {
+    if (favoriteOwnerKeyRef.current === favoriteOwnerKey) return;
+    favoriteOwnerKeyRef.current = favoriteOwnerKey;
+    setFavoriteIds(loadFavoritesForKey(favoriteOwnerKey));
+  }, [favoriteOwnerKey]);
+
+  useEffect(() => {
+    if (cartOwnerKeyRef.current === cartOwnerKey) return;
+    cartOwnerKeyRef.current = cartOwnerKey;
+    skipCartSaveRef.current = true;
+    setCart(loadCartForKey(cartOwnerKey));
+  }, [cartOwnerKey]);
+
+  useEffect(() => {
+    if (skipCartSaveRef.current) {
+      skipCartSaveRef.current = false;
+      return;
+    }
+    saveCartForKey(cartOwnerKey, cart);
+  }, [cartOwnerKey, cart]);
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
@@ -1085,15 +1182,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const toggleFavorite = useCallback((productId: string) => {
     setFavoriteIds((prev) => {
       const exists = prev.includes(productId);
-      return exists
+      const next = exists
         ? prev.filter((id) => id !== productId)
         : [productId, ...prev];
+      saveFavoritesForCustomer(currentCustomer, next);
+      return next;
     });
-  }, []);
+  }, [currentCustomer]);
 
   const clearFavorites = useCallback(() => {
     setFavoriteIds([]);
-  }, []);
+    saveFavoritesForCustomer(currentCustomer, []);
+  }, [currentCustomer]);
 
   const recordRecentlyViewed = (productId: string) => {
     setRecentlyViewedIds((prev) => {
@@ -1733,7 +1833,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const deleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
-    setFavoriteIds((prev) => prev.filter((id) => id !== productId));
+    setFavoriteIds((prev) => {
+      const next = prev.filter((id) => id !== productId);
+      saveFavoritesForCustomer(currentCustomer, next);
+      return next;
+    });
 
     if (isSupabaseConfigured && supabase) {
       supabase
@@ -1922,6 +2026,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setStoreSettings(INITIAL_STORE_SETTINGS);
     setCart([{ productId: 'prod-1', quantity: 1 }]);
     setFavoriteIds([]);
+    saveFavoritesForCustomer(null, []);
     setCurrentCustomer(null);
     setCurrentAdminRole('owner');
     addToast({
