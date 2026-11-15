@@ -4,7 +4,6 @@ import {
   Phone,
   MapPin,
   Clock,
-  Instagram,
   Send,
   MessageSquare,
   ChevronDown,
@@ -109,16 +108,6 @@ export const StoreFooter: React.FC = () => {
                 <span>{configuredSupportPhone}</span>
               </a>
             )}
-
-            <a
-              href={storeSettings.instagramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0F3D2E] hover:bg-[#C89D54] hover:text-[#09261C] border border-emerald-700 text-xs font-bold text-white transition-colors"
-            >
-              <Instagram className="w-3.5 h-3.5" />
-              <span>{storeSettings.instagramHandle}</span>
-            </a>
 
             <button
               type="button"

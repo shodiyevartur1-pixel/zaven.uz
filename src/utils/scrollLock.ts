@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 let lockCount = 0;
 let savedScrollY = 0;
 let savedStyles: Record<string, string> | null = null;
+let savedHtmlScrollBehavior = '';
 let touchStartY = 0;
 
 const isScrollableOverlayTarget = (target: EventTarget | null) => {
@@ -48,7 +49,9 @@ const acquireScrollLock = () => {
   if (lockCount !== 1) return;
 
   const body = document.body;
+  const html = document.documentElement;
   savedScrollY = window.scrollY;
+  savedHtmlScrollBehavior = html.style.scrollBehavior;
   savedStyles = {
     position: body.style.position,
     top: body.style.top,
@@ -67,6 +70,8 @@ const acquireScrollLock = () => {
   body.style.overflow = 'hidden';
   if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
   body.classList.add('zaven-modal-open');
+  // Disable the site's global smooth-scroll rule while a dialog is open.
+  html.style.scrollBehavior = 'auto';
 
   document.addEventListener('wheel', preventBackgroundScroll, { passive: false });
   document.addEventListener('touchstart', handleTouchStart, { passive: true });
@@ -79,6 +84,7 @@ const releaseScrollLock = () => {
   if (lockCount !== 0 || !savedStyles) return;
 
   const body = document.body;
+  const html = document.documentElement;
   Object.assign(body.style, savedStyles);
   savedStyles = null;
   body.classList.remove('zaven-modal-open');
@@ -86,11 +92,19 @@ const releaseScrollLock = () => {
   document.removeEventListener('touchstart', handleTouchStart);
   document.removeEventListener('touchmove', handleTouchMove);
   document.removeEventListener('keydown', handleKeyDown);
-  window.scrollTo(0, savedScrollY);
+  // The page sets `scroll-behavior: smooth`; restoration must be immediate or
+  // closing a modal visibly animates the background from the top of the page.
+  window.scrollTo({
+    top: savedScrollY,
+    left: 0,
+    behavior: 'instant' as ScrollBehavior,
+  });
+  html.style.scrollBehavior = savedHtmlScrollBehavior;
+  savedHtmlScrollBehavior = '';
 };
 
 export const useBodyScrollLock = (isLocked: boolean) => {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isLocked) return;
     acquireScrollLock();
     return releaseScrollLock;

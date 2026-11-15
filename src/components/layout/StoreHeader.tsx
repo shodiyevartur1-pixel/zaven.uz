@@ -223,8 +223,22 @@ export const StoreHeader: React.FC = () => {
       <div ref={searchContainerRef} className="bg-[#0F3D2E] text-white">
         <div className="zaven-page-container py-2 sm:py-2.5">
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Brand Identity & Desktop Catalog Link */}
+            {/* Desktop back control and brand */}
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              {location.pathname !== '/' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.history.length > 1) navigate(-1);
+                    else navigate('/');
+                  }}
+                  className="hidden md:inline-flex w-9 h-9 items-center justify-center rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-white transition-colors"
+                  aria-label={t('cart.backToShop')}
+                  title={t('cart.backToShop')}
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+              )}
               <Link
                 to="/"
                 className="flex items-center gap-1.5 sm:gap-2 group focus:outline-none shrink-0"
@@ -243,13 +257,6 @@ export const StoreHeader: React.FC = () => {
                 </div>
               </Link>
 
-              <Link
-                to="/catalog"
-                className="hidden md:inline-flex items-center gap-1.5 ml-2 px-3 py-2 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-xs font-bold text-white transition-colors"
-              >
-                <Grid className="w-3.5 h-3.5 text-[#C89D54]" />
-                <span>{t('nav.catalog')}</span>
-              </Link>
             </div>
 
             {/* Desktop & Tablet Inline Search Bar */}
@@ -287,22 +294,8 @@ export const StoreHeader: React.FC = () => {
               </form>
             </div>
 
-            {/* Right Actions: Wishlist, Language, Theme and Account */}
+            {/* Mobile has a single Cabinet destination in the bottom navigation; the wishlist takes its place here. */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <Link
-                to="/favorites"
-                className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 text-[#E5C992] hover:bg-[#16533F] flex items-center justify-center transition-colors shrink-0"
-                aria-label={`${t('header.favoritesShort')}${favoriteIds.length ? ` (${favoriteIds.length})` : ''}`}
-                title={t('header.favoritesShort')}
-              >
-                <Heart className="w-4 h-4" />
-                {favoriteIds.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                    {favoriteIds.length > 99 ? '99+' : favoriteIds.length}
-                  </span>
-                )}
-              </Link>
-
               <button
                 type="button"
                 onClick={cycleLanguageMobile}
@@ -328,10 +321,32 @@ export const StoreHeader: React.FC = () => {
                 )}
               </button>
 
+              <Link
+                to="/catalog"
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#09261C]/80 hover:bg-[#16533F] border border-emerald-700/70 text-xs font-bold text-white transition-colors shrink-0"
+              >
+                <Grid className="w-3.5 h-3.5 text-[#C89D54]" />
+                <span>{t('nav.catalog')}</span>
+              </Link>
+
+              <Link
+                to="/favorites"
+                className="relative order-first md:order-none w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 text-[#E5C992] hover:bg-[#16533F] flex items-center justify-center transition-colors shrink-0"
+                aria-label={`${t('header.favoritesShort')}${favoriteIds.length ? ` (${favoriteIds.length})` : ''}`}
+                title={t('header.favoritesShort')}
+              >
+                <Heart className="w-4 h-4" />
+                {favoriteIds.length > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                    {favoriteIds.length > 99 ? '99+' : favoriteIds.length}
+                  </span>
+                )}
+              </Link>
+
               {/* Account Entry */}
               <Link
                 to="/account"
-                className="flex items-center gap-0 sm:gap-2 px-0 sm:px-2 py-1.5 rounded-xl hover:bg-[#16533F] transition-colors text-white shrink-0"
+                className="hidden md:flex items-center gap-0 sm:gap-2 px-0 sm:px-2 py-1.5 rounded-xl hover:bg-[#16533F] transition-colors text-white shrink-0"
                 title={t('header.account')}
               >
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 flex items-center justify-center shrink-0">

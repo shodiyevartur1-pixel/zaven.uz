@@ -467,7 +467,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     Array.isArray(savedState?.favoriteIds) ? savedState.favoriteIds : []
   );
   const [recentlyViewedIds, setRecentlyViewedIds] = useState<string[]>(
-    savedState?.recentlyViewedIds || ['prod-1', 'prod-2', 'prod-4']
+    Array.isArray(savedState?.recentlyViewedIds)
+      ? savedState.recentlyViewedIds
+      : []
   );
   const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(
     savedState?.currentCustomer !== undefined

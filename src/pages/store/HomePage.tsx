@@ -34,6 +34,7 @@ export const HomePage: React.FC = () => {
     products,
     categories,
     storeSettings,
+    recentlyViewedIds,
     recordRecentlyViewed,
   } = useStore();
   const { t, getCategoryText, getProductText } = useThemeLanguage();
@@ -48,6 +49,17 @@ export const HomePage: React.FC = () => {
         (p) => p.status === 'active' || p.status === 'out_of_stock'
       ),
     [products]
+  );
+
+  const recentlyViewedProducts = useMemo(
+    () =>
+      recentlyViewedIds
+        .map((id) => visibleProducts.find((product) => product.id === id))
+        .filter((product): product is (typeof visibleProducts)[number] =>
+          Boolean(product)
+        )
+        .slice(0, 4),
+    [recentlyViewedIds, visibleProducts]
   );
 
   // Featured products for the image-first slider
@@ -507,6 +519,25 @@ export const HomePage: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* Recently Viewed Products */}
+      {recentlyViewedProducts.length > 0 && (
+        <section className="zaven-page-container space-y-3">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <h2 className="text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
+              {t('product.recentlyViewedTitle')}
+            </h2>
+            <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 shrink-0">
+              {recentlyViewedProducts.length}
+            </span>
+          </div>
+          <div className="zaven-product-grid zaven-product-grid-4">
+            {recentlyViewedProducts.map((viewedProduct) => (
+              <ProductCard key={viewedProduct.id} product={viewedProduct} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 6. Homepage Information Section */}
       <section className="zaven-page-container bg-transparent">
