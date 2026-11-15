@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -34,6 +34,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   } = useStore();
   const { t, getProductText, getCategoryText } = useThemeLanguage();
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const imagePointerStartX = useRef<number | null>(null);
+  const suppressImageClick = useRef(false);
 
   const category = categories.find((c) => c.id === product.categoryId);
   const localizedProduct = getProductText(product);
@@ -75,6 +77,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     recordRecentlyViewed(product.id);
   };
 
+  const handleImagePointerDown = (event: React.PointerEvent<HTMLAnchorElement>) => {
+    if (images.length > 1) imagePointerStartX.current = event.clientX;
+  };
+
+  const handleImagePointerUp = (event: React.PointerEvent<HTMLAnchorElement>) => {
+    const startX = imagePointerStartX.current;
+    imagePointerStartX.current = null;
+    if (startX === null || images.length < 2) return;
+
+    const deltaX = event.clientX - startX;
+    if (Math.abs(deltaX) < 36) return;
+
+    setActiveImageIndex((currentIndex) =>
+      (currentIndex + (deltaX < 0 ? 1 : images.length - 1)) % images.length
+    );
+    suppressImageClick.current = true;
+    window.setTimeout(() => {
+      suppressImageClick.current = false;
+    }, 500);
+  };
+
+  const handleImageClickCapture = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!suppressImageClick.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressImageClick.current = false;
+  };
+
   return (
     <article className="min-w-0 w-full group bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden flex flex-col justify-between h-full shadow-sm transition-all duration-200 hover:border-brand-green/60 dark:hover:border-brand-gold/60 hover:shadow-card-hover">
       <div className="flex-1 flex flex-col min-w-0">
@@ -83,13 +113,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <Link
             to={`/product/${product.slug}`}
             onClick={handleProductLinkClick}
-            className="block w-full h-full focus:outline-none"
+            onClickCapture={handleImageClickCapture}
+            onPointerDown={handleImagePointerDown}
+            onPointerUp={handleImagePointerUp}
+            onPointerCancel={() => {
+              imagePointerStartX.current = null;
+            }}
+            className="block w-full h-full touch-pan-y select-none focus:outline-none"
             title={localizedProduct.name}
           >
             <img
               src={images[activeImageIndex] || images[0]}
               alt={localizedProduct.name}
               loading="lazy"
+              draggable={false}
               className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
                 isOutOfStock ? 'opacity-60 grayscale-[25%]' : ''
               }`}
