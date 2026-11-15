@@ -2083,13 +2083,20 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
         }
       >
-        <div className="space-y-3 py-1 text-xs sm:text-sm">
-          <Badge variant="gold" size="sm">
-            {t('cart.authRequiredBadge')}
-          </Badge>
-          <p className="text-gray-700 dark:text-gray-200 leading-relaxed">
-            {t('cart.authRequiredDesc')}
-          </p>
+        <div className="py-1">
+          <div className="flex items-start gap-3 rounded-xl border border-[#C89D54]/30 bg-[#C89D54]/5 p-3.5 sm:p-4">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0F3D2E] text-[#C89D54]">
+              <User className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <p className="text-xs font-extrabold tracking-wide text-[#9A7130] dark:text-[#E5C992]">
+                {t('cart.authRequiredBadge')}
+              </p>
+              <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-200">
+                {t('cart.authRequiredDesc')}
+              </p>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

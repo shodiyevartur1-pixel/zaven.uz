@@ -49,6 +49,7 @@ export const StoreHeader: React.FC = () => {
     location.pathname === '/cart' ||
     location.pathname.startsWith('/cart/') ||
     location.pathname.startsWith('/checkout');
+  const isAccountPage = location.pathname === '/account';
 
   const configuredSupportPhone =
     storeSettings.supportPhone?.trim() === '+998 78 113-45-67'
@@ -260,6 +261,7 @@ export const StoreHeader: React.FC = () => {
             </div>
 
             {/* Desktop & Tablet Inline Search Bar */}
+            {!isAccountPage && (
             <div className="hidden md:block flex-1 max-w-2xl relative">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
@@ -293,6 +295,7 @@ export const StoreHeader: React.FC = () => {
                 </button>
               </form>
             </div>
+            )}
 
             {/* Mobile has a single Cabinet destination in the bottom navigation; the wishlist takes its place here. */}
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -370,7 +373,7 @@ export const StoreHeader: React.FC = () => {
           </div>
 
           {/* Mobile Single Search Bar */}
-          <div className="mt-2 md:hidden relative">
+          {!isAccountPage && <div className="mt-2 md:hidden relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -402,10 +405,10 @@ export const StoreHeader: React.FC = () => {
                 {t('header.searchShortBtn')}
               </button>
             </form>
-          </div>
+          </div>}
 
           {/* Live Search Suggestions Dropdown */}
-          {isSearchFocused && searchQuery.trim().length >= 1 && (
+          {!isAccountPage && isSearchFocused && searchQuery.trim().length >= 1 && (
             <div className="relative max-w-2xl mx-auto">
               <div className="absolute left-0 right-0 mt-1.5 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#2F5246] shadow-xl overflow-hidden z-50 text-gray-900 dark:text-gray-100">
                 {searchResults.length > 0 ? (
