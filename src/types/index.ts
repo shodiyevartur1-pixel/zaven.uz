@@ -159,6 +159,9 @@ export interface Order {
   telegramNotificationStatus?: TelegramNotificationStatus;
   telegramNotificationError?: string;
   status: OrderStatus;
+  /** Recoverable admin trash metadata; absent on legacy orders. */
+  isDeleted?: boolean;
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -169,7 +172,7 @@ export interface CustomerAddress {
   region: string;
   district?: string;
   addressLine: string;
-  locationCoordinates?: { lat: number; lng: number };
+  locationCoordinates?: { lat: number; lng: number; accuracyMeters?: number };
   isDefault: boolean;
 }
 
@@ -185,6 +188,11 @@ export interface Customer {
   orderCount: number;
   totalSpent: number;
   lastOrderDate?: string;
+  /** Optional moderation and recoverable deletion state for admin workflows. */
+  isBlocked?: boolean;
+  blockedReason?: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
   createdAt: string;
 }
 
@@ -197,6 +205,7 @@ export interface Coupon {
   minOrderAmount: number;
   startDate: string;
   endDate: string;
+  expiresAt?: string;
   usageLimit: number;
   usedCount: number;
   isActive: boolean;
@@ -204,6 +213,7 @@ export interface Coupon {
 
 export interface HomepageBanner {
   id: string;
+  title?: string;
   badgeText: string;
   headline: string;
   subheadline: string;
@@ -214,6 +224,7 @@ export interface HomepageBanner {
   isActive: boolean;
   startDate?: string;
   endDate?: string;
+  translations?: Partial<Record<Language, { headline?: string; subheadline?: string }>>;
 }
 
 export interface TrustItem {
@@ -237,6 +248,7 @@ export interface DeliverySettings {
   isDeliveryEnabled: boolean;
   generalDeliveryNote: string;
   showDeliveryInfoOnProductPage: boolean;
+  estimatedDeliveryDays?: string;
   regions: DeliveryRegionRule[];
 }
 
@@ -258,6 +270,10 @@ export interface CustomerInquiry {
   subject: string;
   message: string;
   status: 'unread' | 'read' | 'replied';
+  replyMessage?: string;
+  repliedAt?: string;
+  repliedBy?: string;
+  replyDeliveryMethod?: 'telegram' | 'manual_confirmed';
   createdAt: string;
 }
 
@@ -267,6 +283,8 @@ export interface AdminUser {
   role: AdminRole;
   title: string;
   lastActive: string;
+  roleLabel?: string;
+  permissions?: string[];
 }
 
 export interface StoreSettings {
@@ -285,6 +303,8 @@ export interface StoreSettings {
   delivery: DeliverySettings;
   paymentMethods: PaymentMethodOption[];
   bankTransfer: BankTransferConfig;
+  /** Statistics are reset by date baseline, never by deleting order history. */
+  statsResetAt?: string;
 }
 
 export interface ToastMessage {

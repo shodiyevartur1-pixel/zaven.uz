@@ -27,6 +27,7 @@ import { ProductCard } from '../../components/product/ProductCard';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
+import { ProductImage } from '../../components/ui/ProductImage';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatUZS, calculateDiscountPercent } from '../../utils/format';
 
@@ -281,7 +282,7 @@ export const ProductDetailPage: React.FC = () => {
           {/* Left Column: Multi-Image Gallery & Evenly Sized Square Thumbnails */}
           <div className="lg:col-span-6 space-y-3 min-w-0">
             <div className="relative aspect-square rounded-2xl bg-gray-100 dark:bg-[#1A3028] border border-gray-200 dark:border-[#28453B] overflow-hidden group">
-              <img
+              <ProductImage
                 src={currentImage}
                 alt={`${localizedProduct.name} — ${selectedImageIdx + 1}`}
                 onClick={() => setIsLightboxOpen(true)}
@@ -386,7 +387,7 @@ export const ProductDetailPage: React.FC = () => {
                           : 'border-gray-200 dark:border-[#28453B] opacity-65 hover:opacity-100'
                       }`}
                     >
-                      <img
+                      <ProductImage
                         src={imgUrl}
                         alt={`${localizedProduct.name} — ${idx + 1}`}
                         className="w-full h-full object-cover block"
@@ -756,7 +757,7 @@ export const ProductDetailPage: React.FC = () => {
         >
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              <img
+              <ProductImage
                 src={images[0]}
                 alt={localizedProduct.name}
                 className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-[#28453B] shrink-0 bg-gray-50"
@@ -851,7 +852,7 @@ export const ProductDetailPage: React.FC = () => {
         }
       >
         <div className="relative rounded-xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center max-h-[65vh]">
-          <img
+          <ProductImage
             src={currentImage}
             alt={localizedProduct.name}
             onClick={() => setIsZoomedInLightbox((prev) => !prev)}

@@ -102,6 +102,41 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    let actionPayload: { action?: string; authUserId?: string; isBlocked?: boolean } = {};
+    try {
+      actionPayload = await req.json();
+    } catch {
+      // Empty body is the normal owner-verification request.
+    }
+
+    if (actionPayload.action === 'set_customer_block') {
+      if (!actionPayload.authUserId || typeof actionPayload.isBlocked !== 'boolean') {
+        return new Response(JSON.stringify({ authorized: true, ok: false, error: 'Mijoz bloklash maʼlumotlari notoʻgʻri.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      if (actionPayload.authUserId === user.id) {
+        return new Response(JSON.stringify({ authorized: true, ok: false, error: 'Owner hisobini shu amal bilan bloklab boʻlmaydi.' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { error: banError } = await adminClient.auth.admin.updateUserById(actionPayload.authUserId, {
+        ban_duration: actionPayload.isBlocked ? '876000h' : 'none',
+      });
+      if (banError) {
+        return new Response(JSON.stringify({ authorized: true, ok: false, error: banError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ authorized: true, ok: true, ownerEmail: user.email }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(
       JSON.stringify({
         authorized: true,

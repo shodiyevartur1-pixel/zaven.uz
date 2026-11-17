@@ -73,7 +73,11 @@ interface StoreContextType {
   syncVerifiedCustomerFromAuthUser: (user: SupabaseUser) => Promise<void>;
   signInCustomerDemo: (phone: string, fullName?: string) => void;
   signOutCustomer: () => Promise<void>;
-  updateCustomerProfile: (updated: Partial<Customer>) => void;
+  updateCustomerProfile: (updated: Partial<Customer>) => Promise<boolean>;
+  toggleBlockCustomer: (customerId: string, isBlocked: boolean, reason?: string) => Promise<boolean>;
+  deleteCustomer: (customerId: string) => Promise<boolean>;
+  restoreCustomer: (customerId: string) => Promise<boolean>;
+  replyToInquiry: (params: { inquiryId: string; replyMessage: string; repliedBy: string; deliveryMethod: 'telegram' | 'manual_confirmed' }) => Promise<boolean>;
 
   submitCustomerInquiry: (data: {
     customerName: string;
@@ -106,6 +110,8 @@ interface StoreContextType {
     reviewNote?: string
   ) => void;
   retryOrderTelegramNotification: (orderId: string) => Promise<void>;
+  deleteOrder: (orderId: string) => Promise<boolean>;
+  restoreOrder: (orderId: string) => Promise<boolean>;
 
   saveProduct: (product: Product, isNewProduct?: boolean) => void;
   deleteProduct: (productId: string) => void;
@@ -116,10 +122,13 @@ interface StoreContextType {
   ) => void;
 
   saveCategory: (category: Category) => void;
-  saveCoupon: (coupon: Coupon) => void;
-  deleteCoupon: (couponId: string) => void;
-  saveBanner: (banner: HomepageBanner) => void;
-  updateStoreSettings: (settings: StoreSettings) => void;
+  deleteCategory: (categoryId: string, reassignToCategoryId?: string) => Promise<{ ok: boolean; error?: string }>;
+  uploadImageFile: (file: File, folder?: string) => Promise<string>;
+  saveCoupon: (coupon: Coupon) => Promise<boolean>;
+  deleteCoupon: (couponId: string) => Promise<boolean>;
+  saveBanner: (banner: HomepageBanner) => Promise<boolean>;
+  updateStoreSettings: (settings: StoreSettings) => Promise<boolean>;
+  resetOrderStatsBaseline: () => Promise<boolean>;
   updateInquiryStatus: (
     inquiryId: string,
     status: CustomerInquiry['status']
@@ -311,6 +320,7 @@ function mapRowToOrder(
   return {
     id: String(row.id),
     orderNumber: String(row.order_number),
+    customerId: row.customer_id ? String(row.customer_id) : undefined,
     customerName: String(row.customer_name),
     customerPhone: String(row.customer_phone),
     customerEmail: row.customer_email ? String(row.customer_email) : undefined,
@@ -372,6 +382,8 @@ function mapRowToOrder(
       ? String(row.telegram_notification_error)
       : undefined,
     status: (row.status as OrderStatus) || 'new',
+    isDeleted: Boolean(row.is_deleted ?? false),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
     createdAt: String(row.created_at || new Date().toISOString()),
     updatedAt: String(row.updated_at || new Date().toISOString()),
   };
@@ -396,6 +408,10 @@ function mapRowToCustomer(row: Record<string, unknown>): Customer {
     lastOrderDate: row.last_order_date
       ? String(row.last_order_date)
       : undefined,
+    isBlocked: Boolean(row.is_blocked ?? false),
+    blockedReason: row.blocked_reason ? String(row.blocked_reason) : undefined,
+    isDeleted: Boolean(row.is_deleted ?? false),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
     createdAt: String(row.created_at || new Date().toISOString()),
   };
 }
@@ -413,6 +429,10 @@ function mapCustomerToRow(cust: Customer) {
     order_count: cust.orderCount,
     total_spent: Math.round(cust.totalSpent),
     last_order_date: cust.lastOrderDate || null,
+    is_blocked: Boolean(cust.isBlocked ?? false),
+    blocked_reason: cust.blockedReason || null,
+    is_deleted: Boolean(cust.isDeleted ?? false),
+    deleted_at: cust.deletedAt || null,
     created_at: cust.createdAt,
   };
 }
@@ -455,6 +475,12 @@ function mapRowToInquiry(row: Record<string, unknown>): CustomerInquiry {
     subject: String(row.subject || ''),
     message: String(row.message || ''),
     status: (row.status as CustomerInquiry['status']) || 'unread',
+    replyMessage: row.reply_message ? String(row.reply_message) : undefined,
+    repliedAt: row.replied_at ? String(row.replied_at) : undefined,
+    repliedBy: row.replied_by ? String(row.replied_by) : undefined,
+    replyDeliveryMethod: row.reply_delivery_method
+      ? (row.reply_delivery_method as CustomerInquiry['replyDeliveryMethod'])
+      : undefined,
     createdAt: String(row.created_at || new Date().toISOString()),
   };
 }
@@ -615,10 +641,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       nextSettings: StoreSettings,
       nextCoupons: Coupon[],
       nextBanners: HomepageBanner[]
-    ) => {
-      if (!isSupabaseConfigured || !supabase) return;
+    ): Promise<boolean> => {
+      if (!isSupabaseConfigured || !supabase) return true;
       try {
-        await supabase.from('store_settings').upsert({
+        const { error } = await supabase.from('store_settings').upsert({
           id: 1,
           payload: {
             ...nextSettings,
@@ -627,11 +653,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           },
           updated_at: new Date().toISOString(),
         });
+        if (error) {
+          addToast({ type: 'error', title: 'Sozlamalarni bazaga yozib boʻlmadi', description: error.message });
+          return false;
+        }
+        return true;
       } catch (err) {
-        console.error('Failed to sync store_settings to Supabase:', err);
+        addToast({ type: 'error', title: 'Sozlamalarni saqlashda xatolik', description: err instanceof Error ? err.message : 'Nomaʼlum xatolik' });
+        return false;
       }
     },
-    []
+    [addToast]
   );
 
   const syncVerifiedCustomerFromAuthUser = useCallback(
@@ -641,6 +673,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (!email || !isConfirmed) {
         return;
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        let { data: ownRecord, error } = await supabase
+          .from('customers')
+          .select('is_blocked,is_deleted,blocked_reason')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        if (!error && !ownRecord) {
+          const emailLookup = await supabase
+            .from('customers')
+            .select('is_blocked,is_deleted,blocked_reason')
+            .eq('email', email)
+            .maybeSingle();
+          ownRecord = emailLookup.data;
+          error = emailLookup.error;
+        }
+        if (!error && (ownRecord?.is_blocked || ownRecord?.is_deleted)) {
+          await supabase.auth.signOut().catch(() => {});
+          setCurrentCustomer(null);
+          addToast({
+            type: 'error',
+            title: 'Hisobingizga kirish cheklangan',
+            description: ownRecord.blocked_reason || 'Doʻkon maʼmuriyatiga murojaat qiling.',
+          });
+          return;
+        }
       }
 
       const metaFullName =
@@ -710,8 +769,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         return [created, ...prev];
       });
     },
-    []
+    [addToast]
   );
+
+  useEffect(() => {
+    if (!currentCustomer) return;
+    const ownRecord = customers.find((customer) =>
+      customer.id === currentCustomer.id ||
+      Boolean(customer.authUserId && customer.authUserId === currentCustomer.authUserId) ||
+      Boolean(customer.email && currentCustomer.email && customer.email.toLowerCase() === currentCustomer.email.toLowerCase())
+    );
+    if (!ownRecord || (!ownRecord.isBlocked && !ownRecord.isDeleted)) return;
+    if (isSupabaseConfigured && supabase) supabase.auth.signOut().catch(() => {});
+    setCurrentCustomer(null);
+    addToast({
+      type: 'error',
+      title: 'Hisobingiz bloklangan',
+      description: ownRecord.blockedReason || 'Doʻkon maʼmuriyatiga murojaat qiling.',
+    });
+  }, [customers, currentCustomer, addToast]);
 
   const refreshFromSupabase = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -1252,8 +1328,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const updateCustomerProfile = (updated: Partial<Customer>) => {
-    if (!currentCustomer) return;
+  const updateCustomerProfile = async (updated: Partial<Customer>): Promise<boolean> => {
+    if (!currentCustomer) return false;
     const normalizedTg =
       updated.telegramUsername !== undefined
         ? normalizeTelegramUsername(updated.telegramUsername)
@@ -1264,22 +1340,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       ...updated,
       telegramUsername: normalizedTg,
     };
-    setCurrentCustomer(nextCustomer);
-    setCustomers((prev) =>
-      prev.map((c) => (c.id === nextCustomer.id ? nextCustomer : c))
-    );
-
     if (isSupabaseConfigured && supabase) {
-      supabase
+      const { error } = await supabase
         .from('customers')
-        .upsert(mapCustomerToRow(nextCustomer))
-        .then(() => {});
+        .upsert(mapCustomerToRow(nextCustomer));
+      if (error) {
+        addToast({ type: 'error', title: 'Profilni saqlashda xatolik', description: error.message });
+        return false;
+      }
     }
+
+    setCurrentCustomer(nextCustomer);
+    setCustomers((prev) => prev.map((c) => (c.id === nextCustomer.id ? nextCustomer : c)));
 
     addToast({
       type: 'success',
       title: 'Profil maʼlumotlari saqlandi',
     });
+    return true;
   };
 
   const submitCustomerInquiry: StoreContextType['submitCustomerInquiry'] =
@@ -1802,6 +1880,131 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
+  const deleteOrder: StoreContextType['deleteOrder'] = async (orderId) => {
+    const target = orders.find((item) => item.id === orderId);
+    if (!target) return false;
+    const now = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('orders').update({ is_deleted: true, deleted_at: now, updated_at: now }).eq('order_number', target.orderNumber);
+      if (error) { addToast({ type: 'error', title: 'Buyurtmani arxivlashda xatolik', description: error.message }); return false; }
+    }
+    setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: true, deletedAt: now, updatedAt: now } : item));
+    addToast({ type: 'info', title: `Buyurtma #${target.orderNumber} arxivlandi` });
+    return true;
+  };
+
+  const restoreOrder: StoreContextType['restoreOrder'] = async (orderId) => {
+    const target = orders.find((item) => item.id === orderId);
+    if (!target) return false;
+    const now = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('orders').update({ is_deleted: false, deleted_at: null, updated_at: now }).eq('order_number', target.orderNumber);
+      if (error) { addToast({ type: 'error', title: 'Buyurtmani tiklashda xatolik', description: error.message }); return false; }
+    }
+    setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: false, deletedAt: undefined, updatedAt: now } : item));
+    addToast({ type: 'success', title: `Buyurtma #${target.orderNumber} tiklandi` });
+    return true;
+  };
+
+  const toggleBlockCustomer: StoreContextType['toggleBlockCustomer'] = async (customerId, isBlocked, reason) => {
+    const target = customers.find((item) => item.id === customerId);
+    if (!target) return false;
+    const cleanReason = isBlocked ? reason?.trim() || 'Admin tomonidan bloklangan' : undefined;
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('customers').update({ is_blocked: isBlocked, blocked_reason: cleanReason || null }).eq('id', customerId);
+      if (error) { addToast({ type: 'error', title: 'Mijoz holatini yangilashda xatolik', description: error.message }); return false; }
+      if (target.authUserId) {
+        const { data, error: fnError } = await supabase.functions.invoke('admin-owner-guard', { body: { action: 'set_customer_block', authUserId: target.authUserId, isBlocked } });
+        if (fnError || data?.ok === false) addToast({ type: 'warning', title: 'Auth sessiyasini bloklash yakunlanmadi', description: fnError?.message || data?.error || 'Edge Function holatini tekshiring.' });
+      }
+    }
+    setCustomers((prev) => prev.map((item) => item.id === customerId ? { ...item, isBlocked, blockedReason: cleanReason } : item));
+    if (isBlocked && currentCustomer?.id === customerId) { await signOutCustomer(); }
+    addToast({ type: isBlocked ? 'warning' : 'success', title: isBlocked ? 'Mijoz hisobi bloklandi' : 'Mijoz blokdan chiqarildi' });
+    return true;
+  };
+
+  const setCustomerArchived = async (customerId: string, isDeleted: boolean): Promise<boolean> => {
+    const target = customers.find((item) => item.id === customerId);
+    if (!target) return false;
+    const now = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('customers').update({ is_deleted: isDeleted, deleted_at: isDeleted ? now : null }).eq('id', customerId);
+      if (error) { addToast({ type: 'error', title: isDeleted ? 'Mijozni arxivlashda xatolik' : 'Mijozni tiklashda xatolik', description: error.message }); return false; }
+    }
+    setCustomers((prev) => prev.map((item) => item.id === customerId ? { ...item, isDeleted, deletedAt: isDeleted ? now : undefined } : item));
+    addToast({ type: isDeleted ? 'info' : 'success', title: isDeleted ? 'Mijoz profili arxivlandi' : 'Mijoz profili tiklandi' });
+    return true;
+  };
+  const deleteCustomer: StoreContextType['deleteCustomer'] = (id) => setCustomerArchived(id, true);
+  const restoreCustomer: StoreContextType['restoreCustomer'] = (id) => setCustomerArchived(id, false);
+
+  const replyToInquiry: StoreContextType['replyToInquiry'] = async ({ inquiryId, replyMessage, repliedBy, deliveryMethod }) => {
+    const message = replyMessage.trim();
+    if (!message) return false;
+    const now = new Date().toISOString();
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('inquiries').update({ status: 'replied', reply_message: message, replied_at: now, replied_by: repliedBy, reply_delivery_method: deliveryMethod }).eq('id', inquiryId);
+      if (error) { addToast({ type: 'error', title: 'Javobni saqlashda xatolik', description: error.message }); return false; }
+    }
+    setInquiries((prev) => prev.map((item) => item.id === inquiryId ? { ...item, status: 'replied', replyMessage: message, repliedAt: now, repliedBy, replyDeliveryMethod: deliveryMethod } : item));
+    addToast({ type: 'success', title: 'Murojaat javobi saqlandi' });
+    return true;
+  };
+
+  const deleteCategory: StoreContextType['deleteCategory'] = async (categoryId, reassignToCategoryId) => {
+    const affected = products.filter((item) => item.categoryId === categoryId);
+    if (affected.length && (!reassignToCategoryId || reassignToCategoryId === categoryId || !categories.some((c) => c.id === reassignToCategoryId))) return { ok: false, error: 'Avval mahsulotlarni ko‘chirish uchun boshqa toifani tanlang.' };
+    if (isSupabaseConfigured && supabase) {
+      if (affected.length) {
+        const { error } = await supabase.from('products').update({ category_id: reassignToCategoryId, updated_at: new Date().toISOString() }).in('id', affected.map((p) => p.id));
+        if (error) return { ok: false, error: error.message };
+      }
+      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
+      if (error) {
+        if (affected.length) await supabase.from('products').update({ category_id: categoryId }).in('id', affected.map((p) => p.id));
+        return { ok: false, error: error.message };
+      }
+    }
+    if (affected.length && reassignToCategoryId) setProducts((prev) => prev.map((p) => p.categoryId === categoryId ? { ...p, categoryId: reassignToCategoryId } : p));
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    addToast({ type: 'success', title: 'Toifa o‘chirildi' });
+    return { ok: true };
+  };
+
+  const uploadImageFile: StoreContextType['uploadImageFile'] = async (file, folder = 'catalog') => {
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) throw new Error('JPG, PNG, WEBP yoki GIF rasm tanlang.');
+    if (file.size > 5 * 1024 * 1024) throw new Error('Rasm hajmi 5 MB dan oshmasin.');
+    if (isSupabaseConfigured && supabase) {
+      const path = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type, upsert: true });
+      if (error) throw new Error(error.message);
+      const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+      if (!data.publicUrl) throw new Error('Rasm URL manzili olinmadi.');
+      return data.publicUrl;
+    }
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Rasm faylini oʻqib boʻlmadi.'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => resolve(String(reader.result));
+        image.onload = () => {
+          const ratio = Math.min(1, 1000 / Math.max(image.width, image.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * ratio));
+          canvas.height = Math.max(1, Math.round(image.height * ratio));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(String(reader.result)); return; }
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/webp', 0.82));
+        };
+        image.src = String(reader.result);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const saveProduct = (product: Product, isNewProduct = false) => {
     if (isNewProduct) {
       setProducts((prev) => [product, ...prev]);
@@ -1947,51 +2150,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const saveCoupon = (coupon: Coupon) => {
-    setCoupons((prev) => {
-      const exists = prev.some((c) => c.id === coupon.id);
-      const nextCoupons = exists
-        ? prev.map((c) => (c.id === coupon.id ? coupon : c))
-        : [coupon, ...prev];
-      syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners);
-      return nextCoupons;
-    });
-
+  const saveCoupon: StoreContextType['saveCoupon'] = async (coupon) => {
+    const nextCoupons = coupons.some((c) => c.id === coupon.id)
+      ? coupons.map((c) => (c.id === coupon.id ? coupon : c))
+      : [coupon, ...coupons];
+    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners))) return false;
+    setCoupons(nextCoupons);
     addToast({
       type: 'success',
       title: 'Promokod saqlandi',
       description: coupon.code,
     });
+    return true;
   };
 
-  const deleteCoupon = (couponId: string) => {
-    setCoupons((prev) => {
-      const nextCoupons = prev.filter((c) => c.id !== couponId);
-      syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners);
-      return nextCoupons;
-    });
+  const deleteCoupon: StoreContextType['deleteCoupon'] = async (couponId) => {
+    const nextCoupons = coupons.filter((c) => c.id !== couponId);
+    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners))) return false;
+    setCoupons(nextCoupons);
     addToast({ type: 'info', title: 'Promokod oʻchirildi' });
+    return true;
   };
 
-  const saveBanner = (banner: HomepageBanner) => {
-    setBanners((prev) => {
-      const exists = prev.some((b) => b.id === banner.id);
-      const nextBanners = exists
-        ? prev.map((b) => (b.id === banner.id ? banner : b))
-        : [banner, ...prev];
-      syncStoreSettingsPayloadToSupabase(storeSettings, coupons, nextBanners);
-      return nextBanners;
-    });
+  const saveBanner: StoreContextType['saveBanner'] = async (banner) => {
+    const nextBanners = banners.some((b) => b.id === banner.id)
+      ? banners.map((b) => (b.id === banner.id ? banner : b))
+      : [banner, ...banners];
+    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, coupons, nextBanners))) return false;
+    setBanners(nextBanners);
     addToast({ type: 'success', title: 'Banner saqlandi' });
+    return true;
   };
 
-  const updateStoreSettings = (settings: StoreSettings) => {
+  const updateStoreSettings: StoreContextType['updateStoreSettings'] = async (settings) => {
+    const saved = await syncStoreSettingsPayloadToSupabase(settings, coupons, banners);
+    if (!saved) return false;
     setStoreSettings(settings);
-    syncStoreSettingsPayloadToSupabase(settings, coupons, banners);
-    addToast({
-      type: 'success',
-      title: 'Doʻkon sozlamalari yangilandi',
-    });
+    addToast({ type: 'success', title: 'Doʻkon sozlamalari yangilandi' });
+    return true;
+  };
+
+  const resetOrderStatsBaseline: StoreContextType['resetOrderStatsBaseline'] = async () => {
+    const next = { ...storeSettings, statsResetAt: new Date().toISOString() };
+    const saved = await syncStoreSettingsPayloadToSupabase(next, coupons, banners);
+    if (!saved) return false;
+    setStoreSettings(next);
+    addToast({ type: 'success', title: 'Statistika hisoblagichlari nol qilindi', description: 'Tarixiy buyurtmalar saqlab qolindi.' });
+    return true;
   };
 
   const updateInquiryStatus = (
@@ -2066,20 +2271,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         signInCustomerDemo,
         signOutCustomer,
         updateCustomerProfile,
+        toggleBlockCustomer,
+        deleteCustomer,
+        restoreCustomer,
         submitCustomerInquiry,
         placeOrder,
         updateOrderStatus,
         addOrderInternalNote,
         reviewOrderReceipt,
         retryOrderTelegramNotification,
+        deleteOrder,
+        restoreOrder,
+        replyToInquiry,
         saveProduct,
         deleteProduct,
         adjustProductStock,
         saveCategory,
+        deleteCategory,
+        uploadImageFile,
         saveCoupon,
         deleteCoupon,
         saveBanner,
         updateStoreSettings,
+        resetOrderStatsBaseline,
         updateInquiryStatus,
         refreshFromSupabase,
         toasts,

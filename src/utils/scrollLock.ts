@@ -1,112 +1,69 @@
 import { useLayoutEffect } from 'react';
 
-let lockCount = 0;
+let activeLockCount = 0;
 let savedScrollY = 0;
-let savedStyles: Record<string, string> | null = null;
-let savedHtmlScrollBehavior = '';
-let touchStartY = 0;
+let savedBodyStyles: Partial<CSSStyleDeclaration> | null = null;
+let savedHtmlOverscroll = '';
 
-const isScrollableOverlayTarget = (target: EventTarget | null) => {
-  if (!(target instanceof Element)) return false;
-  return Boolean(target.closest('[data-zaven-scroll-area="true"]'));
-};
+/**
+ * Locks only the background document. No global touchmove/wheel handlers are
+ * installed, so map gestures, form scrolling, and text selection keep working.
+ * A reference count prevents nested overlays from unlocking each other.
+ */
+function acquireScrollLock() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
-const preventBackgroundScroll = (event: Event) => {
-  if (!isScrollableOverlayTarget(event.target)) event.preventDefault();
-};
+  if (activeLockCount === 0) {
+    const { body, documentElement } = document;
+    savedScrollY = window.scrollY || window.pageYOffset || 0;
+    savedHtmlOverscroll = documentElement.style.overscrollBehavior;
+    savedBodyStyles = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+      paddingRight: body.style.paddingRight,
+      overscrollBehavior: body.style.overscrollBehavior,
+    };
 
-const handleTouchStart = (event: TouchEvent) => {
-  touchStartY = event.touches[0]?.clientY ?? 0;
-};
-
-const handleTouchMove = (event: TouchEvent) => {
-  const target = event.target;
-  if (!(target instanceof Element)) {
-    event.preventDefault();
-    return;
+    const scrollbarWidth = window.innerWidth - documentElement.clientWidth;
+    body.style.position = 'fixed';
+    body.style.top = `-${savedScrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+    documentElement.style.overscrollBehavior = 'none';
+    body.classList.add('zaven-modal-open');
   }
-  const area = target.closest<HTMLElement>('[data-zaven-scroll-area="true"]');
-  if (!area) {
-    event.preventDefault();
-    return;
-  }
-  const style = window.getComputedStyle(area);
-  if (!/(auto|scroll)/.test(`${style.overflowY} ${style.overflow}`) || area.scrollHeight <= area.clientHeight) return;
-  const deltaY = (event.touches[0]?.clientY ?? touchStartY) - touchStartY;
-  const atTop = area.scrollTop <= 0;
-  const atBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 1;
-  if ((deltaY > 0 && atTop) || (deltaY < 0 && atBottom)) event.preventDefault();
-};
 
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) {
-    if (!isScrollableOverlayTarget(event.target)) event.preventDefault();
-  }
-};
+  activeLockCount += 1;
+}
 
-const acquireScrollLock = () => {
-  lockCount += 1;
-  if (lockCount !== 1) return;
+function releaseScrollLock() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (activeLockCount <= 0) return;
 
-  const body = document.body;
-  const html = document.documentElement;
-  savedScrollY = window.scrollY;
-  savedHtmlScrollBehavior = html.style.scrollBehavior;
-  savedStyles = {
-    position: body.style.position,
-    top: body.style.top,
-    left: body.style.left,
-    right: body.style.right,
-    width: body.style.width,
-    overflow: body.style.overflow,
-    paddingRight: body.style.paddingRight,
-  };
-  const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-  body.style.position = 'fixed';
-  body.style.top = `-${savedScrollY}px`;
-  body.style.left = '0';
-  body.style.right = '0';
-  body.style.width = '100%';
-  body.style.overflow = 'hidden';
-  if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
-  body.classList.add('zaven-modal-open');
-  // Disable the site's global smooth-scroll rule while a dialog is open.
-  html.style.scrollBehavior = 'auto';
+  activeLockCount -= 1;
+  if (activeLockCount !== 0 || !savedBodyStyles) return;
 
-  document.addEventListener('wheel', preventBackgroundScroll, { passive: false });
-  document.addEventListener('touchstart', handleTouchStart, { passive: true });
-  document.addEventListener('touchmove', handleTouchMove, { passive: false });
-  document.addEventListener('keydown', handleKeyDown);
-};
-
-const releaseScrollLock = () => {
-  lockCount = Math.max(0, lockCount - 1);
-  if (lockCount !== 0 || !savedStyles) return;
-
-  const body = document.body;
-  const html = document.documentElement;
-  Object.assign(body.style, savedStyles);
-  savedStyles = null;
+  const { body, documentElement } = document;
+  Object.assign(body.style, savedBodyStyles);
+  savedBodyStyles = null;
+  documentElement.style.overscrollBehavior = savedHtmlOverscroll;
+  savedHtmlOverscroll = '';
   body.classList.remove('zaven-modal-open');
-  document.removeEventListener('wheel', preventBackgroundScroll);
-  document.removeEventListener('touchstart', handleTouchStart);
-  document.removeEventListener('touchmove', handleTouchMove);
-  document.removeEventListener('keydown', handleKeyDown);
-  // The page sets `scroll-behavior: smooth`; restoration must be immediate or
-  // closing a modal visibly animates the background from the top of the page.
-  window.scrollTo({
-    top: savedScrollY,
-    left: 0,
-    behavior: 'instant' as ScrollBehavior,
-  });
-  html.style.scrollBehavior = savedHtmlScrollBehavior;
-  savedHtmlScrollBehavior = '';
-};
+  window.scrollTo({ top: savedScrollY, left: 0, behavior: 'instant' as ScrollBehavior });
+}
 
-export const useBodyScrollLock = (isLocked: boolean) => {
+export function useBodyScrollLock(isLocked: boolean): void {
   useLayoutEffect(() => {
     if (!isLocked) return;
     acquireScrollLock();
     return releaseScrollLock;
   }, [isLocked]);
-};
+}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -19,10 +19,12 @@ import {
   ChevronRight,
   ExternalLink,
   X,
+  LogOut,
 } from 'lucide-react';
 import { Language } from '../../types';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
+import { useOwnerAuth } from '../../context/OwnerAuthContext';
 
 export interface AdminNavItem {
   id: string;
@@ -47,8 +49,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onCloseMobile,
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { orders, products, inquiries, storeSettings } = useStore();
   const { language, t } = useThemeLanguage();
+  const { signOutOwner } = useOwnerAuth();
+
+  const handleSignOut = async (mobileMode = false) => {
+    await signOutOwner();
+    if (mobileMode) onCloseMobile();
+    navigate('/admin/login', { replace: true });
+  };
 
   const newOrdersCount = orders.filter((o) => o.status === 'new').length;
   const lowStockCount = products.filter(
@@ -322,13 +332,25 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         </div>
 
         <div className="p-3 border-t border-emerald-800/80 bg-brand-green/50">
-          <Link
-            to="/"
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-white text-xs font-bold border border-emerald-700 transition-colors"
-          >
-            <ExternalLink className="w-4 h-4 text-brand-gold shrink-0" />
-            {showText && <span>{t('admin.viewStorefront')}</span>}
-          </Link>
+          <div className="space-y-2">
+            <Link
+              to="/"
+              onClick={mobileMode ? onCloseMobile : undefined}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-brand-green hover:bg-brand-green-hover text-white text-xs font-bold border border-emerald-700 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4 text-brand-gold shrink-0" />
+              {showText && <span>{t('admin.viewStorefront')}</span>}
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleSignOut(mobileMode)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/40 hover:bg-red-900/70 text-red-100 text-xs font-bold border border-red-800/70 transition-colors"
+              aria-label={t('account.signOut')}
+            >
+              <LogOut className="w-4 h-4 shrink-0" />
+              {showText && <span>{t('account.signOut')}</span>}
+            </button>
+          </div>
         </div>
       </div>
     );

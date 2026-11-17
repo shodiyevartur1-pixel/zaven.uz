@@ -146,6 +146,8 @@ export const AccountPage: React.FC = () => {
   const [profilePhone, setProfilePhone] = useState<string>('');
   const [profileTelegram, setProfileTelegram] = useState<string>('');
   const [profileError, setProfileError] = useState<string>('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   // Saved Addresses Modal State
   const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
@@ -531,7 +533,7 @@ export const AccountPage: React.FC = () => {
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError('');
 
@@ -548,11 +550,18 @@ export const AccountPage: React.FC = () => {
       return;
     }
 
-    updateCustomerProfile({
-      fullName: profileName.trim(),
-      phone: profilePhone.trim(),
-      telegramUsername: normalizeTelegramUsername(profileTelegram),
-    });
+    setIsSavingProfile(true);
+    setProfileSaved(false);
+    try {
+      const saved = await updateCustomerProfile({
+        fullName: profileName.trim(),
+        phone: profilePhone.trim(),
+        telegramUsername: normalizeTelegramUsername(profileTelegram),
+      });
+      if (saved) setProfileSaved(true);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const handleOpenAddressModal = (address?: CustomerAddress) => {
@@ -1052,9 +1061,6 @@ export const AccountPage: React.FC = () => {
   // ===========================================================================
   // VERIFIED CUSTOMER DASHBOARD
   // ===========================================================================
-  const totalCustomerSpent = customerOrders
-    .filter((o) => o.status !== 'cancelled')
-    .reduce((sum, o) => sum + o.totalAmount, 0);
 
   return (
     <div className="zaven-page-container py-5 sm:py-8 space-y-6 sm:space-y-8">
@@ -1087,14 +1093,14 @@ export const AccountPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="px-3.5 py-2 rounded-xl bg-surface-page border border-gray-200 text-xs">
-            <span className="text-gray-500 block">
-              {t('account.totalSpent')}
-            </span>
-            <strong className="text-sm font-extrabold text-brand-green">
-              {formatUZS(totalCustomerSpent)}
-            </strong>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<Edit3 className="w-4 h-4" />}
+            onClick={() => setActiveTab('profile')}
+          >
+            {t('account.profileInfo') || 'Profil maʼlumotlari'}
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1312,6 +1318,11 @@ export const AccountPage: React.FC = () => {
                 onSubmit={handleSaveProfile}
                 className="max-w-lg space-y-4"
               >
+                {profileSaved && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
+                    {t('account.savedSuccess') || 'Maʼlumotlar saqlandi.'}
+                  </div>
+                )}
                 {profileError && (
                   <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
                     {profileError}
@@ -1354,8 +1365,8 @@ export const AccountPage: React.FC = () => {
                   leftIcon={<Send className="w-4 h-4" />}
                 />
 
-                <Button type="submit" variant="primary" size="md">
-                  {t('account.saveChanges')}
+                <Button type="submit" variant="primary" size="md" isLoading={isSavingProfile}>
+                  {isSavingProfile ? 'Saqlanmoqda…' : t('account.saveChanges')}
                 </Button>
               </form>
             </div>

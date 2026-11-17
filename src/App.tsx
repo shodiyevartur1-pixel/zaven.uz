@@ -58,9 +58,26 @@ const RouteEffectsManager: React.FC = () => {
   }, [location.key]);
 
   useLayoutEffect(() => {
-    // Route changes should start at the top immediately, not animate the old
-    // page through its content before the new route appears.
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    const isPersistentScrollRoute =
+      location.pathname.startsWith('/admin') ||
+      location.pathname === '/cart' ||
+      location.pathname.startsWith('/checkout');
+    const storageKey = `zaven_route_scroll_v1:${location.pathname}`;
+    let restoreFrame: number | undefined;
+
+    if (isPersistentScrollRoute) {
+      let savedPosition = 0;
+      try {
+        savedPosition = Number(sessionStorage.getItem(storageKey) || 0);
+      } catch {
+        savedPosition = 0;
+      }
+      restoreFrame = window.requestAnimationFrame(() => {
+        window.scrollTo({ top: savedPosition, left: 0, behavior: 'instant' as ScrollBehavior });
+      });
+    } else {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
 
     const baseName = storeSettings.storeName || 'ZAVEN';
     let pageTitle = `${baseName} — ${t('header.onlineStore')}`;
@@ -88,6 +105,17 @@ const RouteEffectsManager: React.FC = () => {
     if (metaDesc && storeSettings.seoDescription) {
       metaDesc.setAttribute('content', storeSettings.seoDescription);
     }
+
+    return () => {
+      if (restoreFrame !== undefined) window.cancelAnimationFrame(restoreFrame);
+      if (isPersistentScrollRoute) {
+        try {
+          sessionStorage.setItem(storageKey, String(window.scrollY || window.pageYOffset || 0));
+        } catch {
+          // Keep route navigation working when session storage is unavailable.
+        }
+      }
+    };
   }, [
     location.pathname,
     language,

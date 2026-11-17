@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
-import { Order, OrderItem, PaymentReceiptAttachment } from '../../types';
+import { CustomerAddress, Order, OrderItem, PaymentReceiptAttachment } from '../../types';
 import {
   formatUZS,
   formatUzbekPhone,
@@ -49,6 +49,7 @@ import { Input } from '../../components/ui/Input';
 import { SearchableSelectSheet } from '../../components/ui/SearchableSelectSheet';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Modal } from '../../components/ui/Modal';
+import { ProductImage } from '../../components/ui/ProductImage';
 
 const ALLOWED_RECEIPT_MIMES = [
   'image/jpeg',
@@ -84,6 +85,12 @@ export const CartCheckoutPage: React.FC = () => {
     isCheckoutRoute && isCustomerSignedIn ? 'address' : 'cart'
   );
   const [isAuthPromptModalOpen, setIsAuthPromptModalOpen] = useState(false);
+  const stepScrollPositionsRef = useRef<Record<CheckoutStep, number>>({
+    cart: 0,
+    address: 0,
+    payment: 0,
+    confirm: 0,
+  });
 
   useEffect(() => {
     if (location.pathname === '/cart') {
@@ -126,6 +133,10 @@ export const CartCheckoutPage: React.FC = () => {
   const [selectedUzRegionId, setSelectedUzRegionId] = useState<string>(
     UZBEKISTAN_REGIONS[0].id
   );
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string | 'new'>(() => {
+    const saved = currentCustomer?.addresses.find((address) => address.isDefault) || currentCustomer?.addresses[0];
+    return saved?.id || 'new';
+  });
   const [selectedDistrict, setSelectedDistrict] = useState<string>(
     UZBEKISTAN_REGIONS[0].districts[0]
   );
@@ -145,6 +156,22 @@ export const CartCheckoutPage: React.FC = () => {
   } | null>(null);
 
   const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
+
+  const savedCustomerAddresses = currentCustomer?.addresses || [];
+
+  const applySavedAddressToCheckout = (address: CustomerAddress) => {
+    setSelectedSavedAddressId(address.id);
+    const matchedRegion = UZBEKISTAN_REGIONS.find(
+      (region) => region.nameUz.toLowerCase() === address.region.toLowerCase() || address.region.toLowerCase().includes(region.nameUz.toLowerCase())
+    );
+    if (matchedRegion) {
+      setSelectedUzRegionId(matchedRegion.id);
+      setSelectedDistrict(address.district && matchedRegion.districts.includes(address.district) ? address.district : matchedRegion.districts[0] || '');
+    }
+    setAddressLine(address.addressLine);
+    setSharedCoordinates(address.locationCoordinates ? { lat: address.locationCoordinates.lat, lng: address.locationCoordinates.lng, accuracyMeters: address.locationCoordinates.accuracyMeters } : null);
+    setErrors((previous) => ({ ...previous, region: undefined, district: undefined, address: undefined }));
+  };
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>(
     enabledPayments[0]?.id || 'pay-card'
@@ -264,21 +291,7 @@ export const CartCheckoutPage: React.FC = () => {
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
       if (defaultAddr && !hasSavedCheckoutDraftRef.current) {
-        const matchedReg = UZBEKISTAN_REGIONS.find(
-          (r) =>
-            r.nameUz.toLowerCase() === defaultAddr.region.toLowerCase() ||
-            defaultAddr.region.toLowerCase().includes(r.nameUz.toLowerCase())
-        );
-        if (matchedReg) {
-          setSelectedUzRegionId(matchedReg.id);
-          setSelectedDistrict(
-            defaultAddr.district &&
-              matchedReg.districts.includes(defaultAddr.district)
-              ? defaultAddr.district
-              : matchedReg.districts[0] || ''
-          );
-        }
-        setAddressLine((prev) => prev || defaultAddr.addressLine);
+        applySavedAddressToCheckout(defaultAddr);
       }
     }
   }, [currentCustomer]);
@@ -633,10 +646,15 @@ export const CartCheckoutPage: React.FC = () => {
   };
 
   const goToStep = (targetStep: CheckoutStep) => {
+    stepScrollPositionsRef.current[activeStep] = window.scrollY;
+    const stepOrder: Record<CheckoutStep, number> = { cart: 1, address: 2, payment: 3, confirm: 4 };
+    const movingBack = stepOrder[targetStep] < stepOrder[activeStep];
     if (targetStep === 'cart') {
       setActiveStep('cart');
       navigate('/cart');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (movingBack) {
+        window.setTimeout(() => window.scrollTo({ top: stepScrollPositionsRef.current.cart, behavior: 'instant' }), 20);
+      }
       return;
     }
 
@@ -649,7 +667,11 @@ export const CartCheckoutPage: React.FC = () => {
     if (!location.pathname.startsWith('/checkout')) {
       navigate('/checkout');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (movingBack) {
+      window.setTimeout(() => window.scrollTo({ top: stepScrollPositionsRef.current[targetStep], behavior: 'instant' }), 20);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleContinueFromAddress = (e: React.FormEvent) => {
@@ -1269,6 +1291,43 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
+            {savedCustomerAddresses.length > 0 && (
+              <section className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Saqlangan manzillar</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSavedAddressId('new');
+                      setAddressLine('');
+                      setSharedCoordinates(null);
+                      setIsMapModalOpen(true);
+                    }}
+                    className="text-xs font-bold text-brand-green hover:underline"
+                  >
+                    + Yangi manzil
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {savedCustomerAddresses.map((address) => {
+                    const selected = selectedSavedAddressId === address.id;
+                    return (
+                      <button
+                        key={address.id}
+                        type="button"
+                        onClick={() => applySavedAddressToCheckout(address)}
+                        aria-pressed={selected}
+                        className={`rounded-xl border p-3 text-left transition-colors ${selected ? 'border-[#C89D54] bg-[#C89D54]/10' : 'border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#12211C]'}`}
+                      >
+                        <span className="block text-sm font-bold text-gray-900 dark:text-gray-100">{address.title}</span>
+                        <span className="mt-1 block text-xs text-brand-green">{address.region}{address.district ? ` · ${address.district}` : ''}</span>
+                        <span className="mt-1 block text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{address.addressLine}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
             <section className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#162923] p-3.5 sm:p-4 space-y-2.5">
               <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
                 {t('cart.promoLabel')}
@@ -1786,70 +1845,6 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5 text-xs sm:text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold uppercase text-gray-400">
-                    {t('cart.step2Title')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => goToStep('address')}
-                    className="text-xs font-bold text-brand-green hover:underline"
-                  >
-                    {t('cart.editStepBtn')}
-                  </button>
-                </div>
-                <p className="font-bold text-gray-900 dark:text-gray-100">
-                  {customerName}
-                </p>
-                <p className="text-brand-green font-semibold">
-                  {customerPhone}
-                </p>
-                {customerEmail && (
-                  <p className="text-xs text-gray-500">{customerEmail}</p>
-                )}
-                {normalizedPreviewTelegram && (
-                  <p className="text-xs font-semibold text-brand-green">
-                    Telegram: {normalizedPreviewTelegram}
-                  </p>
-                )}
-                <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5">
-                  {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
-                  , {addressLine}
-                </p>
-                {sharedCoordinates && (
-                  <p className="text-[11px] font-mono text-brand-green pt-0.5">
-                    Pin: {sharedCoordinates.lat}, {sharedCoordinates.lng}
-                  </p>
-                )}
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold uppercase text-gray-400">
-                    {t('cart.step3Title')}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => goToStep('payment')}
-                    className="text-xs font-bold text-brand-green hover:underline"
-                  >
-                    {t('cart.editStepBtn')}
-                  </button>
-                </div>
-                <p className="font-bold text-gray-900 dark:text-gray-100">
-                  {selectedPaymentMethod?.name}
-                </p>
-                {requiresPaymentReceipt && receiptAttachment && (
-                  <p className="text-emerald-700 font-semibold truncate">
-                    {t('transfer.uploadSuccessReady')}:{' '}
-                    {receiptAttachment.fileName}
-                  </p>
-                )}
-              </div>
-            </div>
-
             <div className="border border-gray-200 dark:border-[#28453B] rounded-xl divide-y divide-gray-200 dark:divide-[#28453B] overflow-hidden">
               {detailedCartItems.map(
                 ({ product, localized, quantity, unitPrice, lineTotal }) => (
@@ -1858,7 +1853,7 @@ export const CartCheckoutPage: React.FC = () => {
                     className="p-3 flex items-center justify-between gap-3 bg-white dark:bg-[#12211C]"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
+                      <ProductImage
                         src={product.images[0]}
                         alt={localized.name}
                         className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0"
@@ -1921,6 +1916,56 @@ export const CartCheckoutPage: React.FC = () => {
                 <span className="text-xl sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
                   {formatUZS(finalTotalAmount)}
                 </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
+                <div>
+                  <span className="text-[11px] font-extrabold uppercase text-gray-400 block">
+                    {t('cart.step2Title')}
+                  </span>
+                </div>
+                <p className="font-bold text-gray-900 dark:text-gray-100">
+                  {customerName}
+                </p>
+                <p className="text-brand-green font-semibold">
+                  {customerPhone}
+                </p>
+                {customerEmail && (
+                  <p className="text-xs text-gray-500">{customerEmail}</p>
+                )}
+                {normalizedPreviewTelegram && (
+                  <p className="text-xs font-semibold text-brand-green">
+                    Telegram: {normalizedPreviewTelegram}
+                  </p>
+                )}
+                <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5">
+                  {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
+                  , {addressLine}
+                </p>
+                {sharedCoordinates && (
+                  <p className="text-[11px] font-mono text-brand-green pt-0.5">
+                    Pin: {sharedCoordinates.lat}, {sharedCoordinates.lng}
+                  </p>
+                )}
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
+                <div>
+                  <span className="text-[11px] font-extrabold uppercase text-gray-400 block">
+                    {t('cart.step3Title')}
+                  </span>
+                </div>
+                <p className="font-bold text-gray-900 dark:text-gray-100">
+                  {selectedPaymentMethod?.name}
+                </p>
+                {requiresPaymentReceipt && receiptAttachment && (
+                  <p className="text-emerald-700 font-semibold truncate">
+                    {t('transfer.uploadSuccessReady')}:{' '}
+                    {receiptAttachment.fileName}
+                  </p>
+                )}
               </div>
             </div>
 

@@ -1,1068 +1,895 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ShoppingBag,
   TrendingUp,
-  ShoppingCart,
-  Calculator,
-  Package,
   AlertTriangle,
-  Calendar,
-  Filter,
-  ArrowRight,
-  Eye,
-  PlusCircle,
-  CheckCircle2,
   Clock,
-  Truck,
-  XCircle,
-  Info,
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  Plus,
+  RotateCcw,
+  Filter,
   BarChart3,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { Order, OrderStatus } from '../../types';
+import { OrderStatus, Product } from '../../types';
 import { formatUZS, formatDateUz } from '../../utils/format';
-import { Button } from '../../components/ui/Button';
+import { ProductImage } from '../../components/ui/ProductImage';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Input, Select, NumericInput } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 
-type DateRangePreset = 'today' | '7d' | '30d' | 'all';
+export interface AdminDashboardProps {
+  isReportsView?: boolean;
+}
 
-const STATUS_BADGE_MAP: Record<
+type DateRangeFilter = 'all' | 'today' | '7d' | '30d';
+
+const ORDER_STATUS_META: Record<
   OrderStatus,
   {
     label: string;
     variant: 'info' | 'gold' | 'warning' | 'success' | 'danger' | 'neutral';
-    barColor: string;
   }
 > = {
-  new: {
-    label: 'Yangi',
-    variant: 'info',
-    barColor: 'bg-sky-500',
-  },
-  confirmed: {
-    label: 'Tasdiqlangan',
-    variant: 'gold',
-    barColor: 'bg-brand-gold',
-  },
-  preparing: {
-    label: 'Tayyorlanmoqda',
-    variant: 'warning',
-    barColor: 'bg-amber-500',
-  },
-  shipped: {
-    label: 'Yoʻlda',
-    variant: 'info',
-    barColor: 'bg-indigo-500',
-  },
-  delivered: {
-    label: 'Yetkazilgan',
-    variant: 'success',
-    barColor: 'bg-brand-green',
-  },
-  cancelled: {
-    label: 'Bekor qilingan',
-    variant: 'danger',
-    barColor: 'bg-red-500',
-  },
+  new: { label: 'Yangi', variant: 'info' },
+  confirmed: { label: 'Tasdiqlangan', variant: 'gold' },
+  preparing: { label: 'Tayyorlanmoqda', variant: 'warning' },
+  shipped: { label: 'Yoʻlda', variant: 'info' },
+  delivered: { label: 'Yetkazildi', variant: 'success' },
+  cancelled: { label: 'Bekor qilingan', variant: 'danger' },
 };
 
-export const AdminDashboard: React.FC<{ isReportsView?: boolean }> = ({
+const DASHBOARD_FILTER_STORAGE_KEY = 'zaven_admin_dashboard_filters_v1';
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isReportsView = false,
 }) => {
   const {
     orders,
     products,
     categories,
-    updateOrderStatus,
+    inquiries,
+    storeSettings,
     adjustProductStock,
+    saveProduct,
+    resetOrderStatsBaseline,
   } = useStore();
 
-  // Dashboard Filters
-  const [dateRange, setDateRange] = useState<DateRangePreset>('30d');
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const savedFilters = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem(DASHBOARD_FILTER_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
-  // Quick Order Inspect & Quick Stock Adjust Modals
-  const [inspectedOrder, setInspectedOrder] = useState<Order | null>(null);
-  const [quickRestockProductId, setQuickRestockProductId] = useState<
-    string | null
-  >(null);
-  const [restockAddQty, setRestockAddQty] = useState<number>(15);
-
-  // Valid (non-cancelled) orders
-  const validOrders = useMemo(
-    () => orders.filter((o) => o.status !== 'cancelled'),
-    [orders]
+  const [dateRange, setDateRange] = useState<DateRangeFilter>(
+    savedFilters?.dateRange || 'all'
+  );
+  const [categoryFilter, setCategoryFilter] = useState<string>(
+    savedFilters?.categoryFilter || 'all'
+  );
+  const [statusFilter, setStatusFilter] = useState<string>(
+    savedFilters?.statusFilter || 'all'
   );
 
-  // Calculate Today's, Weekly, and Monthly Revenue (Blending live orders + clearly labeled demo baselines)
-  const revenueMetrics = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    ).getTime();
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        DASHBOARD_FILTER_STORAGE_KEY,
+        JSON.stringify({ dateRange, categoryFilter, statusFilter })
+      );
+    } catch {
+      // Ignore storage error
+    }
+  }, [dateRange, categoryFilter, statusFilter]);
 
-    const liveTodayOrders = validOrders.filter(
-      (o) => new Date(o.createdAt).getTime() >= startOfToday
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResettingStats, setIsResettingStats] = useState(false);
+
+  // Quick Stock Adjustment Modal State (Preserved on Dashboard)
+  const [quickStockProduct, setQuickStockProduct] = useState<Product | null>(
+    null
+  );
+  const [quickStockVal, setQuickStockVal] = useState<number>(0);
+  const [quickThresholdVal, setQuickThresholdVal] = useState<number>(5);
+  const [quickStockReason, setQuickStockReason] = useState<string>('');
+
+  const resetTimestampMs = useMemo(() => {
+    if (!storeSettings.statsResetAt) return 0;
+    const parsed = new Date(storeSettings.statsResetAt).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }, [storeSettings.statsResetAt]);
+
+  const allowedProductIdsForCategory = useMemo(() => {
+    if (categoryFilter === 'all') return null;
+    return new Set(
+      products.filter((p) => p.categoryId === categoryFilter).map((p) => p.id)
     );
-    const liveTotalRevenue = validOrders.reduce(
-      (sum, o) => sum + o.totalAmount,
-      0
-    );
+  }, [products, categoryFilter]);
 
-    // Ensure realistic Today / Weekly / Monthly figures utilizing live store orders + demo historical baseline
-    const todayRevenue =
-      liveTodayOrders.length > 0
-        ? liveTodayOrders.reduce((s, o) => s + o.totalAmount, 0)
-        : validOrders[0]?.totalAmount || 332000;
+  // All order-derived metrics respect:
+  // 1. !o.isDeleted
+  // 2. o.createdAt > storeSettings.statsResetAt
+  // 3. Date range, category, and order status filters
+  const filteredBaselineOrders = useMemo(() => {
+    const nowMs = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
 
-    const weeklyRevenue = liveTotalRevenue + 1480000;
-    const monthlyRevenue = liveTotalRevenue + 6850000;
+    return orders.filter((o) => {
+      if (o.isDeleted) return false;
+      const createdMs = new Date(o.createdAt).getTime();
 
-    const avgOrderValue =
-      validOrders.length > 0
-        ? Math.round(liveTotalRevenue / validOrders.length)
-        : 0;
-
-    return {
-      todayRevenue,
-      weeklyRevenue,
-      monthlyRevenue,
-      liveTotalRevenue,
-      avgOrderValue,
-    };
-  }, [validOrders]);
-
-  // Order Status Breakdown
-  const statusBreakdown = useMemo(() => {
-    const statuses: OrderStatus[] = [
-      'new',
-      'confirmed',
-      'preparing',
-      'shipped',
-      'delivered',
-      'cancelled',
-    ];
-    return statuses.map((st) => {
-      const count = orders.filter((o) => o.status === st).length;
-      const percentage =
-        orders.length > 0 ? Math.round((count / orders.length) * 100) : 0;
-      return {
-        status: st,
-        count,
-        percentage,
-        meta: STATUS_BADGE_MAP[st],
-      };
-    });
-  }, [orders]);
-
-  // Filtered Products for Best Sellers & Low Stock
-  const filteredCatalogProducts = useMemo(() => {
-    return products.filter((p) => {
-      if (p.status === 'archived') return false;
-      if (
-        selectedCategoryId !== 'all' &&
-        p.categoryId !== selectedCategoryId
-      ) {
+      if (resetTimestampMs > 0 && createdMs <= resetTimestampMs) {
         return false;
       }
+
+      if (dateRange === 'today') {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        if (createdMs < startOfToday.getTime()) return false;
+      } else if (dateRange === '7d') {
+        if (nowMs - createdMs > 7 * dayMs) return false;
+      } else if (dateRange === '30d') {
+        if (nowMs - createdMs > 30 * dayMs) return false;
+      }
+
+      if (statusFilter !== 'all' && o.status !== statusFilter) {
+        return false;
+      }
+
+      if (allowedProductIdsForCategory) {
+        const hasMatchingItem = o.items.some((i) =>
+          allowedProductIdsForCategory.has(i.productId)
+        );
+        if (!hasMatchingItem) return false;
+      }
+
       return true;
     });
-  }, [products, selectedCategoryId]);
+  }, [
+    orders,
+    resetTimestampMs,
+    dateRange,
+    statusFilter,
+    allowedProductIdsForCategory,
+  ]);
 
-  const bestSellingProducts = useMemo(() => {
-    return [...filteredCatalogProducts]
-      .sort((a, b) => b.soldCount - a.soldCount)
-      .slice(0, 5);
-  }, [filteredCatalogProducts]);
-
-  const lowStockProducts = useMemo(() => {
-    return filteredCatalogProducts
-      .filter((p) => p.stock === 0 || p.stock <= p.lowStockThreshold)
-      .sort((a, b) => a.stock - b.stock);
-  }, [filteredCatalogProducts]);
-
-  // Filtered Recent Orders Table
-  const filteredRecentOrders = useMemo(() => {
-    return orders
-      .filter((ord) => {
-        if (statusFilter !== 'all' && ord.status !== statusFilter) {
-          return false;
-        }
-        if (selectedCategoryId !== 'all') {
-          const hasCatItem = ord.items.some((item) => {
-            const prod = products.find((p) => p.id === item.productId);
-            return prod?.categoryId === selectedCategoryId;
-          });
-          if (!hasCatItem) return false;
-        }
-        return true;
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  }, [orders, statusFilter, selectedCategoryId, products]);
-
-  // Clearly Labeled Demo Revenue Chart Data (Adapts to selected DateRangePreset)
-  const chartSeries = useMemo(() => {
-    if (dateRange === 'today') {
-      return [
-        { label: '09:00', revenue: 129000, orders: 1 },
-        { label: '12:00', revenue: 245000, orders: 1 },
-        { label: '15:00', revenue: 332000, orders: 2 },
-        { label: '18:00', revenue: 199000, orders: 1 },
-        { label: '21:00', revenue: 170000, orders: 1 },
-      ];
-    }
-    if (dateRange === '7d') {
-      return [
-        { label: 'Dush', revenue: 420000, orders: 2 },
-        { label: 'Sesh', revenue: 315000, orders: 1 },
-        { label: 'Chor', revenue: 580000, orders: 3 },
-        { label: 'Pay', revenue: 290000, orders: 1 },
-        { label: 'Jum', revenue: 695000, orders: 3 },
-        { label: 'Shan', revenue: 810000, orders: 4 },
-        {
-          label: 'Yak (Joriy)',
-          revenue: revenueMetrics.todayRevenue,
-          orders: Math.max(1, validOrders.length),
-        },
-      ];
-    }
-    return [
-      { label: '1-hafta', revenue: 1650000, orders: 7 },
-      { label: '2-hafta', revenue: 2120000, orders: 9 },
-      { label: '3-hafta', revenue: 1890000, orders: 8 },
-      {
-        label: '4-hafta (Joriy)',
-        revenue: revenueMetrics.weeklyRevenue,
-        orders: 6 + validOrders.length,
-      },
-    ];
-  }, [dateRange, revenueMetrics, validOrders.length]);
-
-  const maxChartRevenue = Math.max(
-    ...chartSeries.map((item) => item.revenue),
-    100000
+  const nonCancelledOrders = useMemo(
+    () => filteredBaselineOrders.filter((o) => o.status !== 'cancelled'),
+    [filteredBaselineOrders]
   );
 
-  // Category Revenue Breakdown for Reports
-  const categorySalesBreakdown = useMemo(() => {
-    return categories
-      .filter((c) => c.isActive)
-      .map((cat) => {
-        const catProducts = products.filter((p) => p.categoryId === cat.id);
-        const unitsSold = catProducts.reduce((s, p) => s + p.soldCount, 0);
-        const estimatedRevenue = catProducts.reduce(
-          (s, p) => s + p.soldCount * (p.salePrice ?? p.price),
-          0
+  // Strictly derived from real non-cancelled orders after statsResetAt (no fabricated/demo revenue)
+  const totalRevenue = useMemo(
+    () =>
+      nonCancelledOrders.reduce((sum, o) => {
+        if (!allowedProductIdsForCategory) return sum + o.totalAmount;
+        const catLinesTotal = o.items
+          .filter((i) => allowedProductIdsForCategory.has(i.productId))
+          .reduce((s, i) => s + i.totalPrice, 0);
+        return sum + catLinesTotal;
+      }, 0),
+    [nonCancelledOrders, allowedProductIdsForCategory]
+  );
+
+  const pendingReceiptsCount = useMemo(
+    () =>
+      filteredBaselineOrders.filter(
+        (o) => o.paymentVerificationStatus === 'pending_verification'
+      ).length,
+    [filteredBaselineOrders]
+  );
+
+  const newOrdersCount = useMemo(
+    () => filteredBaselineOrders.filter((o) => o.status === 'new').length,
+    [filteredBaselineOrders]
+  );
+
+  const statusBreakdown = useMemo(() => {
+    const counts: Record<OrderStatus, number> = {
+      new: 0,
+      confirmed: 0,
+      preparing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
+    for (const o of filteredBaselineOrders) {
+      counts[o.status] = (counts[o.status] || 0) + 1;
+    }
+    return counts;
+  }, [filteredBaselineOrders]);
+
+  const lowStockProducts = useMemo(
+    () =>
+      products
+        .filter(
+          (p) =>
+            p.status !== 'archived' &&
+            (categoryFilter === 'all' || p.categoryId === categoryFilter) &&
+            p.stock <= p.lowStockThreshold
+        )
+        .sort((a, b) => a.stock - b.stock),
+    [products, categoryFilter]
+  );
+
+  // Top products sold count derived strictly from nonCancelledOrders after statsResetAt
+  const topSellingProducts = useMemo(() => {
+    const soldByProduct = new Map<string, number>();
+    for (const ord of nonCancelledOrders) {
+      for (const item of ord.items) {
+        soldByProduct.set(
+          item.productId,
+          (soldByProduct.get(item.productId) || 0) + item.quantity
         );
-        return {
-          id: cat.id,
-          name: cat.name,
-          unitsSold,
-          estimatedRevenue,
-        };
-      })
-      .sort((a, b) => b.estimatedRevenue - a.estimatedRevenue);
-  }, [categories, products]);
+      }
+    }
 
-  const maxCategoryRevenue = Math.max(
-    ...categorySalesBreakdown.map((c) => c.estimatedRevenue),
-    100000
+    return [...products]
+      .filter(
+        (p) =>
+          p.status !== 'archived' &&
+          (categoryFilter === 'all' || p.categoryId === categoryFilter)
+      )
+      .map((p) => ({
+        product: p,
+        periodSoldCount: soldByProduct.get(p.id) || 0,
+      }))
+      .sort((a, b) => b.periodSoldCount - a.periodSoldCount)
+      .slice(0, isReportsView ? 10 : 5);
+  }, [products, nonCancelledOrders, categoryFilter, isReportsView]);
+
+  const recentOrders = useMemo(
+    () =>
+      [...filteredBaselineOrders]
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .slice(0, isReportsView ? 12 : 6),
+    [filteredBaselineOrders, isReportsView]
   );
 
-  const quickRestockProduct = products.find(
-    (p) => p.id === quickRestockProductId
+  const unreadInquiriesCount = useMemo(
+    () => inquiries.filter((i) => i.status === 'unread').length,
+    [inquiries]
   );
 
-  const handleConfirmQuickRestock = (e: React.FormEvent) => {
+  const getCategoryName = (categoryId: string) =>
+    categories.find((c) => c.id === categoryId)?.name || 'Toifa';
+
+  const handleConfirmResetStats = async () => {
+    setIsResettingStats(true);
+    try {
+      await resetOrderStatsBaseline();
+      setIsResetModalOpen(false);
+    } finally {
+      setIsResettingStats(false);
+    }
+  };
+
+  const handleSaveQuickStock = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickRestockProduct || restockAddQty <= 0) return;
+    if (!quickStockProduct) return;
+
+    const nextThreshold = Math.max(1, quickThresholdVal);
+    if (nextThreshold !== quickStockProduct.lowStockThreshold) {
+      saveProduct({
+        ...quickStockProduct,
+        lowStockThreshold: nextThreshold,
+        stock: Math.max(0, quickStockVal),
+        updatedAt: new Date().toISOString(),
+      });
+    }
     adjustProductStock(
-      quickRestockProduct.id,
-      quickRestockProduct.stock + restockAddQty,
-      'Dashboard tezkor zaxira toʻldirish'
+      quickStockProduct.id,
+      Math.max(0, quickStockVal),
+      quickStockReason.trim() || 'Boshqaruv panelidan tezkor zaxira yangilandi'
     );
-    setQuickRestockProductId(null);
+    setQuickStockProduct(null);
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* Top Header & Date Range / Category Filters */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900">
-              {isReportsView
-                ? 'Hisobotlar va savdo tahlili (Analytics)'
-                : 'ZAVEN Boshqaruv Paneli (Dashboard)'}
-            </h1>
+    <div className="space-y-6">
+      {/* Header Card */}
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="gold" size="sm">
-              Demo + Jonli maʼlumotlar
+              {isReportsView ? (
+                <span className="inline-flex items-center gap-1">
+                  <BarChart3 className="w-3 h-3" />
+                  <span>MOLIYAVIY HISOBOTLAR</span>
+                </span>
+              ) : (
+                'ZAVEN ADMIN BOSHQARUV'
+              )}
             </Badge>
+            {storeSettings.statsResetAt && (
+              <span className="text-[11px] font-bold text-brand-green">
+                Statistika boshi:{' '}
+                {formatDateUz(storeSettings.statsResetAt, true)}
+              </span>
+            )}
           </div>
-          <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            Savdo tushumlari, buyurtmalar holati, eng koʻp sotilgan mahsulotlar va ombor qoldigʻi nazorati
+          <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100">
+            {isReportsView
+              ? 'Savdo tahlili va batafsil hisobotlar'
+              : 'Doʻkon koʻrsatkichlari va tezkor nazorat'}
+          </h1>
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+            Barcha hisoblagichlar faqat haqiqiy buyurtmalardan hisoblanadi
           </p>
         </div>
 
-        {/* Date Range & Category Data Filters */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex rounded-xl bg-surface-page p-1 border border-gray-200">
-            {[
-              { id: 'today', label: 'Bugun' },
-              { id: '7d', label: '7 kun' },
-              { id: '30d', label: '30 kun' },
-              { id: 'all', label: 'Barchasi' },
-            ].map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => setDateRange(preset.id as DateRangePreset)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  dateRange === preset.id
-                    ? 'bg-brand-green text-white shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-400 hidden sm:inline" />
-            <select
-              value={selectedCategoryId}
-              onChange={(e) => setSelectedCategoryId(e.target.value)}
-              className="h-9 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 focus:border-brand-green focus:outline-none"
-              aria-label="Toifa boʻyicha filtrlash"
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+            onClick={() => setIsResetModalOpen(true)}
+          >
+            Statistikani 0 ga tushirish
+          </Button>
+          <Link to="/admin/products">
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4 text-[#C89D54]" />}
             >
-              <option value="all">Barcha toifalar</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              Mahsulot qoʻshish
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* 1. Primary Revenue & Order KPI Cards (Today, Weekly, Monthly, AOV, Orders) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Today's Revenue */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between">
+      {/* Report Filters Bar */}
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Select
+          label="Vaqt oraligʻi"
+          value={dateRange}
+          onChange={(e) => setDateRange(e.target.value as DateRangeFilter)}
+          options={[
+            { value: 'all', label: 'Barcha vaqt (Baseline boʻyicha)' },
+            { value: 'today', label: 'Bugun' },
+            { value: '7d', label: 'Oxirgi 7 kun' },
+            { value: '30d', label: 'Oxirgi 30 kun' },
+          ]}
+        />
+
+        <Select
+          label="Toifa boʻyicha filtr"
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          options={[
+            { value: 'all', label: 'Barcha toifalar' },
+            ...categories.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
+
+        <Select
+          label="Buyurtma holati"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          options={[
+            { value: 'all', label: 'Barcha holatlar' },
+            { value: 'new', label: 'Yangi' },
+            { value: 'confirmed', label: 'Tasdiqlangan' },
+            { value: 'preparing', label: 'Tayyorlanmoqda' },
+            { value: 'shipped', label: 'Yoʻlda' },
+            { value: 'delivered', label: 'Yetkazildi' },
+            { value: 'cancelled', label: 'Bekor qilingan' },
+          ]}
+        />
+      </div>
+
+      {/* KPI Summary Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+        <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-5 shadow-card space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Bugungi tushum
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+              Haqiqiy tushum
             </span>
-            <div className="w-9 h-9 rounded-xl bg-brand-green-light text-brand-green flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-brand-green-light dark:bg-[#162923] text-brand-green flex items-center justify-center">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-lg sm:text-xl font-extrabold text-gray-900">
-              {formatUZS(revenueMetrics.todayRevenue)}
-            </p>
-            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-              Joriy kunlik savdo koʻrsatkichi
-            </p>
-          </div>
+          <p className="text-lg sm:text-xl font-extrabold text-brand-green">
+            {formatUZS(totalRevenue)}
+          </p>
+          <p className="text-[11px] text-gray-500">
+            {nonCancelledOrders.length} ta faol buyurtma
+          </p>
         </div>
 
-        {/* Weekly Revenue */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between">
+        <Link
+          to="/admin/orders"
+          className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] hover:border-brand-green p-4 sm:p-5 shadow-card space-y-2 transition-colors block"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Haftalik tushum
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+              Yangi buyurtmalar
             </span>
-            <div className="w-9 h-9 rounded-xl bg-brand-gold-light text-brand-gold-dark flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-sky-50 dark:bg-[#162923] text-sky-700 flex items-center justify-center">
+              <ShoppingBag className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-lg sm:text-xl font-extrabold text-gray-900">
-              {formatUZS(revenueMetrics.weeklyRevenue)}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Soʻnggi 7 kun (Demo + Jonli)
-            </p>
-          </div>
-        </div>
+          <p className="text-lg sm:text-xl font-extrabold text-gray-900 dark:text-gray-100">
+            {newOrdersCount} ta
+          </p>
+          <p className="text-[11px] text-brand-green font-semibold">
+            Tanlangan davrda: {filteredBaselineOrders.length} ta →
+          </p>
+        </Link>
 
-        {/* Monthly Revenue */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between">
+        <Link
+          to="/admin/orders"
+          className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] hover:border-[#C89D54] p-4 sm:p-5 shadow-card space-y-2 transition-colors block"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Oylik tushum
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+              Tekshirilayotgan cheklar
             </span>
-            <div className="w-9 h-9 rounded-xl bg-brand-green text-brand-gold flex items-center justify-center">
-              <BarChart3 className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-[#162923] text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <p className="text-lg sm:text-xl font-extrabold text-brand-green">
-              {formatUZS(revenueMetrics.monthlyRevenue)}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Soʻnggi 30 kun (Demo + Jonli)
-            </p>
-          </div>
-        </div>
+          <p className="text-lg sm:text-xl font-extrabold text-amber-700">
+            {pendingReceiptsCount} ta
+          </p>
+          <p className="text-[11px] text-gray-500">
+            {unreadInquiriesCount} ta yangi mijoz murojaati
+          </p>
+        </Link>
 
-        {/* Total Orders Count */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between">
+        <Link
+          to="/admin/inventory"
+          className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] hover:border-red-400 p-4 sm:p-5 shadow-card space-y-2 transition-colors block"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Jami buyurtmalar
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400">
+              Kam qolgan zaxira
             </span>
-            <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center">
-              <ShoppingCart className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-red-50 dark:bg-[#162923] text-red-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <div className="flex items-baseline gap-2">
-              <p className="text-xl font-extrabold text-gray-900">
-                {orders.length} ta
-              </p>
-              <span className="text-xs font-bold text-brand-gold-dark">
-                ({orders.filter((o) => o.status === 'new').length} yangi)
+          <p className="text-lg sm:text-xl font-extrabold text-red-600">
+            {lowStockProducts.length} ta mahsulot
+          </p>
+          <p className="text-[11px] text-gray-500">
+            Ombor qoldigʻini boshqarish →
+          </p>
+        </Link>
+      </div>
+
+      {/* Status Breakdown Bar */}
+      <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 shadow-card">
+        <div className="flex items-center gap-2 mb-3 text-xs font-extrabold uppercase tracking-wider text-gray-500">
+          <Filter className="w-3.5 h-3.5 text-brand-green" />
+          <span>Buyurtmalar holati boʻyicha taqsimot (Tanlangan davr)</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+          {(Object.keys(ORDER_STATUS_META) as OrderStatus[]).map((st) => (
+            <div
+              key={st}
+              className="p-3 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-2"
+            >
+              <span className="font-semibold text-gray-700 dark:text-gray-200 truncate">
+                {ORDER_STATUS_META[st].label}
               </span>
+              <Badge variant={ORDER_STATUS_META[st].variant} size="sm">
+                {statusBreakdown[st]}
+              </Badge>
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Faol tizimdagi buyurtmalar
-            </p>
-          </div>
-        </div>
-
-        {/* Average Order Value (AOV) */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">
-              Oʻrtacha chek (AOV)
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Calculator className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <p className="text-lg sm:text-xl font-extrabold text-gray-900">
-              {formatUZS(revenueMetrics.avgOrderValue)}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">
-              Har bir faol buyurtma boʻyicha
-            </p>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* 2. Readable Revenue Chart + Order Status Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left (7 cols): Revenue Bar Chart */}
-        <section className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col justify-between space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-gray-900">
-                  Savdo tushumlari dinamikasi (soʻmda)
-                </h2>
-                <Badge variant="neutral" size="sm">
-                  Demo grafik maʼlumotlari
-                </Badge>
-              </div>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Tanlangan davr boʻyicha tushum va buyurtmalar soni taqqoslanmasi
-              </p>
-            </div>
-            <span className="text-xs font-bold text-brand-green">
-              Faol buyurtmalar jami: {formatUZS(revenueMetrics.liveTotalRevenue)}
-            </span>
+      {/* Recent Orders Section (Mobile Cards + Desktop Table) */}
+      <section className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] shadow-card overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
+              Soʻnggi buyurtmalar
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Barcha tarixiy buyurtmalar «Buyurtmalar» boʻlimida saqlanadi
+            </p>
           </div>
+          <Link
+            to="/admin/orders"
+            className="inline-flex items-center gap-1 text-xs font-extrabold text-brand-green hover:underline"
+          >
+            <span>Barchasini koʻrish</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
 
-          {/* Bar Chart Visualization */}
-          <div className="pt-4 pb-2">
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-3 items-end h-52 pt-6 px-2 border-b border-gray-200">
-              {chartSeries.map((point, idx) => {
-                const heightPercent = Math.max(
-                  14,
-                  Math.round((point.revenue / maxChartRevenue) * 100)
-                );
-                const isLast = idx === chartSeries.length - 1;
-
+        {recentOrders.length > 0 ? (
+          <>
+            <div className="md:hidden divide-y divide-gray-200 dark:divide-[#28453B]">
+              {recentOrders.map((order) => {
+                const statusMeta = ORDER_STATUS_META[order.status];
                 return (
-                  <div
-                    key={point.label}
-                    className="h-full flex flex-col justify-end items-center group"
-                  >
-                    <div className="text-[10px] font-bold text-gray-700 mb-1.5 text-center truncate w-full">
-                      {Math.round(point.revenue / 1000)}k
+                  <div key={order.id} className="p-4 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-extrabold text-brand-green text-sm">
+                        #{order.orderNumber}
+                      </span>
+                      <Badge variant={statusMeta.variant} size="sm">
+                        {statusMeta.label}
+                      </Badge>
                     </div>
-                    <div
-                      style={{ height: `${heightPercent}%` }}
-                      className={`w-full max-w-[44px] rounded-t-lg transition-all ${
-                        isLast
-                          ? 'bg-brand-gold hover:bg-brand-gold-hover'
-                          : 'bg-brand-green hover:bg-brand-green-hover'
-                      }`}
-                      title={`${point.label}: ${formatUZS(point.revenue)} (${point.orders} ta buyurtma)`}
-                    />
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-gray-900 dark:text-gray-100 text-sm">
+                        {order.customerName}
+                      </p>
+                      <p className="text-gray-600 dark:text-gray-300 font-semibold">
+                        {order.customerPhone} • {order.region}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        {formatDateUz(order.createdAt, true)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-[#28453B]">
+                      <div>
+                        <span className="text-[11px] text-gray-500 block">
+                          {order.paymentMethodLabel}
+                        </span>
+                        <strong className="text-sm font-extrabold text-brand-green">
+                          {formatUZS(order.totalAmount)}
+                        </strong>
+                      </div>
+                      <Link to={`/admin/orders?q=${order.orderNumber}`}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          leftIcon={<Eye className="w-3.5 h-3.5" />}
+                        >
+                          Tafsilotlar
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* X-Axis Labels */}
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-3 pt-2.5 px-2 text-center">
-              {chartSeries.map((point) => (
-                <div key={point.label}>
-                  <p className="text-xs font-bold text-gray-800 truncate">
-                    {point.label}
-                  </p>
-                  <p className="text-[10px] text-gray-500">
-                    {point.orders} ta buyurtma
-                  </p>
-                </div>
-              ))}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-[#162923] border-b border-gray-200 dark:border-[#28453B] text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
+                    <th className="py-3 px-4">Buyurtma #</th>
+                    <th className="py-3 px-4">Mijoz va Telefon</th>
+                    <th className="py-3 px-4">Hudud</th>
+                    <th className="py-3 px-4">Toʻlov va Chek</th>
+                    <th className="py-3 px-4">Summa</th>
+                    <th className="py-3 px-4">Holati</th>
+                    <th className="py-3 px-4 text-right">Amal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-[#28453B] text-xs sm:text-sm">
+                  {recentOrders.map((order) => {
+                    const statusMeta = ORDER_STATUS_META[order.status];
+                    return (
+                      <tr
+                        key={order.id}
+                        className="hover:bg-gray-50/80 dark:hover:bg-[#162923]/60 transition-colors"
+                      >
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="font-mono font-extrabold text-brand-green block">
+                            #{order.orderNumber}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatDateUz(order.createdAt, true)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <p className="font-bold text-gray-900 dark:text-gray-100">
+                            {order.customerName}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {order.customerPhone}
+                          </p>
+                        </td>
+                        <td className="py-3 px-4 text-xs font-semibold text-gray-800 dark:text-gray-200">
+                          {order.region}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-xs text-gray-700 dark:text-gray-300 block mb-1">
+                            {order.paymentMethodLabel}
+                          </span>
+                          {order.paymentVerificationStatus ===
+                            'pending_verification' && (
+                            <Badge variant="warning" size="sm">
+                              Toʻlov tekshirilmoqda
+                            </Badge>
+                          )}
+                          {order.paymentVerificationStatus === 'verified' && (
+                            <Badge variant="success" size="sm">
+                              Tasdiqlangan
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-brand-green whitespace-nowrap">
+                          {formatUZS(order.totalAmount)}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <Badge variant={statusMeta.variant} size="sm">
+                            {statusMeta.label}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <Link to={`/admin/orders?q=${order.orderNumber}`}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              leftIcon={<Eye className="w-3.5 h-3.5" />}
+                            >
+                              Koʻrish
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          </>
+        ) : (
+          <div className="p-8 text-center text-xs sm:text-sm text-gray-500">
+            Tanlangan hisob davrida yangi buyurtmalar yoʻq. Barcha tarixiy
+            buyurtmalar «Buyurtmalar» boʻlimida saqlanmoqda.
           </div>
+        )}
+      </section>
 
-          <div className="p-3 rounded-xl bg-surface-page border border-gray-200 flex items-center justify-between text-xs text-gray-600">
-            <span className="flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-brand-green shrink-0" />
-              <span>
-                Veb-saytdan yangi buyurtma berilganda joriy kun/hafta ustuni avtomatik yangilanadi.
-              </span>
-            </span>
-          </div>
-        </section>
-
-        {/* Right (5 cols): Order Status Breakdown */}
-        <section className="lg:col-span-5 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card flex flex-col justify-between space-y-5">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+      {/* Top Selling Products & Low-Stock Alerts with Quick Stock Adjust */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <section className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] shadow-card overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-extrabold text-gray-900">
-                Buyurtmalar holati taqsimoti
+              <h2 className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                Top mahsulotlar (Davr boʻyicha)
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Jami {orders.length} ta buyurtmaning bosqichlar boʻyicha ulushi
+                Toʻliq mahsulot nomi, SKU, narx va sotilgan soni
               </p>
             </div>
             <Link
-              to="/admin/orders"
-              className="text-xs font-bold text-brand-green hover:underline"
+              to="/admin/products"
+              className="text-xs font-extrabold text-brand-green hover:underline shrink-0"
             >
               Barchasi →
             </Link>
           </div>
 
-          <div className="space-y-3.5">
-            {statusBreakdown.map(({ status, count, percentage, meta }) => (
-              <div key={status} className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={meta.variant} size="sm">
-                      {meta.label}
-                    </Badge>
-                  </div>
-                  <span className="font-bold text-gray-900">
-                    {count} ta ({percentage}%)
-                  </span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${meta.barColor}`}
-                    style={{ width: `${Math.max(count > 0 ? 8 : 0, percentage)}%` }}
+          <div className="divide-y divide-gray-200 dark:divide-[#28453B]">
+            {topSellingProducts.map(({ product: prod, periodSoldCount }) => (
+              <div
+                key={prod.id}
+                className="p-3.5 sm:p-4 flex items-start sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <ProductImage
+                    src={prod.images[0]}
+                    alt={prod.name}
+                    className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
                   />
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 break-words leading-snug">
+                      {prod.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 font-mono">
+                      SKU: {prod.sku} • {getCategoryName(prod.categoryId)}
+                    </p>
+                    <p className="text-xs font-extrabold text-brand-green">
+                      {formatUZS(prod.salePrice ?? prod.price)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0 space-y-1">
+                  <Badge variant="gold" size="sm">
+                    Sotilgan: {periodSoldCount} dona
+                  </Badge>
+                  <span className="block text-[11px] text-gray-500">
+                    Omborda: {prod.stock} dona
+                  </span>
                 </div>
               </div>
             ))}
           </div>
-
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-            <span className="text-gray-500">
-              Muvaffaqiyatli yetkazilganlar:
-            </span>
-            <strong className="text-emerald-700 font-extrabold">
-              {orders.filter((o) => o.status === 'delivered').length} ta buyurtma
-            </strong>
-          </div>
         </section>
-      </div>
 
-      {/* Category Performance Breakdown (Shown prominently when viewing Reports & Analytics or Dashboard) */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3.5">
-          <div>
-            <h2 className="text-base font-extrabold text-gray-900">
-              Toifalar boʻyicha savdo hajmi (Demo + Jonli hisobot)
-            </h2>
-            <p className="text-xs text-gray-500">
-              Har bir mahsulot toifasi boʻyicha sotilgan donalar va umumiy aylanma
-            </p>
-          </div>
-          <Badge variant="green" size="sm">
-            {categorySalesBreakdown.length} ta faol toifa
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {categorySalesBreakdown.map((cat) => {
-            const pct = Math.round(
-              (cat.estimatedRevenue / maxCategoryRevenue) * 100
-            );
-            return (
-              <div
-                key={cat.id}
-                className="p-4 rounded-xl bg-surface-page border border-gray-200 space-y-2"
-              >
-                <p className="text-xs font-bold text-gray-900 line-clamp-1">
-                  {cat.name}
-                </p>
-                <p className="text-sm font-extrabold text-brand-green">
-                  {formatUZS(cat.estimatedRevenue)}
-                </p>
-                <div className="w-full h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                  <div
-                    className="h-full bg-brand-gold rounded-full"
-                    style={{ width: `${Math.max(10, pct)}%` }}
-                  />
-                </div>
-                <p className="text-[11px] text-gray-500">
-                  Sotilgan: <strong>{cat.unitsSold} dona</strong>
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 3. Best-Selling Products & Low-Stock Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Best-Selling Products (6 cols) */}
-        <section className="lg:col-span-6 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3.5">
+        <section className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] shadow-card overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-extrabold text-gray-900">
-                Eng koʻp sotilgan mahsulotlar (Top 5)
+              <h2 className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                Kam qolgan va tugagan mahsulotlar
               </h2>
-              <p className="text-xs text-gray-500">
-                Sotilgan donalar soni va joriy savdo narxi boʻyicha
-              </p>
-            </div>
-            <Link
-              to="/admin/products"
-              className="text-xs font-bold text-brand-green hover:underline"
-            >
-              Mahsulotlar →
-            </Link>
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {bestSellingProducts.map((prod, idx) => {
-              const unitPrice = prod.salePrice ?? prod.price;
-              return (
-                <div
-                  key={prod.id}
-                  className="py-3 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-6 h-6 rounded-full bg-brand-green-light text-brand-green font-extrabold text-xs flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-                    <img
-                      src={prod.images[0]}
-                      alt={prod.name}
-                      className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 bg-gray-50"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">
-                        {prod.name}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        SKU: {prod.sku} • Narx: {formatUZS(unitPrice)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <span className="text-xs font-extrabold text-brand-green block">
-                      {prod.soldCount} dona sotilgan
-                    </span>
-                    <span className="text-[11px] text-gray-500">
-                      Zaxira: {prod.stock} dona
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Low-Stock Products Alert Table (6 cols) */}
-        <section className="lg:col-span-6 bg-white rounded-2xl border border-gray-200 p-5 sm:p-6 shadow-card space-y-4">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3.5">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-gray-900">
-                  Kam qolgan va tugagan mahsulotlar
-                </h2>
-                {lowStockProducts.length > 0 && (
-                  <Badge variant="danger" size="sm">
-                    {lowStockProducts.length} ta ogohlantirish
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-gray-500">
-                Minimal chegara (`lowStockThreshold`) dan pastga tushgan mahsulotlar
+              <p className="text-xs text-gray-500 mt-0.5">
+                Belgilangan minimal zaxira chegarasidan kam qolgan buyumlar
               </p>
             </div>
             <Link
               to="/admin/inventory"
-              className="text-xs font-bold text-brand-green hover:underline"
+              className="text-xs font-extrabold text-brand-green hover:underline shrink-0"
             >
-              Omborxona →
+              Ombor →
             </Link>
           </div>
 
           {lowStockProducts.length > 0 ? (
-            <div className="divide-y divide-gray-100">
-              {lowStockProducts.map((prod) => {
-                const isZero = prod.stock <= 0;
-                return (
-                  <div
-                    key={prod.id}
-                    className="py-3 flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <img
-                        src={prod.images[0]}
-                        alt={prod.name}
-                        className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 bg-gray-50"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">
-                          {prod.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] text-gray-500">
-                            SKU: {prod.sku}
-                          </span>
-                          {isZero ? (
-                            <Badge variant="danger" size="sm">
-                              Tugagan (0 dona)
-                            </Badge>
-                          ) : (
-                            <Badge variant="warning" size="sm">
-                              Kam qoldi: {prod.stock} dona
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
+            <div className="divide-y divide-gray-200 dark:divide-[#28453B]">
+              {lowStockProducts.map((prod) => (
+                <div
+                  key={prod.id}
+                  className="p-3.5 sm:p-4 flex items-start sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <ProductImage
+                      src={prod.images[0]}
+                      alt={prod.name}
+                      className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 break-words leading-snug">
+                        {prod.name}
+                      </p>
+                      <p className="text-[11px] text-gray-500 font-mono">
+                        SKU: {prod.sku}
+                      </p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300 font-semibold">
+                        Minimal zaxira chegarasi: {prod.lowStockThreshold} dona
+                      </p>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<PlusCircle className="w-3.5 h-3.5 text-brand-green" />}
-                      onClick={() => {
-                        setQuickRestockProductId(prod.id);
-                        setRestockAddQty(15);
-                      }}
-                    >
-                      Toʻldirish
-                    </Button>
                   </div>
-                );
-              })}
+
+                  <div className="text-right shrink-0 space-y-1.5">
+                    <Badge
+                      variant={prod.stock <= 0 ? 'danger' : 'warning'}
+                      size="sm"
+                    >
+                      {prod.stock <= 0
+                        ? 'Tugagan (0 dona)'
+                        : `Qoldiq: ${prod.stock} dona`}
+                    </Badge>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickStockProduct(prod);
+                          setQuickStockVal(prod.stock);
+                          setQuickThresholdVal(prod.lowStockThreshold);
+                          setQuickStockReason('');
+                        }}
+                        className="text-[11px] font-extrabold text-brand-green hover:underline"
+                      >
+                        Tezkor toʻldirish
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="p-8 text-center text-xs text-gray-500">
-              Barcha mahsulotlar zaxirasi yetarli darajada.
+            <div className="p-8 text-center space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                Barcha mahsulotlar zaxirasi yetarli
+              </p>
             </div>
           )}
         </section>
       </div>
 
-      {/* 4. Practical Recent Orders Table with Status Filter & Quick Status Update */}
-      <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-card">
-        <div className="p-5 sm:p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-gray-900">
-              Soʻnggi buyurtmalar jadvali
-            </h2>
-            <p className="text-xs text-gray-500">
-              Yangi buyurtmalar alohida belgilangan; holatni toʻgʻridan-toʻgʻri jadvaldan yangilashingiz mumkin
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-9 rounded-xl border border-gray-300 bg-white px-3 text-xs font-bold text-gray-800 focus:border-brand-green focus:outline-none"
-              aria-label="Buyurtma holati boʻyicha filtrlash"
-            >
-              <option value="all">Barcha holatlar ({orders.length})</option>
-              <option value="new">Yangi ({orders.filter((o) => o.status === 'new').length})</option>
-              <option value="confirmed">Tasdiqlangan</option>
-              <option value="preparing">Tayyorlanmoqda</option>
-              <option value="shipped">Yoʻlda</option>
-              <option value="delivered">Yetkazilgan</option>
-              <option value="cancelled">Bekor qilingan</option>
-            </select>
-
-            <Link to="/admin/orders">
-              <Button
-                variant="secondary"
-                size="sm"
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                Barcha buyurtmalar
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Desktop Data Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                <th className="py-3.5 px-4">Buyurtma #</th>
-                <th className="py-3.5 px-4">Xaridor va telefon</th>
-                <th className="py-3.5 px-4">Hudud</th>
-                <th className="py-3.5 px-4">Sana</th>
-                <th className="py-3.5 px-4">Jami summa</th>
-                <th className="py-3.5 px-4">Holati</th>
-                <th className="py-3.5 px-4 text-right">Tezkor amal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 text-xs sm:text-sm">
-              {filteredRecentOrders.map((ord) => {
-                const isNew = ord.status === 'new';
-                const statusInfo = STATUS_BADGE_MAP[ord.status];
-
-                return (
-                  <tr
-                    key={ord.id}
-                    className={`transition-colors ${
-                      isNew
-                        ? 'bg-brand-gold-light/40 hover:bg-brand-gold-light/70'
-                        : 'hover:bg-surface-page'
-                    }`}
-                  >
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {isNew && (
-                          <span
-                            className="w-2 h-2 rounded-full bg-brand-gold-dark shrink-0"
-                            title="Yangi buyurtma"
-                          />
-                        )}
-                        <span className="font-mono font-extrabold text-brand-green">
-                          #{ord.orderNumber}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <p className="font-bold text-gray-900">
-                        {ord.customerName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {ord.customerPhone}
-                      </p>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs text-gray-600 max-w-[180px] truncate">
-                      {ord.region}
-                    </td>
-
-                    <td className="py-3.5 px-4 text-xs text-gray-500 whitespace-nowrap">
-                      {formatDateUz(ord.createdAt, true)}
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap font-extrabold text-gray-900">
-                      {formatUZS(ord.totalAmount)}
-                    </td>
-
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <Badge variant={statusInfo.variant} size="sm">
-                        {statusInfo.label}
-                      </Badge>
-                    </td>
-
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-2">
-                        <select
-                          value={ord.status}
-                          onChange={(e) =>
-                            updateOrderStatus(
-                              ord.id,
-                              e.target.value as OrderStatus,
-                              `Dashboard orqali holat ${e.target.value} ga oʻzgartirildi`
-                            )
-                          }
-                          className="h-8 rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-800 focus:border-brand-green focus:outline-none"
-                          aria-label={`Buyurtma ${ord.orderNumber} holatini oʻzgartirish`}
-                        >
-                          <option value="new">Yangi</option>
-                          <option value="confirmed">Tasdiqlandi</option>
-                          <option value="preparing">Tayyorlanmoqda</option>
-                          <option value="shipped">Yoʻlda</option>
-                          <option value="delivered">Yetkazildi</option>
-                          <option value="cancelled">Bekor qilish</option>
-                        </select>
-
-                        <button
-                          type="button"
-                          onClick={() => setInspectedOrder(ord)}
-                          className="p-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-brand-green hover:text-white transition-colors"
-                          title="Buyurtma tafsilotlarini koʻrish"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Quick Order Inspection Modal */}
+      {/* Confirm Reset Statistics Modal */}
       <Modal
-        isOpen={Boolean(inspectedOrder)}
-        onClose={() => setInspectedOrder(null)}
-        title={
-          inspectedOrder
-            ? `Buyurtma #${inspectedOrder.orderNumber}`
-            : 'Buyurtma'
-        }
-        maxWidth="lg"
-        footer={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setInspectedOrder(null)}
-          >
-            Yopish
-          </Button>
-        }
-      >
-        {inspectedOrder && (
-          <div className="space-y-4 text-xs sm:text-sm">
-            <div className="p-3.5 rounded-xl bg-surface-page border border-gray-200 space-y-1">
-              <p className="font-bold text-gray-900">
-                {inspectedOrder.customerName} — {inspectedOrder.customerPhone}
-              </p>
-              <p className="text-gray-600">
-                {inspectedOrder.region}, {inspectedOrder.address}
-              </p>
-              <p className="text-xs text-gray-500">
-                Toʻlov usuli: {inspectedOrder.paymentMethodLabel}
-              </p>
-            </div>
-
-            <div className="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden">
-              {inspectedOrder.items.map((item) => (
-                <div
-                  key={item.productId}
-                  className="p-3 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <p className="font-bold text-gray-900">{item.productName}</p>
-                    <p className="text-xs text-gray-500">
-                      SKU: {item.sku} • {item.quantity} dona ×{' '}
-                      {formatUZS(item.unitPrice)}
-                    </p>
-                  </div>
-                  <span className="font-extrabold text-brand-green">
-                    {formatUZS(item.totalPrice)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between font-extrabold text-base pt-2 border-t border-gray-200">
-              <span>Jami buyurtma summasi:</span>
-              <span className="text-brand-green">
-                {formatUZS(inspectedOrder.totalAmount)}
-              </span>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Quick Stock Replenishment Modal */}
-      <Modal
-        isOpen={Boolean(quickRestockProduct)}
-        onClose={() => setQuickRestockProductId(null)}
-        title="Ombor zaxirasini tezkor toʻldirish"
+        isOpen={isResetModalOpen}
+        onClose={() => setIsResetModalOpen(false)}
+        title="Statistika hisoblagichlarini 0 ga tushirish"
         maxWidth="sm"
         footer={
-          <>
+          <div className="w-full grid grid-cols-2 gap-2.5">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setQuickRestockProductId(null)}
+              fullWidth
+              onClick={() => setIsResetModalOpen(false)}
+            >
+              Bekor qilish
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              fullWidth
+              isLoading={isResettingStats}
+              onClick={handleConfirmResetStats}
+            >
+              0 ga tushirish
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
+          Boshqaruv panelidagi buyurtma, tushum, holat taqsimoti va top
+          mahsulotlar sotuv hisoblagichlari hozirgi vaqtdan boshlab{' '}
+          <strong>0</strong> dan hisoblanadi. Hech qanday buyurtma, mijoz,
+          mahsulot yoki ombor zaxirasi oʻchirilmaydi.
+        </p>
+      </Modal>
+
+      {/* Quick Stock Adjustment Modal */}
+      <Modal
+        isOpen={Boolean(quickStockProduct)}
+        onClose={() => setQuickStockProduct(null)}
+        title={
+          quickStockProduct
+            ? `Zaxirani yangilash: ${quickStockProduct.sku}`
+            : ''
+        }
+        maxWidth="sm"
+        footer={
+          <div className="w-full grid grid-cols-2 gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              fullWidth
+              onClick={() => setQuickStockProduct(null)}
             >
               Bekor qilish
             </Button>
             <Button
               type="submit"
-              form="quick-restock-form"
+              form="dashboard-quick-stock-form"
               variant="primary"
               size="sm"
+              fullWidth
             >
-              Zaxirani yangilash
+              Saqlash
             </Button>
-          </>
+          </div>
         }
       >
-        {quickRestockProduct && (
+        {quickStockProduct && (
           <form
-            id="quick-restock-form"
-            onSubmit={handleConfirmQuickRestock}
+            id="dashboard-quick-stock-form"
+            onSubmit={handleSaveQuickStock}
             className="space-y-4 text-xs sm:text-sm"
           >
-            <div>
-              <p className="font-bold text-gray-900">
-                {quickRestockProduct.name}
-              </p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                SKU: {quickRestockProduct.sku} • Hozirgi qoldiq:{' '}
-                <strong className="text-red-600">
-                  {quickRestockProduct.stock} dona
-                </strong>
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                Qoʻshiladigan miqdor (dona):
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={1000}
-                value={restockAddQty}
-                onChange={(e) => setRestockAddQty(Number(e.target.value))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-900 focus:border-brand-green focus:outline-none"
-              />
-              <p className="text-xs text-emerald-700 font-semibold mt-1.5">
-                Yangi zaxira qoldigʻi:{' '}
-                {quickRestockProduct.stock + (restockAddQty || 0)} dona
-              </p>
-            </div>
+            <p className="font-bold text-gray-900 dark:text-gray-100">
+              {quickStockProduct.name}
+            </p>
+            <NumericInput
+              label="Yangi zaxira soni (dona)"
+              required
+              min={0}
+              value={quickStockVal}
+              onChange={(val) => setQuickStockVal(val ?? 0)}
+            />
+            <NumericInput
+              label="Minimal zaxira chegarasi (dona)"
+              required
+              min={1}
+              value={quickThresholdVal}
+              onChange={(val) => setQuickThresholdVal(val ?? 5)}
+            />
+            <Input
+              label="Oʻzgarish sababi"
+              value={quickStockReason}
+              onChange={(e) => setQuickStockReason(e.target.value)}
+              placeholder="Masalan: Yangi partiya qabul qilindi"
+            />
           </form>
         )}
       </Modal>

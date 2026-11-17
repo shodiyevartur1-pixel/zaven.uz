@@ -6,6 +6,7 @@ import { ToastContainer } from '../ui/ToastContainer';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
 import { AdminLoginPage } from '../../pages/admin/AdminLoginPage';
 import { AdminRole } from '../../types';
+import { useBodyScrollLock } from '../../utils/scrollLock';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -15,13 +16,14 @@ interface AdminLayoutProps {
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  useBodyScrollLock(isMobileSidebarOpen);
 
   const { isOwnerAuthenticated, isLoadingAuth } = useOwnerAuth();
 
   if (isLoadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-page text-gray-700">
-        <div className="flex items-center gap-3 text-sm font-bold">
+        <div className="mx-auto flex max-w-md items-center justify-center gap-3 px-5 text-center text-sm font-bold">
           <Loader2 className="w-5 h-5 animate-spin text-brand-green" />
           <span>Doʻkon egasi (Owner) huquqlari tekshirilmoqda...</span>
         </div>

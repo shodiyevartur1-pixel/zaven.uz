@@ -12,6 +12,8 @@ import {
   RefreshCw,
   LogOut,
   ShieldCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
@@ -19,7 +21,6 @@ import { useOwnerAuth } from '../../context/OwnerAuthContext';
 import { formatUZS } from '../../utils/format';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { ThemeLanguageControls } from '../ui/ThemeLanguageControls';
 
 interface AdminTopbarProps {
   onOpenMobileMenu: () => void;
@@ -36,7 +37,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
     inquiries,
     resetAllDemoData,
   } = useStore();
-  const { t, getProductText } = useThemeLanguage();
+  const { t, getProductText, theme, toggleTheme } = useThemeLanguage();
   const { ownerEmail, authMode, signOutOwner } = useOwnerAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,9 +256,17 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
         </div>
       </div>
 
-      {/* Right: Theme/Language Switcher, Quick Actions, Notifications & Verified Single-Owner Badge */}
+      {/* Right: Admin-only controls, quick actions, notifications, and owner badge */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-        <ThemeLanguageControls variant="surface" />
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+          aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
+          className="h-9 w-9 rounded-xl border border-gray-200 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] text-gray-700 dark:text-gray-200 inline-flex items-center justify-center hover:border-brand-green transition-colors"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-brand-gold" /> : <Moon className="w-4 h-4 text-brand-green" />}
+        </button>
 
         <Button
           variant="primary"

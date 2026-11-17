@@ -12,6 +12,7 @@ import { Product } from '../../types';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { formatUZS, calculateDiscountPercent } from '../../utils/format';
+import { ProductImage } from '../ui/ProductImage';
 
 export interface ProductCardProps {
   product: Product;
@@ -122,7 +123,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             className="block w-full h-full touch-pan-y select-none focus:outline-none"
             title={localizedProduct.name}
           >
-            <img
+            <ProductImage
               src={images[activeImageIndex] || images[0]}
               alt={localizedProduct.name}
               loading="lazy"

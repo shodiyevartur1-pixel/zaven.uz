@@ -623,7 +623,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
       />
 
       {/* Full-Height Mobile Map Sheet (`h-[92dvh] sm:h-[85vh]`) */}
-      <div className="relative z-10 w-full sm:max-w-2xl h-[92dvh] sm:h-[85vh] bg-white dark:bg-[#12211C] rounded-t-3xl sm:rounded-3xl border-t sm:border border-gray-200 dark:border-[#2F5246] shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative z-10 w-full sm:max-w-2xl h-[86dvh] max-h-[86dvh] sm:h-[84vh] bg-white dark:bg-[#12211C] rounded-t-3xl sm:rounded-3xl border-t sm:border border-gray-200 dark:border-[#2F5246] shadow-2xl flex flex-col overflow-hidden">
         {/* Top Bar: Title + Search Input + Quick Region Chips */}
         <div className="bg-[#0F3D2E] text-white px-3.5 pt-3 pb-2.5 sm:px-5 sm:py-3.5 space-y-2.5 shrink-0 border-b border-[#09261C]">
           <div className="flex items-center justify-between gap-2">
@@ -734,7 +734,7 @@ export const DeliveryMapModal: React.FC<DeliveryMapModalProps> = ({
         </div>
 
         {/* Center Interactive Touch Map Viewport (Fills available height) */}
-        <div data-zaven-scroll-area="true" className="relative flex-1 min-h-[220px] w-full bg-gray-100 dark:bg-[#0B1512] overflow-hidden">
+        <div data-zaven-scroll-area="true" className="relative flex-1 min-h-[150px] w-full bg-gray-100 dark:bg-[#0B1512] overflow-hidden">
           <div
             ref={mapContainerRef}
             className="w-full h-full z-0"
