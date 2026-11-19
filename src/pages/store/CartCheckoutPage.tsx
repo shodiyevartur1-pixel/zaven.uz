@@ -717,7 +717,9 @@ export const CartCheckoutPage: React.FC = () => {
     if (!selectedPaymentMethod) {
       nextErrors.payment = t('cart.step3Title');
     }
-    if (requiresPaymentReceipt && !receiptAttachment) {
+    if (requiresPaymentReceipt && !hasConfiguredTransferCards) {
+      nextErrors.payment = t('transfer.notConfiguredTitle');
+    } else if (requiresPaymentReceipt && !receiptAttachment) {
       nextErrors.receipt = t('transfer.errMissingReceipt');
     }
 
@@ -734,6 +736,13 @@ export const CartCheckoutPage: React.FC = () => {
 
   const handleFinalSubmitOrder = async () => {
     if (isSubmittingOrder) return;
+    if (requiresPaymentReceipt && (!hasConfiguredTransferCards || !receiptAttachment)) {
+      const message = !hasConfiguredTransferCards ? t('transfer.notConfiguredTitle') : t('transfer.errMissingReceipt');
+      addToast({ type: 'error', title: message });
+      setErrors((prev) => ({ ...prev, payment: !hasConfiguredTransferCards ? message : prev.payment, receipt: hasConfiguredTransferCards ? message : prev.receipt }));
+      setActiveStep('payment');
+      return;
+    }
 
     const orderItems: OrderItem[] = detailedCartItems.map((entry) => ({
       productId: entry.product.id,
@@ -1630,7 +1639,15 @@ export const CartCheckoutPage: React.FC = () => {
               })}
             </div>
 
-            {requiresPaymentReceipt && (
+            {requiresPaymentReceipt && !hasConfiguredTransferCards && (
+              <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
+                {t('transfer.notConfiguredDesc')} Boshqa toʻlov usulini tanlang yoki doʻkon egasidan karta rekvizitlarini kiritishni soʻrang.
+              </div>
+            )}
+            {errors.payment && (
+              <p role="alert" className="text-xs font-bold text-red-600">{errors.payment}</p>
+            )}
+            {requiresPaymentReceipt && hasConfiguredTransferCards && (
               <div className="rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/40 p-4 sm:p-5 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold-border pb-3">
                   <div className="flex items-center gap-2">

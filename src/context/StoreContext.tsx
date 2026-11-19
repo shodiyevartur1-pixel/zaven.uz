@@ -239,12 +239,12 @@ function mapRowToProduct(row: Record<string, unknown>): Product {
     sku: String(row.sku),
     name: String(row.name),
     categoryId: String(row.category_id || 'cat-home'),
-    price: Number(row.price || 0),
+    price: Number(row.price ?? 0),
     salePrice:
       row.sale_price !== null && row.sale_price !== undefined
         ? Number(row.sale_price)
         : null,
-    costPrice: Number(row.cost_price || 0),
+    costPrice: Number(row.cost_price ?? 0),
     stock: Number(row.stock ?? 0),
     lowStockThreshold: Number(row.low_stock_threshold ?? 5),
     status: (row.status as ProductStatus) || 'active',
@@ -345,11 +345,11 @@ function mapRowToOrder(
       ? (row.internal_notes as string[])
       : [],
     items: Array.isArray(row.items) ? (row.items as Order['items']) : [],
-    subtotal: Number(row.subtotal || 0),
-    discountAmount: Number(row.discount_amount || 0),
+    subtotal: Number(row.subtotal ?? 0),
+    discountAmount: Number(row.discount_amount ?? 0),
     couponCode: row.coupon_code ? String(row.coupon_code) : undefined,
-    deliveryFee: Number(row.delivery_fee || 0),
-    totalAmount: Number(row.total_amount || 0),
+    deliveryFee: Number(row.delivery_fee ?? 0),
+    totalAmount: Number(row.total_amount ?? 0),
     paymentMethodId: String(row.payment_method_id || 'pay-cod'),
     paymentMethodLabel: String(row.payment_method_label || ''),
     paymentVerificationStatus:
@@ -360,7 +360,7 @@ function mapRowToOrder(
         ? {
             fileName: fileName || 'receipt',
             mimeType: String(row.payment_receipt_mime || 'image/jpeg'),
-            fileSize: Number(row.payment_receipt_size || 0),
+            fileSize: Number(row.payment_receipt_size ?? 0),
             dataUrl: signedReceiptUrl || '',
             storagePath,
             uploadedAt: String(row.created_at || new Date().toISOString()),
@@ -403,8 +403,8 @@ function mapRowToCustomer(row: Record<string, unknown>): Customer {
     addresses: Array.isArray(row.addresses)
       ? (row.addresses as Customer['addresses'])
       : [],
-    orderCount: Number(row.order_count || 0),
-    totalSpent: Number(row.total_spent || 0),
+    orderCount: Number(row.order_count ?? 0),
+    totalSpent: Number(row.total_spent ?? 0),
     lastOrderDate: row.last_order_date
       ? String(row.last_order_date)
       : undefined,
@@ -443,9 +443,9 @@ function mapRowToStockLog(row: Record<string, unknown>): StockLogEntry {
     productId: String(row.product_id),
     productName: String(row.product_name),
     sku: String(row.sku),
-    previousStock: Number(row.previous_stock || 0),
-    newStock: Number(row.new_stock || 0),
-    changeAmount: Number(row.change_amount || 0),
+    previousStock: Number(row.previous_stock ?? 0),
+    newStock: Number(row.new_stock ?? 0),
+    changeAmount: Number(row.change_amount ?? 0),
     reason: String(row.reason || ''),
     updatedBy: String(row.updated_by || 'Store Owner'),
     createdAt: String(row.created_at || new Date().toISOString()),

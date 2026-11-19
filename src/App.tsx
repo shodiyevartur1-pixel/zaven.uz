@@ -5,6 +5,7 @@ import {
   Route,
   Link,
   useLocation,
+  useNavigationType,
 } from 'react-router-dom';
 import { Compass, Home, Search } from 'lucide-react';
 import { StoreProvider, useStore } from './context/StoreContext';
@@ -32,6 +33,7 @@ import { Badge } from './components/ui/Badge';
 
 const RouteEffectsManager: React.FC = () => {
   const location = useLocation();
+  const navigationType = useNavigationType();
   const { storeSettings } = useStore();
   const { t, language } = useThemeLanguage();
   const [isRouteLoading, setIsRouteLoading] = useState(false);
@@ -58,14 +60,11 @@ const RouteEffectsManager: React.FC = () => {
   }, [location.key]);
 
   useLayoutEffect(() => {
-    const isPersistentScrollRoute =
-      location.pathname.startsWith('/admin') ||
-      location.pathname === '/cart' ||
-      location.pathname.startsWith('/checkout');
-    const storageKey = `zaven_route_scroll_v1:${location.pathname}`;
+    window.history.scrollRestoration = 'manual';
+    const storageKey = `zaven_route_scroll_v2:${location.key}`;
     let restoreFrame: number | undefined;
 
-    if (isPersistentScrollRoute) {
+    if (navigationType === 'POP') {
       let savedPosition = 0;
       try {
         savedPosition = Number(sessionStorage.getItem(storageKey) || 0);
@@ -108,12 +107,10 @@ const RouteEffectsManager: React.FC = () => {
 
     return () => {
       if (restoreFrame !== undefined) window.cancelAnimationFrame(restoreFrame);
-      if (isPersistentScrollRoute) {
-        try {
-          sessionStorage.setItem(storageKey, String(window.scrollY || window.pageYOffset || 0));
-        } catch {
-          // Keep route navigation working when session storage is unavailable.
-        }
+      try {
+        sessionStorage.setItem(storageKey, String(window.scrollY || window.pageYOffset || 0));
+      } catch {
+        // Keep navigation working when session storage is unavailable.
       }
     };
   }, [

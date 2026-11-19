@@ -230,8 +230,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     const showText = mobileMode || !isCollapsed;
 
     return (
-      <div className="h-full flex flex-col justify-between bg-brand-green-dark text-emerald-50 select-none">
-        <div>
+      <div className="h-full min-h-0 flex flex-col bg-brand-green-dark text-emerald-50 select-none overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="h-16 px-4 flex items-center justify-between border-b border-emerald-800/80">
             <Link
               to="/admin"
@@ -278,7 +278,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
           <nav
             aria-label="Admin navigation"
-            className="p-2.5 space-y-1 overflow-y-auto max-h-[calc(100vh-140px)] scrollbar-thin"
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2.5 pb-3 space-y-1 scrollbar-thin"
           >
             {navItems.map((item) => {
               const active = isPathActive(item.path);
@@ -331,7 +331,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </nav>
         </div>
 
-        <div className="p-3 border-t border-emerald-800/80 bg-brand-green/50">
+        <div className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-emerald-800/80 bg-brand-green/50">
           <div className="space-y-2">
             <Link
               to="/"
@@ -363,7 +363,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
-        <div className="sticky top-0 h-screen">{renderSidebarInner(false)}</div>
+        <div className="sticky top-0 h-[100dvh] max-h-[100dvh] overflow-hidden">{renderSidebarInner(false)}</div>
       </aside>
 
       {isMobileOpen && (
@@ -373,7 +373,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             onClick={onCloseMobile}
             aria-hidden="true"
           />
-          <div className="relative w-72 max-w-full h-full z-10 shadow-2xl">
+          <div className="relative w-72 max-w-full h-[100dvh] max-h-[100dvh] z-10 shadow-2xl overflow-hidden">
             {renderSidebarInner(true)}
           </div>
         </div>

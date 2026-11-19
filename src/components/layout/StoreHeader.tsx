@@ -10,7 +10,6 @@ import {
   X,
   ChevronRight,
   ArrowLeft,
-  Lock,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -45,10 +44,6 @@ export const StoreHeader: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isCompactCheckoutRoute =
-    location.pathname === '/cart' ||
-    location.pathname.startsWith('/cart/') ||
-    location.pathname.startsWith('/checkout');
   const isAccountPage = location.pathname === '/account';
 
   const configuredSupportPhone =
@@ -102,86 +97,6 @@ export const StoreHeader: React.FC = () => {
     setLanguage(next.code);
   };
 
-  // ============================================================================
-  // Compact checkout header follows the current storefront navigation: brand,
-  // favorites, language, and theme, with no duplicate account/back controls.
-  // ============================================================================
-  if (isCompactCheckoutRoute) {
-    return (
-      <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
-        <div className="zaven-page-container h-14 flex items-center justify-between gap-2">
-          <div className="flex items-center min-w-0">
-            <Link
-              to="/"
-              className="flex items-center gap-2 group focus:outline-none shrink-0"
-              aria-label="ZAVEN"
-            >
-              <div className="w-8 h-8 rounded-lg bg-[#C89D54] flex items-center justify-center text-[#09261C] font-extrabold text-base tracking-tight shadow-sm shrink-0">
-                Z
-              </div>
-              <div className="flex flex-col">
-                <span className="font-extrabold text-base sm:text-lg tracking-wider text-white leading-none">
-                  {storeSettings.storeName}
-                </span>
-                <span className="hidden md:flex text-[9px] text-[#E5C992] font-semibold tracking-widest uppercase mt-0.5 items-center gap-1">
-                  <Lock className="w-2.5 h-2.5 shrink-0" />
-                  <span>{t('header.secureCheckoutBadge')}</span>
-                </span>
-              </div>
-            </Link>
-          </div>
-
-          {/* Compact controls match the updated storefront header */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <Link
-              to="/favorites"
-              className="relative w-9 h-9 rounded-xl bg-[#09261C]/85 border border-[#C89D54]/40 text-[#E5C992] hover:bg-[#16533F] flex items-center justify-center transition-colors shrink-0"
-              aria-label={`${t('header.favoritesShort')}${favoriteIds.length ? ` (${favoriteIds.length})` : ''}`}
-              title={t('header.favoritesShort')}
-            >
-              <Heart className="w-4 h-4" />
-              {favoriteIds.length > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center">
-                  {favoriteIds.length > 99 ? '99+' : favoriteIds.length}
-                </span>
-              )}
-            </Link>
-
-            <div className="hidden sm:block">
-              <ThemeLanguageControls variant="header-dark" />
-            </div>
-
-            <button
-              type="button"
-              onClick={cycleLanguageMobile}
-              className="sm:hidden min-w-[36px] h-9 px-2 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 text-[10px] font-extrabold text-[#C89D54] flex items-center justify-center shrink-0"
-              aria-label="Tilni almashtirish / Switch language"
-            >
-              {COMPACT_LANGS.find((l) => l.code === language)?.label || 'OʻZ'}
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="sm:hidden w-9 h-9 rounded-xl bg-[#09261C]/85 border border-emerald-700/80 flex items-center justify-center text-[#C89D54] shrink-0"
-              aria-label={theme === 'dark' ? t('theme.light') : t('theme.dark')}
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
-            </button>
-
-          </div>
-        </div>
-      </header>
-    );
-  }
-
-  // ============================================================================
-  // STANDARD STOREFRONT HEADER
-  // ============================================================================
   return (
     <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
       {/* Desktop Top Utility Bar */}
@@ -219,7 +134,7 @@ export const StoreHeader: React.FC = () => {
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Desktop back control and brand */}
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-              {location.pathname !== '/' && (
+              {location.pathname !== '/' && !location.pathname.startsWith('/product/') && (
                 <button
                   type="button"
                   onClick={() => {

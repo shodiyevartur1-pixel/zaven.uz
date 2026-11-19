@@ -751,7 +751,7 @@ export const ProductDetailPage: React.FC = () => {
       {/* Sticky Bottom Purchase Bar on Mobile */}
       {showStickyMobileBar && (
         <div
-          className="md:hidden fixed bottom-16 left-0 right-0 z-30 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] px-4 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
+          className="md:hidden fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] left-0 right-0 z-30 bg-white dark:bg-[#12211C] border-t border-gray-200 dark:border-[#28453B] px-4 py-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
           role="region"
           aria-label={localizedProduct.name}
         >

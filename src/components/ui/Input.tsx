@@ -534,12 +534,8 @@ export const NumericInput: React.FC<NumericInputProps> = ({
 
     setRawText(normalized);
 
-    if (normalized === '') {
-      onChange(allowEmpty ? null : 0);
-    } else {
-      const parsed = Math.max(min, Number(normalized));
-      onChange(parsed);
-    }
+    if (normalized === '') onChange(allowEmpty ? null : 0);
+    else onChange(Number(normalized));
   };
 
   const handleFocus = () => {
@@ -569,7 +565,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
   const previewAmount =
     rawText !== '' && !Number.isNaN(Number(rawText))
       ? Number(rawText)
-      : value && value > 0
+      : value !== null && value !== undefined
       ? value
       : null;
 
@@ -603,7 +599,7 @@ export const NumericInput: React.FC<NumericInputProps> = ({
         <p className="mt-1 text-xs font-semibold text-red-600 dark:text-red-400">
           {error}
         </p>
-      ) : showCurrencyPreview && previewAmount !== null && previewAmount > 0 ? (
+      ) : showCurrencyPreview && previewAmount !== null ? (
         <p className="mt-1 text-[11px] font-bold text-brand-green">
           {formatUZS(previewAmount)}
         </p>

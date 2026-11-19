@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Filter,
   BarChart3,
+  X,
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { OrderStatus, Product } from '../../types';
@@ -91,6 +92,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [isResettingStats, setIsResettingStats] = useState(false);
+  const [resetError, setResetError] = useState('');
 
   // Quick Stock Adjustment Modal State (Preserved on Dashboard)
   const [quickStockProduct, setQuickStockProduct] = useState<Product | null>(
@@ -265,10 +267,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     categories.find((c) => c.id === categoryId)?.name || 'Toifa';
 
   const handleConfirmResetStats = async () => {
+    setResetError('');
     setIsResettingStats(true);
     try {
-      await resetOrderStatsBaseline();
-      setIsResetModalOpen(false);
+      const ok = await resetOrderStatsBaseline();
+      if (ok) setIsResetModalOpen(false);
+      else setResetError('Statistikani bazaga saqlab boʻlmadi. Ulanish yoki Supabase sozlamalarini tekshiring.');
+    } catch {
+      setResetError('Statistikani saqlashda xatolik yuz berdi. Qayta urinib koʻring.');
     } finally {
       setIsResettingStats(false);
     }
@@ -821,6 +827,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         }
       >
+        {resetError && (
+          <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-red-500/40 bg-red-950/30 px-3 py-2.5 text-xs font-semibold text-red-300">
+            <span>{resetError}</span>
+            <button type="button" aria-label="Xatolikni yopish" onClick={() => setResetError('')} className="shrink-0 rounded p-0.5 hover:bg-red-900/50">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
         <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
           Boshqaruv panelidagi buyurtma, tushum, holat taqsimoti va top
           mahsulotlar sotuv hisoblagichlari hozirgi vaqtdan boshlab{' '}

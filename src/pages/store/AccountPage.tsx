@@ -125,8 +125,24 @@ export const AccountPage: React.FC = () => {
   } = useStore();
   const { t } = useThemeLanguage();
 
+  const isRecoveryLink = () => {
+    if (typeof window === 'undefined') return false;
+    const queryType = new URLSearchParams(window.location.search).get('type');
+    const hashType = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
+    let pendingRecovery = false;
+    try {
+      const requestedAt = Number(window.localStorage.getItem('zaven_password_recovery_pending'));
+      pendingRecovery = Number.isFinite(requestedAt) && Date.now() - requestedAt < 30 * 60 * 1000;
+    } catch {
+      pendingRecovery = false;
+    }
+    return queryType === 'recovery' || hashType === 'recovery' || pendingRecovery;
+  };
   const [activeTab, setActiveTab] = useState<AccountTab>('orders');
-  const [authMode, setAuthMode] = useState<AuthMode>('signin');
+  const [authMode, setAuthMode] = useState<AuthMode>(() =>
+    isRecoveryLink() ? 'update_password' : 'signin'
+  );
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isRecoveryLink);
 
   // Email Auth Form State
   const [authEmail, setAuthEmail] = useState<string>('');
@@ -175,7 +191,7 @@ export const AccountPage: React.FC = () => {
     if (!isSupabaseConfigured || !supabase) return;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
+      if (session?.user && !isRecoveryLink()) {
         if (session.user.email_confirmed_at) {
           syncVerifiedCustomerFromAuthUser(session.user);
         } else {
@@ -189,6 +205,7 @@ export const AccountPage: React.FC = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        setIsPasswordRecovery(true);
         setAuthError('');
         setAuthFeedback('');
         setAuthMode('update_password');
@@ -217,10 +234,10 @@ export const AccountPage: React.FC = () => {
   }, [currentCustomer]);
 
   useEffect(() => {
-    if (currentCustomer?.emailVerified && safeRedirectPath) {
+    if (!isPasswordRecovery && currentCustomer?.emailVerified && safeRedirectPath) {
       navigate(safeRedirectPath, { replace: true });
     }
-  }, [currentCustomer, navigate, safeRedirectPath]);
+  }, [currentCustomer, navigate, safeRedirectPath, isPasswordRecovery]);
 
   // Match orders by customerId, verified email, or phone so existing orders are never detached
   const customerOrders = useMemo(() => {
@@ -475,7 +492,7 @@ export const AccountPage: React.FC = () => {
     setIsAuthSubmitting(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/account`,
+        redirectTo: `${window.location.origin}/account?type=recovery`,
       });
 
       if (error) {
@@ -483,6 +500,11 @@ export const AccountPage: React.FC = () => {
         return;
       }
 
+      try {
+        window.localStorage.setItem('zaven_password_recovery_pending', String(Date.now()));
+      } catch {
+        // The Supabase recovery URL still carries its own recovery marker.
+      }
       setAuthFeedback(t('account.resetSentSuccess'));
       addToast({
         type: 'info',
@@ -527,7 +549,17 @@ export const AccountPage: React.FC = () => {
         title: t('account.passwordUpdatedSuccess'),
       });
       setAuthNewPassword('');
+      setIsPasswordRecovery(false);
       setAuthMode('signin');
+      try {
+        window.localStorage.removeItem('zaven_password_recovery_pending');
+      } catch {
+        // Continue even if local storage is unavailable.
+      }
+      const cleanRecoveryUrl = new URL(window.location.href);
+      cleanRecoveryUrl.searchParams.delete('type');
+      cleanRecoveryUrl.hash = '';
+      window.history.replaceState({}, document.title, `${cleanRecoveryUrl.pathname}${cleanRecoveryUrl.search}`);
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -984,6 +1016,22 @@ export const AccountPage: React.FC = () => {
                 >
                   {t('account.updatePasswordBtn')}
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPasswordRecovery(false);
+                    setAuthNewPassword('');
+                    setAuthMode('signin');
+                    try { window.localStorage.removeItem('zaven_password_recovery_pending'); } catch { /* Ignore storage errors. */ }
+                    const cleanRecoveryUrl = new URL(window.location.href);
+                    cleanRecoveryUrl.searchParams.delete('type');
+                    cleanRecoveryUrl.hash = '';
+                    window.history.replaceState({}, document.title, `${cleanRecoveryUrl.pathname}${cleanRecoveryUrl.search}`);
+                  }}
+                  className="w-full text-center text-xs font-bold text-brand-green hover:underline"
+                >
+                  {t('account.signInTab')}
+                </button>
               </form>
             )}
 

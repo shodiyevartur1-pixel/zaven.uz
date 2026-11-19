@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
-import { Customer, Order, OrderStatus } from '../../types';
+import { Customer, CustomerInquiry, Order, OrderStatus } from '../../types';
 import { formatUZS, formatDateUz } from '../../utils/format';
 import { ProductImage } from '../../components/ui/ProductImage';
 import { Button } from '../../components/ui/Button';
@@ -101,6 +101,9 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>(
     searchParams.get('q') || savedFilters?.searchQuery || ''
   );
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [inquirySearchQuery, setInquirySearchQuery] = useState('');
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState<'all' | CustomerInquiry['status']>('all');
   const [statusFilter, setStatusFilter] = useState<string>(
     savedFilters?.statusFilter || 'all'
   );
@@ -239,24 +242,24 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   );
 
   const filteredCustomers = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const base = showDeletedCustomers
-      ? deletedCustomersList
-      : activeCustomersList;
+    const q = customerSearchQuery.trim().toLowerCase();
+    const base = showDeletedCustomers ? deletedCustomersList : activeCustomersList;
     if (!q) return base;
-    return base.filter(
-      (c) =>
-        c.fullName.toLowerCase().includes(q) ||
-        c.phone.toLowerCase().includes(q) ||
-        (c.email && c.email.toLowerCase().includes(q)) ||
-        (c.telegramUsername && c.telegramUsername.toLowerCase().includes(q))
+    return base.filter((c) =>
+      c.fullName.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) ||
+      (c.email && c.email.toLowerCase().includes(q)) ||
+      (c.telegramUsername && c.telegramUsername.toLowerCase().includes(q))
     );
-  }, [
-    activeCustomersList,
-    deletedCustomersList,
-    showDeletedCustomers,
-    searchQuery,
-  ]);
+  }, [activeCustomersList, deletedCustomersList, showDeletedCustomers, customerSearchQuery]);
+
+  const filteredInquiries = useMemo(() => {
+    const q = inquirySearchQuery.trim().toLowerCase();
+    return inquiries.filter((inq) => {
+      if (inquiryStatusFilter !== 'all' && inq.status !== inquiryStatusFilter) return false;
+      if (!q) return true;
+      return [inq.customerName, inq.phone, inq.subject, inq.message].some((value) => value.toLowerCase().includes(q));
+    });
+  }, [inquiries, inquirySearchQuery, inquiryStatusFilter]);
 
   const handleAddInternalNote = (e: React.FormEvent) => {
     e.preventDefault();
@@ -788,8 +791,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             <div className="flex-1 max-w-md">
               <Input
                 placeholder="Mijoz ismi, telefon, email yoki @telegram..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={customerSearchQuery}
+                onChange={(e) => setCustomerSearchQuery(e.target.value)}
                 leftIcon={<Search className="w-4 h-4" />}
               />
             </div>
@@ -969,8 +972,16 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
 
       {/* SECTION 3: INQUIRIES & REAL REPLY COMPOSER */}
       {activeSection === 'inquiries' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {inquiries.map((inq) => {
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#12211C] p-4">
+            <Input placeholder="Murojaat, mijoz yoki telefon qidirish..." value={inquirySearchQuery} onChange={(e) => setInquirySearchQuery(e.target.value)} leftIcon={<Search className="w-4 h-4" />} />
+            <Select value={inquiryStatusFilter} onChange={(e) => setInquiryStatusFilter(e.target.value as 'all' | CustomerInquiry['status'])} options={[{ value: 'all', label: 'Barcha murojaatlar' }, { value: 'unread', label: 'Oʻqilmagan' }, { value: 'read', label: 'Koʻrib chiqilgan' }, { value: 'replied', label: 'Javob berilgan' }]} />
+          </div>
+          {filteredInquiries.length === 0 ? (
+            <EmptyState title={inquirySearchQuery.trim() ? 'Mos murojaat topilmadi' : 'Murojaatlar yoʻq'} description={inquirySearchQuery.trim() ? 'Qidiruv yoki holat filtrini oʻzgartiring.' : 'Mijozlardan yangi murojaat kelganda shu yerda koʻrinadi.'} actionLabel={inquirySearchQuery.trim() || inquiryStatusFilter !== 'all' ? 'Filtrlarni tozalash' : undefined} onAction={inquirySearchQuery.trim() || inquiryStatusFilter !== 'all' ? () => { setInquirySearchQuery(''); setInquiryStatusFilter('all'); } : undefined} />
+          ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filteredInquiries.map((inq) => {
             const draftText = replyDrafts[inq.id] || '';
             const isSubmittingThis = submittingInquiryId === inq.id;
 
@@ -1124,6 +1135,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               </div>
             );
           })}
+          </div>
+          )}
         </div>
       )}
 
