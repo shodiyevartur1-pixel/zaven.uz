@@ -141,6 +141,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   } | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isArchivingOrder, setIsArchivingOrder] = useState<boolean>(false);
+  const [isSavingOrderAction, setIsSavingOrderAction] = useState(false);
 
   // Customer Management Modals
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
@@ -261,26 +262,37 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     });
   }, [inquiries, inquirySearchQuery, inquiryStatusFilter]);
 
-  const handleAddInternalNote = (e: React.FormEvent) => {
+  const handleAddInternalNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder || !newInternalNote.trim()) return;
-    addOrderInternalNote(selectedOrder.id, newInternalNote.trim());
-    setNewInternalNote('');
+    if (!selectedOrder || !newInternalNote.trim() || isSavingOrderAction) return;
+    setIsSavingOrderAction(true);
+    try {
+      if (await addOrderInternalNote(selectedOrder.id, newInternalNote.trim())) setNewInternalNote('');
+    } finally {
+      setIsSavingOrderAction(false);
+    }
   };
 
-  const handleConfirmReceiptDecision = () => {
-    if (!pendingReceiptDecision) return;
-    reviewOrderReceipt(
-      pendingReceiptDecision.order.id,
-      pendingReceiptDecision.decision,
-      ownerEmail || 'owner@zaven.uz',
-      receiptReviewNote.trim() || undefined
-    );
-    setReceiptReviewNote('');
-    setPendingReceiptDecision(null);
+  const handleConfirmReceiptDecision = async () => {
+    if (!pendingReceiptDecision || isSavingOrderAction) return;
+    setIsSavingOrderAction(true);
+    try {
+      const saved = await reviewOrderReceipt(
+        pendingReceiptDecision.order.id,
+        pendingReceiptDecision.decision,
+        ownerEmail || 'owner@zaven.uz',
+        receiptReviewNote.trim() || undefined
+      );
+      if (saved) {
+        setReceiptReviewNote('');
+        setPendingReceiptDecision(null);
+      }
+    } finally {
+      setIsSavingOrderAction(false);
+    }
   };
 
-  const handleRequestStatusChange = (order: Order, nextStatus: OrderStatus) => {
+  const handleRequestStatusChange = async (order: Order, nextStatus: OrderStatus) => {
     if (order.status === nextStatus) return;
     if (
       nextStatus === 'cancelled' ||
@@ -289,7 +301,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     ) {
       setPendingStatusChange({ order, nextStatus });
     } else {
-      updateOrderStatus(
+      await updateOrderStatus(
         order.id,
         nextStatus,
         `Holat oʻzgartirildi: ${ORDER_STATUS_META[nextStatus].label}`
@@ -297,16 +309,19 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     }
   };
 
-  const handleConfirmStatusChange = () => {
-    if (!pendingStatusChange) return;
-    updateOrderStatus(
-      pendingStatusChange.order.id,
-      pendingStatusChange.nextStatus,
-      `Holat tasdiq bilan oʻzgartirildi: ${
-        ORDER_STATUS_META[pendingStatusChange.nextStatus].label
-      }`
-    );
-    setPendingStatusChange(null);
+  const handleConfirmStatusChange = async () => {
+    if (!pendingStatusChange || isSavingOrderAction) return;
+    setIsSavingOrderAction(true);
+    try {
+      const saved = await updateOrderStatus(
+        pendingStatusChange.order.id,
+        pendingStatusChange.nextStatus,
+        `Holat tasdiq bilan oʻzgartirildi: ${ORDER_STATUS_META[pendingStatusChange.nextStatus].label}`
+      );
+      if (saved) setPendingStatusChange(null);
+    } finally {
+      setIsSavingOrderAction(false);
+    }
   };
 
   const handleConfirmDeleteOrder = async () => {
@@ -1055,7 +1070,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                         </span>
                         <button
                           type="button"
-                          onClick={() => updateInquiryStatus(inq.id, 'read')}
+                          onClick={() => void updateInquiryStatus(inq.id, 'read')}
                           className="text-[11px] font-bold text-amber-700 hover:underline"
                         >
                           Qayta ochish
@@ -1124,7 +1139,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                     {inq.status === 'unread' && (
                       <button
                         type="button"
-                        onClick={() => updateInquiryStatus(inq.id, 'read')}
+                        onClick={() => void updateInquiryStatus(inq.id, 'read')}
                         className="text-xs font-semibold text-gray-500 hover:underline"
                       >
                         Oʻqildi deb belgilash

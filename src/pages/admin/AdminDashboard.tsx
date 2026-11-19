@@ -101,6 +101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [quickStockVal, setQuickStockVal] = useState<number>(0);
   const [quickThresholdVal, setQuickThresholdVal] = useState<number>(5);
   const [quickStockReason, setQuickStockReason] = useState<string>('');
+  const [isSavingQuickStock, setIsSavingQuickStock] = useState(false);
 
   const resetTimestampMs = useMemo(() => {
     if (!storeSettings.statsResetAt) return 0;
@@ -280,25 +281,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleSaveQuickStock = (e: React.FormEvent) => {
+  const handleSaveQuickStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickStockProduct) return;
+    if (!quickStockProduct || isSavingQuickStock) return;
 
-    const nextThreshold = Math.max(1, quickThresholdVal);
-    if (nextThreshold !== quickStockProduct.lowStockThreshold) {
-      saveProduct({
-        ...quickStockProduct,
-        lowStockThreshold: nextThreshold,
-        stock: Math.max(0, quickStockVal),
-        updatedAt: new Date().toISOString(),
-      });
+    setIsSavingQuickStock(true);
+    try {
+      const nextThreshold = Math.max(1, quickThresholdVal);
+      if (nextThreshold !== quickStockProduct.lowStockThreshold) {
+        const thresholdSaved = await saveProduct({
+          ...quickStockProduct,
+          lowStockThreshold: nextThreshold,
+          stock: quickStockProduct.stock,
+          updatedAt: new Date().toISOString(),
+        });
+        if (!thresholdSaved) return;
+      }
+      const stockSaved = await adjustProductStock(
+        quickStockProduct.id,
+        Math.max(0, quickStockVal),
+        quickStockReason.trim() || 'Boshqaruv panelidan tezkor zaxira yangilandi'
+      );
+      if (stockSaved) setQuickStockProduct(null);
+    } finally {
+      setIsSavingQuickStock(false);
     }
-    adjustProductStock(
-      quickStockProduct.id,
-      Math.max(0, quickStockVal),
-      quickStockReason.trim() || 'Boshqaruv panelidan tezkor zaxira yangilandi'
-    );
-    setQuickStockProduct(null);
   };
 
   return (
@@ -869,6 +876,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               variant="primary"
               size="sm"
               fullWidth
+              disabled={isSavingQuickStock}
+              isLoading={isSavingQuickStock}
             >
               Saqlash
             </Button>

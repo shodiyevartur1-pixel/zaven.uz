@@ -101,27 +101,27 @@ interface StoreContextType {
     orderId: string,
     status: OrderStatus,
     note?: string
-  ) => void;
-  addOrderInternalNote: (orderId: string, note: string) => void;
+  ) => Promise<boolean>;
+  addOrderInternalNote: (orderId: string, note: string) => Promise<boolean>;
   reviewOrderReceipt: (
     orderId: string,
     decision: 'verified' | 'rejected',
     reviewerEmail: string,
     reviewNote?: string
-  ) => void;
+  ) => Promise<boolean>;
   retryOrderTelegramNotification: (orderId: string) => Promise<void>;
   deleteOrder: (orderId: string) => Promise<boolean>;
   restoreOrder: (orderId: string) => Promise<boolean>;
 
-  saveProduct: (product: Product, isNewProduct?: boolean) => void;
-  deleteProduct: (productId: string) => void;
+  saveProduct: (product: Product, isNewProduct?: boolean) => Promise<boolean>;
+  deleteProduct: (productId: string) => Promise<boolean>;
   adjustProductStock: (
     productId: string,
     newStock: number,
     reason: string
-  ) => void;
+  ) => Promise<boolean>;
 
-  saveCategory: (category: Category) => void;
+  saveCategory: (category: Category) => Promise<boolean>;
   deleteCategory: (categoryId: string, reassignToCategoryId?: string) => Promise<{ ok: boolean; error?: string }>;
   uploadImageFile: (file: File, folder?: string) => Promise<string>;
   saveCoupon: (coupon: Coupon) => Promise<boolean>;
@@ -132,7 +132,7 @@ interface StoreContextType {
   updateInquiryStatus: (
     inquiryId: string,
     status: CustomerInquiry['status']
-  ) => void;
+  ) => Promise<boolean>;
   refreshFromSupabase: () => Promise<void>;
 
   toasts: ToastMessage[];
@@ -644,7 +644,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     ): Promise<boolean> => {
       if (!isSupabaseConfigured || !supabase) return true;
       try {
-        const { error } = await supabase.from('store_settings').upsert({
+        const { data, error } = await supabase.from('store_settings').upsert({
           id: 1,
           payload: {
             ...nextSettings,
@@ -652,9 +652,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             banners: nextBanners,
           },
           updated_at: new Date().toISOString(),
-        });
-        if (error) {
-          addToast({ type: 'error', title: 'Sozlamalarni bazaga yozib boʻlmadi', description: error.message });
+        }).select('id').maybeSingle();
+        if (error || !data?.id) {
+          const reason = error?.message || 'Bazadan tasdiq javobi kelmadi. Jadval yoki RLS ruxsatini tekshiring.';
+          addToast({ type: 'error', title: 'Sozlamalarni bazaga yozib boʻlmadi', description: reason });
           return false;
         }
         return true;
@@ -1658,51 +1659,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return newOrder;
   };
 
-  const reviewOrderReceipt: StoreContextType['reviewOrderReceipt'] = (
-    orderId,
-    decision,
-    reviewerEmail,
-    reviewNote
+  const reviewOrderReceipt: StoreContextType['reviewOrderReceipt'] = async (
+    orderId, decision, reviewerEmail, reviewNote
   ) => {
+    const target = orders.find((order) => order.id === orderId);
+    if (!target) return false;
     const now = new Date().toISOString();
-    const target = orders.find((o) => o.id === orderId);
-    if (!target) return;
-
-    const actionLabel =
-      decision === 'verified'
-        ? 'Toʻlov cheki TASDIQLANDI'
-        : 'Toʻlov cheki RAD ETILDI';
-    const auditLine = `${actionLabel} — Tekshirdi: ${reviewerEmail} (${new Date(
-      now
-    ).toLocaleString('uz-UZ')})${reviewNote ? `. Izoh: ${reviewNote}` : ''}`;
-
-    const nextStatus: OrderStatus =
-      decision === 'verified' && target.status === 'new'
-        ? 'confirmed'
-        : target.status;
+    const auditLine = `${decision === 'verified' ? 'Toʻlov cheki TASDIQLANDI' : 'Toʻlov cheki RAD ETILDI'} — Tekshirdi: ${reviewerEmail} (${new Date(now).toLocaleString('uz-UZ')})${reviewNote ? `. Izoh: ${reviewNote}` : ''}`;
+    const nextStatus: OrderStatus = decision === 'verified' && target.status === 'new' ? 'confirmed' : target.status;
     const nextNotes = [...target.internalNotes, auditLine];
 
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              paymentVerificationStatus: decision,
-              paymentReviewedBy: reviewerEmail,
-              paymentReviewedAt: now,
-              paymentReviewNote: reviewNote?.trim() || undefined,
-              status: nextStatus,
-              internalNotes: nextNotes,
-              updatedAt: now,
-            }
-          : o
-      )
-    );
-
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({
+      try {
+        const { data, error } = await supabase.from('orders').update({
           payment_verification_status: decision,
           payment_reviewed_by: reviewerEmail,
           payment_reviewed_at: now,
@@ -1710,19 +1679,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           status: nextStatus,
           internal_notes: nextNotes,
           updated_at: now,
-        })
-        .eq('order_number', target.orderNumber)
-        .then(() => {});
+        }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+        if (error || !data?.order_number) {
+          addToast({ type: 'error', title: 'Chek holati saqlanmadi', description: error?.message || 'Buyurtma bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Chekni tekshirishda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
 
-    addToast({
-      type: decision === 'verified' ? 'success' : 'warning',
-      title:
-        decision === 'verified'
-          ? 'Toʻlov cheki tasdiqlandi!'
-          : 'Toʻlov cheki rad etildi',
-      description: `Tekshiruvchi: ${reviewerEmail}`,
-    });
+    setOrders((prev) => prev.map((order) => order.id === orderId ? {
+      ...order,
+      paymentVerificationStatus: decision,
+      paymentReviewedBy: reviewerEmail,
+      paymentReviewedAt: now,
+      paymentReviewNote: reviewNote?.trim() || undefined,
+      status: nextStatus,
+      internalNotes: nextNotes,
+      updatedAt: now,
+    } : order));
+    addToast({ type: decision === 'verified' ? 'success' : 'warning', title: decision === 'verified' ? 'Toʻlov cheki tasdiqlandi!' : 'Toʻlov cheki rad etildi', description: `Tekshiruvchi: ${reviewerEmail}` });
+    return true;
   };
 
   const retryOrderTelegramNotification: StoreContextType['retryOrderTelegramNotification'] =
@@ -1801,83 +1780,52 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-  const updateOrderStatus = (
-    orderId: string,
-    status: OrderStatus,
-    note?: string
-  ) => {
+  const updateOrderStatus: StoreContextType['updateOrderStatus'] = async (orderId, status, note) => {
+    const target = orders.find((order) => order.id === orderId);
+    if (!target) return false;
     const now = new Date().toISOString();
-    const target = orders.find((o) => o.id === orderId);
-    if (!target) return;
-
-    const updatedNotes = note
-      ? [
-          ...target.internalNotes,
-          `${note} (${new Date().toLocaleTimeString('uz-UZ')})`,
-        ]
-      : target.internalNotes;
-
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? { ...o, status, internalNotes: updatedNotes, updatedAt: now }
-          : o
-      )
-    );
+    const updatedNotes = note ? [...target.internalNotes, `${note} (${new Date().toLocaleTimeString('uz-UZ')})`] : target.internalNotes;
 
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({
-          status,
-          internal_notes: updatedNotes,
-          updated_at: now,
-        })
-        .eq('order_number', target.orderNumber)
-        .then(() => {});
+      try {
+        const { data, error } = await supabase.from('orders').update({ status, internal_notes: updatedNotes, updated_at: now })
+          .eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+        if (error || !data?.order_number) {
+          addToast({ type: 'error', title: 'Buyurtma holati saqlanmadi', description: error?.message || 'Buyurtma bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Buyurtma holatini yangilashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
-
-    addToast({
-      type: 'success',
-      title: 'Buyurtma holati yangilandi',
-    });
+    setOrders((prev) => prev.map((order) => order.id === orderId ? { ...order, status, internalNotes: updatedNotes, updatedAt: now } : order));
+    addToast({ type: 'success', title: 'Buyurtma holati yangilandi' });
+    return true;
   };
 
-  const addOrderInternalNote = (orderId: string, note: string) => {
-    if (!note.trim()) return;
+  const addOrderInternalNote: StoreContextType['addOrderInternalNote'] = async (orderId, note) => {
+    if (!note.trim()) return false;
+    const target = orders.find((order) => order.id === orderId);
+    if (!target) return false;
     const now = new Date().toISOString();
-    const target = orders.find((o) => o.id === orderId);
-    if (!target) return;
-
     const nextNotes = [...target.internalNotes, note.trim()];
-
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              internalNotes: nextNotes,
-              updatedAt: now,
-            }
-          : o
-      )
-    );
-
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('orders')
-        .update({
-          internal_notes: nextNotes,
-          updated_at: now,
-        })
-        .eq('order_number', target.orderNumber)
-        .then(() => {});
+      try {
+        const { data, error } = await supabase.from('orders').update({ internal_notes: nextNotes, updated_at: now })
+          .eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+        if (error || !data?.order_number) {
+          addToast({ type: 'error', title: 'Ichki izoh saqlanmadi', description: error?.message || 'Buyurtma bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Ichki izohda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
-
-    addToast({
-      type: 'success',
-      title: 'Ichki izoh qoʻshildi',
-    });
+    setOrders((prev) => prev.map((order) => order.id === orderId ? { ...order, internalNotes: nextNotes, updatedAt: now } : order));
+    addToast({ type: 'success', title: 'Ichki izoh qoʻshildi' });
+    return true;
   };
 
   const deleteOrder: StoreContextType['deleteOrder'] = async (orderId) => {
@@ -1885,8 +1833,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('orders').update({ is_deleted: true, deleted_at: now, updated_at: now }).eq('order_number', target.orderNumber);
-      if (error) { addToast({ type: 'error', title: 'Buyurtmani arxivlashda xatolik', description: error.message }); return false; }
+      const { data, error } = await supabase.from('orders').update({ is_deleted: true, deleted_at: now, updated_at: now }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+      if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani arxivlashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: true, deletedAt: now, updatedAt: now } : item));
     addToast({ type: 'info', title: `Buyurtma #${target.orderNumber} arxivlandi` });
@@ -1898,8 +1846,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('orders').update({ is_deleted: false, deleted_at: null, updated_at: now }).eq('order_number', target.orderNumber);
-      if (error) { addToast({ type: 'error', title: 'Buyurtmani tiklashda xatolik', description: error.message }); return false; }
+      const { data, error } = await supabase.from('orders').update({ is_deleted: false, deleted_at: null, updated_at: now }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+      if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani tiklashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: false, deletedAt: undefined, updatedAt: now } : item));
     addToast({ type: 'success', title: `Buyurtma #${target.orderNumber} tiklandi` });
@@ -1911,8 +1859,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const cleanReason = isBlocked ? reason?.trim() || 'Admin tomonidan bloklangan' : undefined;
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('customers').update({ is_blocked: isBlocked, blocked_reason: cleanReason || null }).eq('id', customerId);
-      if (error) { addToast({ type: 'error', title: 'Mijoz holatini yangilashda xatolik', description: error.message }); return false; }
+      const { data, error } = await supabase.from('customers').update({ is_blocked: isBlocked, blocked_reason: cleanReason || null }).eq('id', customerId).select('id').maybeSingle();
+      if (error || !data?.id) { addToast({ type: 'error', title: 'Mijoz holatini yangilashda xatolik', description: error?.message || 'Mijoz topilmadi yoki ruxsat yoʻq.' }); return false; }
       if (target.authUserId) {
         const { data, error: fnError } = await supabase.functions.invoke('admin-owner-guard', { body: { action: 'set_customer_block', authUserId: target.authUserId, isBlocked } });
         if (fnError || data?.ok === false) addToast({ type: 'warning', title: 'Auth sessiyasini bloklash yakunlanmadi', description: fnError?.message || data?.error || 'Edge Function holatini tekshiring.' });
@@ -1929,8 +1877,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('customers').update({ is_deleted: isDeleted, deleted_at: isDeleted ? now : null }).eq('id', customerId);
-      if (error) { addToast({ type: 'error', title: isDeleted ? 'Mijozni arxivlashda xatolik' : 'Mijozni tiklashda xatolik', description: error.message }); return false; }
+      const { data, error } = await supabase.from('customers').update({ is_deleted: isDeleted, deleted_at: isDeleted ? now : null }).eq('id', customerId).select('id').maybeSingle();
+      if (error || !data?.id) { addToast({ type: 'error', title: isDeleted ? 'Mijozni arxivlashda xatolik' : 'Mijozni tiklashda xatolik', description: error?.message || 'Mijoz topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setCustomers((prev) => prev.map((item) => item.id === customerId ? { ...item, isDeleted, deletedAt: isDeleted ? now : undefined } : item));
     addToast({ type: isDeleted ? 'info' : 'success', title: isDeleted ? 'Mijoz profili arxivlandi' : 'Mijoz profili tiklandi' });
@@ -1944,8 +1892,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!message) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase.from('inquiries').update({ status: 'replied', reply_message: message, replied_at: now, replied_by: repliedBy, reply_delivery_method: deliveryMethod }).eq('id', inquiryId);
-      if (error) { addToast({ type: 'error', title: 'Javobni saqlashda xatolik', description: error.message }); return false; }
+      const { data, error } = await supabase.from('inquiries').update({ status: 'replied', reply_message: message, replied_at: now, replied_by: repliedBy, reply_delivery_method: deliveryMethod }).eq('id', inquiryId).select('id').maybeSingle();
+      if (error || !data?.id) { addToast({ type: 'error', title: 'Javobni saqlashda xatolik', description: error?.message || 'Murojaat topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setInquiries((prev) => prev.map((item) => item.id === inquiryId ? { ...item, status: 'replied', replyMessage: message, repliedAt: now, repliedBy, replyDeliveryMethod: deliveryMethod } : item));
     addToast({ type: 'success', title: 'Murojaat javobi saqlandi' });
@@ -1957,13 +1905,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (affected.length && (!reassignToCategoryId || reassignToCategoryId === categoryId || !categories.some((c) => c.id === reassignToCategoryId))) return { ok: false, error: 'Avval mahsulotlarni ko‘chirish uchun boshqa toifani tanlang.' };
     if (isSupabaseConfigured && supabase) {
       if (affected.length) {
-        const { error } = await supabase.from('products').update({ category_id: reassignToCategoryId, updated_at: new Date().toISOString() }).in('id', affected.map((p) => p.id));
-        if (error) return { ok: false, error: error.message };
+        const { data, error } = await supabase.from('products').update({ category_id: reassignToCategoryId, updated_at: new Date().toISOString() }).in('id', affected.map((p) => p.id)).select('id');
+        if (error || data?.length !== affected.length) return { ok: false, error: error?.message || 'Mahsulotlarning hammasi boshqa toifaga oʻtkazilmadi.' };
       }
-      const { error } = await supabase.from('categories').delete().eq('id', categoryId);
-      if (error) {
+      const { data, error } = await supabase.from('categories').delete().eq('id', categoryId).select('id').maybeSingle();
+      if (error || !data?.id) {
         if (affected.length) await supabase.from('products').update({ category_id: categoryId }).in('id', affected.map((p) => p.id));
-        return { ok: false, error: error.message };
+        return { ok: false, error: error?.message || 'Toifa topilmadi yoki oʻchirishga ruxsat yoʻq.' };
       }
     }
     if (affected.length && reassignToCategoryId) setProducts((prev) => prev.map((p) => p.categoryId === categoryId ? { ...p, categoryId: reassignToCategoryId } : p));
@@ -1973,8 +1921,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const uploadImageFile: StoreContextType['uploadImageFile'] = async (file, folder = 'catalog') => {
-    if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) throw new Error('JPG, PNG, WEBP yoki GIF rasm tanlang.');
-    if (file.size > 5 * 1024 * 1024) throw new Error('Rasm hajmi 5 MB dan oshmasin.');
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('JPG, PNG yoki WEBP rasm tanlang.');
+    if (file.size > 4 * 1024 * 1024) throw new Error('Rasm hajmi 4 MB dan oshmasin.');
     if (isSupabaseConfigured && supabase) {
       const path = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       const { error } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type, upsert: true });
@@ -2005,74 +1953,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const saveProduct = (product: Product, isNewProduct = false) => {
-    if (isNewProduct) {
-      setProducts((prev) => [product, ...prev]);
-    } else {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === product.id ? product : p))
-      );
-    }
-
+  const saveProduct: StoreContextType['saveProduct'] = async (product, isNewProduct = false) => {
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('products')
-        .upsert(mapProductToRow(product))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase saveProduct error:', error.message);
-          }
-        });
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .upsert(mapProductToRow(product))
+          .select('id')
+          .maybeSingle();
+        if (error || !data?.id) {
+          addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: error?.message || 'Bazadan tasdiq javobi kelmadi.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Mahsulotni saqlashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
 
+    setProducts((prev) => isNewProduct
+      ? [product, ...prev.filter((item) => item.id !== product.id)]
+      : prev.map((item) => item.id === product.id ? product : item));
     addToast({
       type: 'success',
-      title: isNewProduct
-        ? 'Yangi mahsulot qoʻshildi'
-        : 'Mahsulot yangilandi',
+      title: isNewProduct ? 'Yangi mahsulot qoʻshildi' : 'Mahsulot yangilandi',
       description: product.name,
     });
+    return true;
   };
 
-  const deleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  const deleteProduct: StoreContextType['deleteProduct'] = async (productId) => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .delete()
+          .eq('id', productId)
+          .select('id');
+        if (error || !data?.length) {
+          addToast({ type: 'error', title: 'Mahsulot oʻchirilmadi', description: error?.message || 'Mahsulot bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Mahsulotni oʻchirishda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
+    }
+
+    setProducts((prev) => prev.filter((item) => item.id !== productId));
     setFavoriteIds((prev) => {
       const next = prev.filter((id) => id !== productId);
       saveFavoritesForCustomer(currentCustomer, next);
       return next;
     });
-
-    if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase deleteProduct error:', error.message);
-          }
-        });
-    }
-
-    addToast({ type: 'info', title: 'Mahsulot oʻchirildi' });
+    addToast({ type: 'success', title: 'Mahsulot oʻchirildi' });
+    return true;
   };
 
-  const adjustProductStock = (
-    productId: string,
-    newStock: number,
-    reason: string
-  ) => {
-    const target = products.find((p) => p.id === productId);
-    if (!target) return;
+  const adjustProductStock: StoreContextType['adjustProductStock'] = async (productId, newStock, reason) => {
+    const target = products.find((item) => item.id === productId);
+    if (!target || !Number.isFinite(newStock) || newStock < 0) {
+      addToast({ type: 'error', title: 'Zaxira miqdorini tekshiring' });
+      return false;
+    }
 
     const now = new Date().toISOString();
-    const nextStatus: ProductStatus =
-      newStock === 0 && target.status === 'active'
-        ? 'out_of_stock'
-        : newStock > 0 && target.status === 'out_of_stock'
-        ? 'active'
-        : target.status;
-
+    const nextStatus: ProductStatus = newStock === 0 && target.status === 'active'
+      ? 'out_of_stock'
+      : newStock > 0 && target.status === 'out_of_stock' ? 'active' : target.status;
     const logEntry: StockLogEntry = {
       id: `log-${Date.now()}`,
       productId: target.id,
@@ -2086,68 +2034,59 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       createdAt: now,
     };
 
-    setStockLogs((prev) => [logEntry, ...prev]);
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId
-          ? {
-              ...p,
-              stock: newStock,
-              status: nextStatus,
-              updatedAt: now,
-            }
-          : p
-      )
-    );
-
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('products')
-        .update({
-          stock: newStock,
-          status: nextStatus,
-          updated_at: now,
-        })
-        .eq('id', productId)
-        .then(() => {});
-
-      supabase
-        .from('stock_logs')
-        .insert(mapStockLogToRow(logEntry))
-        .then(() => {});
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .update({ stock: newStock, status: nextStatus, updated_at: now })
+          .eq('id', productId)
+          .select('id')
+          .maybeSingle();
+        if (error || !data?.id) {
+          addToast({ type: 'error', title: 'Zaxira saqlanmadi', description: error?.message || 'Mahsulot bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+        const { error: logError } = await supabase.from('stock_logs').insert(mapStockLogToRow(logEntry));
+        if (logError) {
+          addToast({ type: 'warning', title: 'Zaxira yangilandi, lekin tarix yozilmadi', description: logError.message });
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Zaxirani yangilashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
 
-    addToast({
-      type: 'success',
-      title: 'Ombor qoldigʻi yangilandi',
-      description: `${target.sku}: ${target.stock} -> ${newStock} dona`,
-    });
+    setStockLogs((prev) => [logEntry, ...prev]);
+    setProducts((prev) => prev.map((item) => item.id === productId
+      ? { ...item, stock: newStock, status: nextStatus, updatedAt: now }
+      : item));
+    addToast({ type: 'success', title: 'Ombor qoldigʻi yangilandi', description: `${target.sku}: ${target.stock} → ${newStock} dona` });
+    return true;
   };
 
-  const saveCategory = (category: Category) => {
-    setCategories((prev) => {
-      const exists = prev.some((c) => c.id === category.id);
-      return exists
-        ? prev.map((c) => (c.id === category.id ? category : c))
-        : [...prev, category];
-    });
-
+  const saveCategory: StoreContextType['saveCategory'] = async (category) => {
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('categories')
-        .upsert(mapCategoryToRow(category))
-        .then(({ error }) => {
-          if (error) {
-            console.error('Supabase saveCategory error:', error.message);
-          }
-        });
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .upsert(mapCategoryToRow(category))
+          .select('id')
+          .maybeSingle();
+        if (error || !data?.id) {
+          addToast({ type: 'error', title: 'Toifa saqlanmadi', description: error?.message || 'Bazadan tasdiq javobi kelmadi.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Toifani saqlashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
 
-    addToast({
-      type: 'success',
-      title: 'Toifa saqlandi',
-      description: category.name,
-    });
+    setCategories((prev) => prev.some((item) => item.id === category.id)
+      ? prev.map((item) => item.id === category.id ? category : item)
+      : [...prev, category]);
+    addToast({ type: 'success', title: 'Toifa saqlandi', description: category.name });
+    return true;
   };
 
   const saveCoupon: StoreContextType['saveCoupon'] = async (coupon) => {
@@ -2199,23 +2138,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return true;
   };
 
-  const updateInquiryStatus = (
-    inquiryId: string,
-    status: CustomerInquiry['status']
-  ) => {
-    setInquiries((prev) =>
-      prev.map((inq) => (inq.id === inquiryId ? { ...inq, status } : inq))
-    );
-
+  const updateInquiryStatus: StoreContextType['updateInquiryStatus'] = async (inquiryId, status) => {
+    const target = inquiries.find((inquiry) => inquiry.id === inquiryId);
+    if (!target) return false;
     if (isSupabaseConfigured && supabase) {
-      supabase
-        .from('inquiries')
-        .update({ status })
-        .eq('id', inquiryId)
-        .then(() => {});
+      try {
+        const { data, error } = await supabase.from('inquiries').update({ status }).eq('id', inquiryId).select('id').maybeSingle();
+        if (error || !data?.id) {
+          addToast({ type: 'error', title: 'Murojaat holati saqlanmadi', description: error?.message || 'Murojaat bazada topilmadi yoki ruxsat yoʻq.' });
+          return false;
+        }
+      } catch (err) {
+        addToast({ type: 'error', title: 'Murojaatni yangilashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        return false;
+      }
     }
-
+    setInquiries((prev) => prev.map((inquiry) => inquiry.id === inquiryId ? { ...inquiry, status } : inquiry));
     addToast({ type: 'success', title: 'Murojaat holati yangilandi' });
+    return true;
   };
 
   const resetAllDemoData = () => {

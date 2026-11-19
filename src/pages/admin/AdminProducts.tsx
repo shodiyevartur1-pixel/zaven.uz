@@ -104,6 +104,10 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   const [isUploadingProductImages, setIsUploadingProductImages] =
     useState<boolean>(false);
   const [productFormError, setProductFormError] = useState<string>('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isSavingStock, setIsSavingStock] = useState(false);
 
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
@@ -278,7 +282,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     setProdImages((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleSaveProductSubmit = (e: React.FormEvent) => {
+  const handleSaveProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProductFormError('');
 
@@ -290,8 +294,8 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       setProductFormError('SKU kodini kiriting');
       return;
     }
-    if (prodPrice <= 0) {
-      setProductFormError('Asosiy sotuv narxi 0 dan katta boʻlishi shart');
+    if (prodPrice < 0) {
+      setProductFormError('Asosiy sotuv narxi manfiy boʻlishi mumkin emas');
       return;
     }
     if (
@@ -349,8 +353,14 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       updatedAt: now,
     };
 
-    saveProduct(nextProduct, isNewProductMode);
-    setIsProductModalOpen(false);
+    setIsSavingProduct(true);
+    try {
+      const saved = await saveProduct(nextProduct, isNewProductMode);
+      if (saved) setIsProductModalOpen(false);
+      else setProductFormError('Mahsulot saqlanmadi. Kiritilgan maʼlumotlar oynada qoldi; xatoni tuzating va qayta urinib koʻring.');
+    } finally {
+      setIsSavingProduct(false);
+    }
   };
 
   const handleOpenCategoryModal = (cat?: Category) => {
@@ -400,7 +410,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     }
   };
 
-  const handleSaveCategorySubmit = (e: React.FormEvent) => {
+  const handleSaveCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCatFormError('');
 
@@ -416,7 +426,8 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     const id = editingCategoryId || `cat-${Date.now()}`;
     const existing = categories.find((c) => c.id === id);
 
-    saveCategory({
+    setIsSavingCategory(true);
+    const saved = await saveCategory({
       id,
       slug: existing?.slug || slugify(catName),
       name: catName.trim(),
@@ -427,7 +438,9 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       sortOrder: Math.max(1, catSortOrder),
     });
 
-    setIsCategoryModalOpen(false);
+    if (saved) setIsCategoryModalOpen(false);
+    else setCatFormError('Toifa saqlanmadi. Oyna yopilmadi; xatoni tuzatib qayta urinib koʻring.');
+    setIsSavingCategory(false);
   };
 
   const dependentProductsForCatToDelete = useMemo(() => {
@@ -479,25 +492,31 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
     }
   };
 
-  const handleSaveStockAdjustment = (e: React.FormEvent) => {
+  const handleSaveStockAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!stockModalProduct) return;
 
     const updatedThreshold = Math.max(1, newThresholdValue);
+    setIsSavingStock(true);
+    try {
     if (updatedThreshold !== stockModalProduct.lowStockThreshold) {
-      saveProduct({
+      const thresholdSaved = await saveProduct({
         ...stockModalProduct,
         lowStockThreshold: updatedThreshold,
-        stock: Math.max(0, newStockValue),
+        stock: stockModalProduct.stock,
         updatedAt: new Date().toISOString(),
       });
+      if (!thresholdSaved) return;
     }
-    adjustProductStock(
+    const stockSaved = await adjustProductStock(
       stockModalProduct.id,
       Math.max(0, newStockValue),
       stockReason.trim() || 'Admin tomonidan zaxira yangilandi'
     );
-    setStockModalProduct(null);
+    if (stockSaved) setStockModalProduct(null);
+    } finally {
+      setIsSavingStock(false);
+    }
   };
 
   return (
@@ -1015,7 +1034,8 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               variant="primary"
               size="md"
               fullWidth
-              disabled={isUploadingProductImages}
+              disabled={isUploadingProductImages || isSavingProduct}
+              isLoading={isSavingProduct}
             >
               Saqlash
             </Button>
@@ -1172,7 +1192,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           type="button"
                           disabled={idx === 0}
                           onClick={() => handleMoveProductImage(idx, -1)}
-                          className="w-6 h-6 rounded bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
+                          className="w-8 h-8 min-w-8 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
                           aria-label="Oldinga surish"
                         >
                           <ArrowUp className="w-3 h-3" />
@@ -1181,7 +1201,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           type="button"
                           disabled={idx === prodImages.length - 1}
                           onClick={() => handleMoveProductImage(idx, 1)}
-                          className="w-6 h-6 rounded bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
+                          className="w-8 h-8 min-w-8 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
                           aria-label="Orqaga surish"
                         >
                           <ArrowDown className="w-3 h-3" />
@@ -1189,7 +1209,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveProductImage(idx)}
-                          className="w-6 h-6 rounded bg-red-50 text-red-600 flex items-center justify-center"
+                          className="w-8 h-8 min-w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center"
                           aria-label="Rasmni olib tashlash"
                         >
                           <X className="w-3 h-3" />
@@ -1283,10 +1303,17 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               variant="danger"
               size="sm"
               fullWidth
-              onClick={() => {
-                if (!productToDelete) return;
-                deleteProduct(productToDelete.id);
-                setProductToDelete(null);
+              disabled={isDeletingProduct}
+              isLoading={isDeletingProduct}
+              onClick={async () => {
+                if (!productToDelete || isDeletingProduct) return;
+                setIsDeletingProduct(true);
+                try {
+                  const deleted = await deleteProduct(productToDelete.id);
+                  if (deleted) setProductToDelete(null);
+                } finally {
+                  setIsDeletingProduct(false);
+                }
               }}
             >
               Oʻchirish
@@ -1326,7 +1353,8 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               variant="primary"
               size="md"
               fullWidth
-              disabled={isUploadingCatImage}
+              disabled={isUploadingCatImage || isSavingCategory}
+              isLoading={isSavingCategory}
             >
               Saqlash
             </Button>
@@ -1415,7 +1443,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                   Toifa rasmini qurilmadan yuklash
                 </span>
                 <span className="text-[11px] text-gray-500">
-                  JPG, PNG yoki WEBP (≤ 5 MB)
+                  JPG, PNG yoki WEBP (≤ 4 MB)
                 </span>
                 <input
                   type="file"
@@ -1541,6 +1569,8 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               variant="primary"
               size="sm"
               fullWidth
+              disabled={isSavingStock}
+              isLoading={isSavingStock}
             >
               Saqlash
             </Button>

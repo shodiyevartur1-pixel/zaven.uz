@@ -69,7 +69,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
   const [isEditingDelivery, setIsEditingDelivery] = useState<boolean>(false);
   const [isEditingBankCards, setIsEditingBankCards] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [saveError, setSaveError] = useState<string>('');
   const [lastSavedSection, setLastSavedSection] = useState<string | null>(null);
 
   // Regional Tariff Modal State
@@ -132,16 +131,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
     sectionKey: string,
     onSuccessCloseEditor?: () => void
   ) => {
-    setSaveError('');
     setIsSaving(true);
     try {
       const ok = await updateStoreSettings(nextSettings);
-      if (!ok) {
-        setSaveError(
-          'Maʼlumotlarni saqlashda xatolik yuz berdi. Kiritilgan oʻzgarishlar saqlab qolindi, qayta urinib koʻring.'
-        );
-        return false;
-      }
+      if (!ok) return false;
       setDraft(nextSettings);
       setLastSavedSection(sectionKey);
       onSuccessCloseEditor?.();
@@ -496,12 +489,6 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
           </button>
         </div>
       </div>
-
-      {saveError && (
-        <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
-          {saveError}
-        </div>
-      )}
 
       {/* TAB 1: GENERAL SETTINGS */}
       {activeTab === 'general' && (
