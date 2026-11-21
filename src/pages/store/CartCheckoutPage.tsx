@@ -64,6 +64,22 @@ const CHECKOUT_ORDER_ATTEMPT_KEY = 'zaven_checkout_order_attempt_v1';
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
 
+const getSavedAddressRegion = (address?: CustomerAddress) => {
+  if (!address) return undefined;
+  const savedRegion = address.region.trim().toLocaleLowerCase();
+  if (!savedRegion) return undefined;
+  return UZBEKISTAN_REGIONS.find((region) =>
+    [region.nameUz, region.nameRu, region.nameEn].some((name) => {
+      const normalizedName = name.toLocaleLowerCase();
+      return (
+        normalizedName === savedRegion ||
+        savedRegion.includes(normalizedName) ||
+        normalizedName.startsWith(savedRegion)
+      );
+    })
+  );
+};
+
 export const CartCheckoutPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -132,26 +148,44 @@ export const CartCheckoutPage: React.FC = () => {
     currentCustomer?.telegramUsername || ''
   );
 
+  const initialSavedAddress =
+    currentCustomer?.addresses.find((address) => address.isDefault) ||
+    currentCustomer?.addresses[0];
+  const initialSavedRegion = getSavedAddressRegion(initialSavedAddress);
   const [selectedUzRegionId, setSelectedUzRegionId] = useState<string>(
-    UZBEKISTAN_REGIONS[0].id
+    initialSavedRegion?.id || UZBEKISTAN_REGIONS[0].id
   );
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string | 'new'>(() => {
-    const saved = currentCustomer?.addresses.find((address) => address.isDefault) || currentCustomer?.addresses[0];
-    return saved?.id || 'new';
+    return initialSavedAddress?.id || 'new';
   });
   const [selectedDistrict, setSelectedDistrict] = useState<string>(
-    UZBEKISTAN_REGIONS[0].districts[0]
+    initialSavedAddress
+      ? initialSavedRegion?.districts.find(
+          (district) =>
+            district.toLocaleLowerCase() ===
+            initialSavedAddress.district?.trim().toLocaleLowerCase()
+        ) || ''
+      : initialSavedRegion?.districts[0] || UZBEKISTAN_REGIONS[0].districts[0]
   );
   const [addressLine, setAddressLine] = useState<string>(
-    currentCustomer?.addresses.find((a) => a.isDefault)?.addressLine || ''
+    initialSavedAddress?.addressLine || ''
   );
+  const [isAddressEditing, setIsAddressEditing] = useState(
+    !initialSavedAddress
+  );
+  const [isSavedAddressPickerOpen, setIsSavedAddressPickerOpen] =
+    useState(false);
   const [customerNote, setCustomerNote] = useState<string>('');
 
   const [sharedCoordinates, setSharedCoordinates] = useState<{
     lat: number;
     lng: number;
     accuracyMeters?: number;
-  } | null>(null);
+  } | null>(
+    initialSavedAddress?.locationCoordinates
+      ? { ...initialSavedAddress.locationCoordinates }
+      : null
+  );
   const [mapSelectionFeedback, setMapSelectionFeedback] = useState<{
     type: 'success' | 'warning';
     text: string;
@@ -163,15 +197,32 @@ export const CartCheckoutPage: React.FC = () => {
 
   const applySavedAddressToCheckout = (address: CustomerAddress) => {
     setSelectedSavedAddressId(address.id);
-    const matchedRegion = UZBEKISTAN_REGIONS.find(
-      (region) => region.nameUz.toLowerCase() === address.region.toLowerCase() || address.region.toLowerCase().includes(region.nameUz.toLowerCase())
+    const matchedRegion = getSavedAddressRegion(address);
+    const matchedDistrict = matchedRegion?.districts.find(
+      (district) =>
+        district.toLocaleLowerCase() ===
+        address.district?.trim().toLocaleLowerCase()
     );
     if (matchedRegion) {
       setSelectedUzRegionId(matchedRegion.id);
-      setSelectedDistrict(address.district && matchedRegion.districts.includes(address.district) ? address.district : matchedRegion.districts[0] || '');
+      setSelectedDistrict(matchedDistrict || '');
+    } else {
+      setSelectedUzRegionId(UZBEKISTAN_REGIONS[0].id);
+      setSelectedDistrict('');
     }
     setAddressLine(address.addressLine);
-    setSharedCoordinates(address.locationCoordinates ? { lat: address.locationCoordinates.lat, lng: address.locationCoordinates.lng, accuracyMeters: address.locationCoordinates.accuracyMeters } : null);
+    setSharedCoordinates(
+      address.locationCoordinates
+        ? { ...address.locationCoordinates }
+        : null
+    );
+    setIsAddressEditing(
+      !matchedRegion ||
+        !matchedDistrict ||
+        address.addressLine.trim().length < 5
+    );
+    setIsSavedAddressPickerOpen(false);
+    setMapSelectionFeedback(null);
     setErrors((previous) => ({ ...previous, region: undefined, district: undefined, address: undefined }));
   };
 
@@ -218,6 +269,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [hasRestoredCheckoutDraft, setHasRestoredCheckoutDraft] =
     useState(false);
   const hasSavedCheckoutDraftRef = useRef(false);
+  const hasInitializedSavedAddressRef = useRef(false);
   const orderAttemptIdRef = useRef<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
@@ -235,6 +287,38 @@ export const CartCheckoutPage: React.FC = () => {
         if (typeof parsed.selectedUzRegionId === 'string') setSelectedUzRegionId(parsed.selectedUzRegionId);
         if (typeof parsed.selectedDistrict === 'string') setSelectedDistrict(parsed.selectedDistrict);
         if (typeof parsed.addressLine === 'string') setAddressLine(parsed.addressLine);
+        if (typeof parsed.selectedSavedAddressId === 'string') {
+          setSelectedSavedAddressId(parsed.selectedSavedAddressId);
+        } else {
+          setSelectedSavedAddressId('new');
+          setIsAddressEditing(true);
+        }
+        const draftCoordinates = parsed.sharedCoordinates;
+        if (
+          draftCoordinates &&
+          typeof draftCoordinates === 'object' &&
+          'lat' in draftCoordinates &&
+          'lng' in draftCoordinates &&
+          typeof draftCoordinates.lat === 'number' &&
+          Number.isFinite(draftCoordinates.lat) &&
+          typeof draftCoordinates.lng === 'number' &&
+          Number.isFinite(draftCoordinates.lng)
+        ) {
+          setSharedCoordinates({
+            lat: draftCoordinates.lat,
+            lng: draftCoordinates.lng,
+            ...('accuracyMeters' in draftCoordinates &&
+            typeof draftCoordinates.accuracyMeters === 'number' &&
+            Number.isFinite(draftCoordinates.accuracyMeters)
+              ? { accuracyMeters: draftCoordinates.accuracyMeters }
+              : {}),
+          });
+        } else {
+          setSharedCoordinates(null);
+        }
+        if (typeof parsed.isAddressEditing === 'boolean') {
+          setIsAddressEditing(parsed.isAddressEditing);
+        }
         if (typeof parsed.customerNote === 'string') setCustomerNote(parsed.customerNote);
         if (typeof parsed.appliedCouponCode === 'string') setAppliedCouponCode(parsed.appliedCouponCode);
       }
@@ -258,6 +342,9 @@ export const CartCheckoutPage: React.FC = () => {
           selectedUzRegionId,
           selectedDistrict,
           addressLine,
+          selectedSavedAddressId,
+          sharedCoordinates,
+          isAddressEditing,
           customerNote,
           appliedCouponCode,
         })
@@ -274,6 +361,9 @@ export const CartCheckoutPage: React.FC = () => {
     selectedUzRegionId,
     selectedDistrict,
     addressLine,
+    selectedSavedAddressId,
+    sharedCoordinates,
+    isAddressEditing,
     customerNote,
     appliedCouponCode,
   ]);
@@ -292,6 +382,10 @@ export const CartCheckoutPage: React.FC = () => {
           (prev) => prev || currentCustomer.telegramUsername || ''
         );
       }
+      if (!hasRestoredCheckoutDraft || hasInitializedSavedAddressRef.current) {
+        return;
+      }
+      hasInitializedSavedAddressRef.current = true;
       const defaultAddr =
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
@@ -299,7 +393,7 @@ export const CartCheckoutPage: React.FC = () => {
         applySavedAddressToCheckout(defaultAddr);
       }
     }
-  }, [currentCustomer]);
+  }, [currentCustomer, hasRestoredCheckoutDraft]);
 
   const currentUzRegionObj = useMemo(
     () =>
@@ -324,8 +418,35 @@ export const CartCheckoutPage: React.FC = () => {
     return reg.nameUz;
   };
 
+  const selectedSavedAddress = savedCustomerAddresses.find(
+    (address) => address.id === selectedSavedAddressId
+  );
+  const showAddressEditor =
+    savedCustomerAddresses.length === 0 || isAddressEditing;
+  const markAddressAsCustom = () => {
+    setSelectedSavedAddressId('new');
+  };
+
+  const startNewAddress = () => {
+    setSelectedSavedAddressId('new');
+    setSelectedUzRegionId(UZBEKISTAN_REGIONS[0].id);
+    setSelectedDistrict(UZBEKISTAN_REGIONS[0].districts[0] || '');
+    setAddressLine('');
+    setSharedCoordinates(null);
+    setMapSelectionFeedback(null);
+    setErrors((previous) => ({
+      ...previous,
+      region: undefined,
+      district: undefined,
+      address: undefined,
+    }));
+    setIsSavedAddressPickerOpen(false);
+    setIsAddressEditing(true);
+  };
+
   // Manual region change resets incompatible district immediately
   const handleRegionChange = (newRegionId: string) => {
+    markAddressAsCustom();
     setSelectedUzRegionId(newRegionId);
     const found = UZBEKISTAN_REGIONS.find((r) => r.id === newRegionId);
     if (found && found.districts.length > 0) {
@@ -347,6 +468,7 @@ export const CartCheckoutPage: React.FC = () => {
     matchedRegion,
     matchedDistrict,
   }: ConfirmedMapLocationPayload) => {
+    markAddressAsCustom();
     setSharedCoordinates(coords);
 
     if (reverseGeocodedAddress) {
@@ -703,6 +825,7 @@ export const CartCheckoutPage: React.FC = () => {
 
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
+      if (savedCustomerAddresses.length > 0) setIsAddressEditing(true);
       addToast({
         type: 'error',
         title:
@@ -713,6 +836,8 @@ export const CartCheckoutPage: React.FC = () => {
       });
       return;
     }
+    setIsSavedAddressPickerOpen(false);
+    if (savedCustomerAddresses.length > 0) setIsAddressEditing(false);
     goToStep('payment');
   };
 
@@ -1335,40 +1460,129 @@ export const CartCheckoutPage: React.FC = () => {
 
           <div className="p-4 sm:p-6 space-y-5">
             {savedCustomerAddresses.length > 0 && (
-              <section className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">Saqlangan manzillar</h2>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSavedAddressId('new');
-                      setAddressLine('');
-                      setSharedCoordinates(null);
-                      setIsMapModalOpen(true);
-                    }}
-                    className="text-xs font-bold text-brand-green hover:underline"
-                  >
-                    + Yangi manzil
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {savedCustomerAddresses.map((address) => {
-                    const selected = selectedSavedAddressId === address.id;
-                    return (
+              <section className="min-w-0 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
+                {isSavedAddressPickerOpen ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        Saqlangan manzillar
+                      </h2>
                       <button
-                        key={address.id}
                         type="button"
-                        onClick={() => applySavedAddressToCheckout(address)}
-                        aria-pressed={selected}
-                        className={`rounded-xl border p-3 text-left transition-colors ${selected ? 'border-[#C89D54] bg-[#C89D54]/10' : 'border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#12211C]'}`}
+                        onClick={() => setIsSavedAddressPickerOpen(false)}
+                        className="min-h-10 rounded-lg px-2 text-xs font-bold text-brand-green hover:underline"
                       >
-                        <span className="block text-sm font-bold text-gray-900 dark:text-gray-100">{address.title}</span>
-                        <span className="mt-1 block text-xs text-brand-green">{address.region}{address.district ? ` · ${address.district}` : ''}</span>
-                        <span className="mt-1 block text-xs text-gray-600 dark:text-gray-300 line-clamp-2">{address.addressLine}</span>
+                        Orqaga
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                    <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2">
+                      {savedCustomerAddresses.map((address) => {
+                        const selected = selectedSavedAddressId === address.id;
+                        return (
+                          <button
+                            key={address.id}
+                            type="button"
+                            onClick={() => applySavedAddressToCheckout(address)}
+                            aria-pressed={selected}
+                            className={`min-w-0 rounded-xl border p-3 text-left transition-colors ${
+                              selected
+                                ? 'border-[#C89D54] bg-[#C89D54]/10'
+                                : 'border-gray-200 bg-white dark:border-[#28453B] dark:bg-[#12211C]'
+                            }`}
+                          >
+                            <span className="block break-words text-sm font-bold text-gray-900 dark:text-gray-100">
+                              {address.title}
+                            </span>
+                            <span className="mt-1 block break-words text-xs text-brand-green">
+                              {address.region}
+                              {address.district ? ` · ${address.district}` : ''}
+                            </span>
+                            <span className="mt-1 block break-words text-xs text-gray-600 dark:text-gray-300">
+                              {address.addressLine}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={startNewAddress}
+                      className="min-h-10 w-full rounded-xl border border-dashed border-brand-green px-3 py-2 text-left text-sm font-bold text-brand-green hover:bg-white/70"
+                    >
+                      + Yangi manzil kiritish
+                    </button>
+                  </div>
+                ) : isAddressEditing ? (
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="min-w-0 break-words text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+                      O‘zgartirishlar faqat shu buyurtma uchun qo‘llanadi; saqlangan manzilingiz o‘zgarmaydi.
+                    </p>
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddressEditing(false);
+                          setIsSavedAddressPickerOpen(true);
+                        }}
+                        className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-bold text-gray-700 dark:border-[#365B4D] dark:text-gray-200"
+                      >
+                        Saqlanganlardan tanlash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddressEditing(false)}
+                        className="min-h-10 rounded-xl bg-brand-green px-4 text-xs font-bold text-white"
+                      >
+                        Tayyor
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 space-y-1">
+                      <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        Yetkazib berish manzili
+                      </h2>
+                      {selectedSavedAddress && (
+                        <p className="break-words text-xs font-semibold text-brand-green">
+                          {selectedSavedAddress.title}
+                        </p>
+                      )}
+                      <p className="break-words text-sm text-gray-700 dark:text-gray-200">
+                        {getRegionDisplayName(currentUzRegionObj)}
+                        {selectedDistrict ? ` · ${selectedDistrict}` : ''}
+                      </p>
+                      <p className="break-words text-sm text-gray-600 dark:text-gray-300">
+                        {addressLine || 'Ko‘cha va uy manzili kiritilmagan'}
+                      </p>
+                      {sharedCoordinates && (
+                        <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                          <MapPin className="h-3.5 w-3.5 shrink-0" />
+                          Xarita nuqtasi biriktirilgan
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddressEditing(false);
+                          setIsSavedAddressPickerOpen(true);
+                        }}
+                        className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-bold text-gray-700 dark:border-[#365B4D] dark:text-gray-200"
+                      >
+                        Manzilni almashtirish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddressEditing(true)}
+                        className="min-h-10 rounded-xl bg-brand-green px-4 text-xs font-bold text-white"
+                      >
+                        Tahrirlash
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
             )}
             <section className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#162923] p-3.5 sm:p-4 space-y-2.5">
@@ -1445,7 +1659,8 @@ export const CartCheckoutPage: React.FC = () => {
             </div>
 
             {/* Custom ZAVEN Region/District Pickers + Touch Map Picker (No GPS Button) */}
-            <div className="p-4 rounded-2xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-4">
+            {showAddressEditor && (
+            <div className="min-w-0 space-y-4 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
                 <div className="min-w-0">
                   <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
@@ -1537,6 +1752,7 @@ export const CartCheckoutPage: React.FC = () => {
                   required
                   value={selectedDistrict}
                   onChange={(dist) => {
+                    markAddressAsCustom();
                     setSelectedDistrict(dist);
                     if (errors.district)
                       setErrors((prev) => ({
@@ -1557,6 +1773,7 @@ export const CartCheckoutPage: React.FC = () => {
                 required
                 value={addressLine}
                 onChange={(e) => {
+                  markAddressAsCustom();
                   setAddressLine(e.target.value);
                   if (errors.address)
                     setErrors((prev) => ({ ...prev, address: undefined }));
@@ -1566,6 +1783,7 @@ export const CartCheckoutPage: React.FC = () => {
                 error={errors.address}
               />
             </div>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1.5">
