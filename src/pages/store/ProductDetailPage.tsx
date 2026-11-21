@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate, useNavigationType } from 'react-router-dom';
 import {
   ShoppingBag,
   Plus,
@@ -34,6 +34,7 @@ import { formatUZS, calculateDiscountPercent } from '../../utils/format';
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
 
   const {
     products,
@@ -76,7 +77,9 @@ export const ProductDetailPage: React.FC = () => {
     useState<boolean>(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    if (navigationType !== 'POP') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
     setSelectedImageIdx(0);
     setPendingQty(1);
     setIsZoomedInLightbox(false);
@@ -90,7 +93,7 @@ export const ProductDetailPage: React.FC = () => {
     } else {
       document.title = storeSettings.seoTitle;
     }
-  }, [product?.id, slug]);
+  }, [product?.id, slug, navigationType]);
 
   useEffect(() => {
     const targetEl = purchaseActionsRef.current;

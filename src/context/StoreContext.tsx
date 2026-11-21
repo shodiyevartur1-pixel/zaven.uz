@@ -61,6 +61,8 @@ interface StoreContextType {
 
   currentAdminRole: AdminRole;
   setCurrentAdminRole: (role: AdminRole) => void;
+  saveAdminAssignment: (admin: AdminUser) => Promise<boolean>;
+  removeAdminAssignment: (adminId: string) => Promise<boolean>;
 
   addToCart: (productId: string, quantity?: number) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
@@ -144,6 +146,26 @@ interface StoreContextType {
 const STORAGE_KEY = 'zaven_store_state_v2';
 const FAVORITES_STORAGE_PREFIX = 'zaven_favorites_v1:';
 const CART_STORAGE_PREFIX = 'zaven_cart_v1:';
+const PASSWORD_RECOVERY_SESSION_KEY = 'zaven_password_recovery_active';
+
+const isPasswordRecoveryActive = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const queryType = new URLSearchParams(window.location.search).get('type');
+  const hashType = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
+  if (queryType === 'recovery' || hashType === 'recovery') {
+    try {
+      window.sessionStorage.setItem(PASSWORD_RECOVERY_SESSION_KEY, '1');
+    } catch {
+      // The URL still identifies the recovery flow if storage is unavailable.
+    }
+    return true;
+  }
+  try {
+    return window.sessionStorage.getItem(PASSWORD_RECOVERY_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
 const getFavoritesStorageKey = (customer: Customer | null | undefined) =>
   `${FAVORITES_STORAGE_PREFIX}${customer?.authUserId || customer?.id || 'guest'}`;
@@ -600,6 +622,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     saveCartForKey(cartOwnerKey, cart);
   }, [cartOwnerKey, cart]);
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(ADMIN_USERS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
 
@@ -795,7 +818,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsSyncingSupabase(true);
 
     try {
-      const [catRes, prodRes, settingsRes] = await Promise.all([
+      const [catRes, prodRes, settingsRes, adminRes] = await Promise.all([
         supabase
           .from('categories')
           .select('*')
@@ -805,6 +828,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           .select('*')
           .order('created_at', { ascending: false }),
         supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
+        supabase
+          .from('admin_assignments')
+          .select('*')
+          .order('created_at', { ascending: true }),
       ]);
 
       if (!catRes.error && catRes.data && catRes.data.length > 0) {
@@ -837,19 +864,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           },
         }));
 
-        if (Array.isArray(savedCoupons) && savedCoupons.length > 0) {
+        if (Array.isArray(savedCoupons)) {
           setCoupons(savedCoupons as Coupon[]);
         }
-        if (Array.isArray(savedBanners) && savedBanners.length > 0) {
+        if (Array.isArray(savedBanners)) {
           setBanners(savedBanners as HomepageBanner[]);
         }
+      }
+
+      if (!adminRes.error && adminRes.data) {
+        setAdminUsers(
+          adminRes.data.map((row: Record<string, unknown>) => ({
+            id: String(row.id),
+            name: String(row.name || row.email || 'Admin'),
+            role: (String(row.role || 'admin') as AdminRole),
+            title: String(row.role === 'owner' ? 'Owner' : row.role === 'order_manager' ? 'Buyurtmalar menejeri' : row.role === 'content_manager' ? 'Kontent menejeri' : 'Admin'),
+            lastActive: row.updated_at ? String(row.updated_at) : '',
+            roleLabel: String(row.role || 'manager'),
+            permissions: Array.isArray(row.permissions)
+              ? row.permissions.filter((item): item is string => typeof item === 'string')
+              : [],
+          }))
+        );
       }
 
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (session?.user) {
+      if (session?.user && !isPasswordRecoveryActive()) {
         if (session.user.email_confirmed_at) {
           await syncVerifiedCustomerFromAuthUser(session.user);
         }
@@ -1119,13 +1162,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        try {
+          window.sessionStorage.setItem(PASSWORD_RECOVERY_SESSION_KEY, '1');
+        } catch {
+          // AccountPage also receives the event and can still show the form.
+        }
+        return;
+      }
       if (
         (event === 'SIGNED_IN' ||
           event === 'TOKEN_REFRESHED' ||
           event === 'USER_UPDATED') &&
         session?.user
       ) {
-        if (session.user.email_confirmed_at) {
+        if (session.user.email_confirmed_at && !isPasswordRecoveryActive()) {
           syncVerifiedCustomerFromAuthUser(session.user);
         }
         refreshFromSupabase();
@@ -1374,10 +1425,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         createdAt: now,
       };
 
-      setInquiries((prev) => [newInquiry, ...prev]);
-
       if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('inquiries')
           .insert({
             customer_name: newInquiry.customerName,
@@ -1389,12 +1438,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           .select('*')
           .maybeSingle();
 
+        if (error || !data) {
+          addToast({
+            type: 'error',
+            title: 'Murojaat saqlanmadi',
+            description: error?.message || 'Bazaga murojaatni yozib bo‘lmadi.',
+          });
+          return;
+        }
         if (data) {
           const synced = mapRowToInquiry(data);
-          setInquiries((prev) =>
-            prev.map((item) => (item.id === newInquiry.id ? synced : item))
-          );
+          setInquiries((prev) => [synced, ...prev]);
         }
+      } else {
+        setInquiries((prev) => [newInquiry, ...prev]);
       }
 
       addToast({
@@ -1405,7 +1462,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const placeOrder: StoreContextType['placeOrder'] = async (orderData) => {
     const now = new Date().toISOString();
-    const orderNumber = `ZVN-2026-${1042 + orders.length}`;
+    const orderNumber = `ZVN-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
     const normalizedTelegram = normalizeTelegramUsername(
       orderData.customerTelegram
     );
@@ -1438,47 +1495,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         );
 
         if (error) {
-          telegramStatus = 'failed';
-          telegramError = error.message;
-          await supabase.from('orders').insert({
-            order_number: orderNumber,
-            customer_name: orderData.customerName,
-            customer_phone: orderData.customerPhone,
-            customer_email: orderData.customerEmail || null,
-            customer_telegram: normalizedTelegram || null,
-            region: orderData.region,
-            district: orderData.district || null,
-            address: orderData.address,
-            location_coordinates: orderData.locationCoordinates || null,
-            customer_note: orderData.customerNote || null,
-            internal_notes: initialNotes,
-            items: orderData.items,
-            subtotal: Math.round(orderData.subtotal),
-            discount_amount: Math.round(orderData.discountAmount || 0),
-            coupon_code: orderData.couponCode || null,
-            delivery_fee: Math.round(orderData.deliveryFee || 0),
-            total_amount: Math.round(orderData.totalAmount),
-            payment_method_id: orderData.paymentMethodId,
-            payment_method_label: orderData.paymentMethodLabel,
-            payment_receipt_filename:
-              orderData.paymentReceipt?.fileName || null,
-            payment_receipt_mime: orderData.paymentReceipt?.mimeType || null,
-            payment_receipt_size: orderData.paymentReceipt?.fileSize || null,
-            payment_verification_status: orderData.paymentVerificationStatus,
-            telegram_notification_status: 'failed',
-            telegram_notification_error: telegramError,
-            status: 'new',
-          });
-        } else if (data) {
+          throw new Error(error.message || 'Buyurtmani serverga yuborib boʻlmadi.');
+        }
+        if (!data?.ok) {
+          throw new Error(
+            typeof data?.error === 'string'
+              ? data.error
+              : 'Buyurtma bazaga tasdiqlanmagan.'
+          );
+        }
+        if (data) {
           telegramStatus = data.telegramNotificationStatus || 'not_configured';
           telegramError = data.telegramNotificationError;
           storedPath = data.storedReceiptPath || undefined;
         }
       } catch (err) {
-        telegramStatus = 'failed';
-        telegramError =
-          err instanceof Error ? err.message : 'Edge function unreachable';
+        addToast({
+          type: 'error',
+          title: 'Buyurtma saqlanmadi',
+          description:
+            err instanceof Error
+              ? err.message
+              : 'Buyurtmani bazaga yozib boʻlmadi.',
+        });
+        throw err instanceof Error ? err : new Error('Buyurtma saqlanmadi.');
       }
+    } else {
+      throw new Error('Supabase ulanmagan. Buyurtma bazaga saqlanmadi.');
     }
 
     const newOrder: Order = {
@@ -1645,6 +1688,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       return [createdCustomer, ...prev];
     });
 
+    await refreshFromSupabase();
     setCart([]);
 
     addToast({
@@ -2129,6 +2173,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return true;
   };
 
+  const saveAdminAssignment: StoreContextType['saveAdminAssignment'] = async (admin) => {
+    if (!admin.name.trim() || !admin.id) return false;
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('admin_assignments')
+        .upsert({
+          email: admin.id.includes('@') ? admin.id : `${admin.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@admin.local`,
+          name: admin.name,
+          role: admin.role,
+          permissions: admin.permissions || [],
+          is_active: admin.role !== ('disabled' as AdminRole),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'email' })
+        .select('id,email,name,role,permissions,is_active,updated_at')
+        .maybeSingle();
+      if (error || !data) {
+        addToast({ type: 'error', title: 'Admin rolini saqlashda xatolik', description: error?.message || 'Bazaga tasdiq kelmadi.' });
+        return false;
+      }
+    }
+    setAdminUsers((prev) => prev.some((item) => item.id === admin.id) ? prev.map((item) => item.id === admin.id ? admin : item) : [admin, ...prev]);
+    addToast({ type: 'success', title: 'Admin roli saqlandi' });
+    return true;
+  };
+
+  const removeAdminAssignment: StoreContextType['removeAdminAssignment'] = async (adminId) => {
+    const target = adminUsers.find((item) => item.id === adminId);
+    if (!target) return false;
+    if (target.role === 'owner') {
+      addToast({ type: 'error', title: 'Owner olib tashlanmaydi', description: 'Oxirgi doʻkon egasini demote yoki olib tashlab boʻlmaydi.' });
+      return false;
+    }
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase
+        .from('admin_assignments')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', adminId);
+      if (error) {
+        addToast({ type: 'error', title: 'Adminni o‘chirishda xatolik', description: error.message });
+        return false;
+      }
+    }
+    setAdminUsers((prev) => prev.filter((item) => item.id !== adminId));
+    addToast({ type: 'success', title: 'Admin ruxsati o‘chirildi' });
+    return true;
+  };
+
   const resetOrderStatsBaseline: StoreContextType['resetOrderStatsBaseline'] = async () => {
     const next = { ...storeSettings, statsResetAt: new Date().toISOString() };
     const saved = await syncStoreSettingsPayloadToSupabase(next, coupons, banners);
@@ -2174,6 +2265,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     saveFavoritesForCustomer(null, []);
     setCurrentCustomer(null);
     setCurrentAdminRole('owner');
+    setAdminUsers(ADMIN_USERS);
     addToast({
       type: 'info',
       title: 'Demo maʼlumotlar dastlabki holatga qaytarildi',
@@ -2192,7 +2284,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         stockLogs,
         inquiries,
         storeSettings,
-        adminUsers: ADMIN_USERS,
+        adminUsers,
         isSyncingSupabase,
         cart,
         favoriteIds,
@@ -2200,6 +2292,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         currentCustomer,
         currentAdminRole,
         setCurrentAdminRole,
+        saveAdminAssignment,
+        removeAdminAssignment,
         addToCart,
         updateCartQuantity,
         removeFromCart,

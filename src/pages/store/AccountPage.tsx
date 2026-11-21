@@ -49,6 +49,26 @@ import { UZBEKISTAN_REGIONS } from '../../utils/uzbekistanLocations';
 
 type AccountTab = 'orders' | 'addresses' | 'profile';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'verify_pending' | 'update_password';
+const PASSWORD_RECOVERY_SESSION_KEY = 'zaven_password_recovery_active';
+
+const isPasswordRecoveryActive = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const queryType = new URLSearchParams(window.location.search).get('type');
+  const hashType = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
+  if (queryType === 'recovery' || hashType === 'recovery') {
+    try {
+      window.sessionStorage.setItem(PASSWORD_RECOVERY_SESSION_KEY, '1');
+    } catch {
+      // Keep relying on the recovery URL if browser storage is unavailable.
+    }
+    return true;
+  }
+  try {
+    return window.sessionStorage.getItem(PASSWORD_RECOVERY_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
 const ORDER_STATUS_META: Record<
   OrderStatus,
@@ -125,24 +145,11 @@ export const AccountPage: React.FC = () => {
   } = useStore();
   const { t } = useThemeLanguage();
 
-  const isRecoveryLink = () => {
-    if (typeof window === 'undefined') return false;
-    const queryType = new URLSearchParams(window.location.search).get('type');
-    const hashType = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type');
-    let pendingRecovery = false;
-    try {
-      const requestedAt = Number(window.localStorage.getItem('zaven_password_recovery_pending'));
-      pendingRecovery = Number.isFinite(requestedAt) && Date.now() - requestedAt < 30 * 60 * 1000;
-    } catch {
-      pendingRecovery = false;
-    }
-    return queryType === 'recovery' || hashType === 'recovery' || pendingRecovery;
-  };
   const [activeTab, setActiveTab] = useState<AccountTab>('orders');
   const [authMode, setAuthMode] = useState<AuthMode>(() =>
-    isRecoveryLink() ? 'update_password' : 'signin'
+    isPasswordRecoveryActive() ? 'update_password' : 'signin'
   );
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isRecoveryLink);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(isPasswordRecoveryActive);
 
   // Email Auth Form State
   const [authEmail, setAuthEmail] = useState<string>('');
@@ -156,6 +163,21 @@ export const AccountPage: React.FC = () => {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string>('');
   const [authFeedback, setAuthFeedback] = useState<string>('');
+
+  const clearRecoveryState = () => {
+    setIsPasswordRecovery(false);
+    try {
+      window.sessionStorage.removeItem(PASSWORD_RECOVERY_SESSION_KEY);
+      window.localStorage.removeItem('zaven_password_recovery_pending');
+    } catch {
+      // Continue even if browser storage is unavailable.
+    }
+    const cleanRecoveryUrl = new URL(window.location.href);
+    cleanRecoveryUrl.searchParams.delete('type');
+    cleanRecoveryUrl.searchParams.delete('code');
+    cleanRecoveryUrl.hash = '';
+    window.history.replaceState({}, document.title, `${cleanRecoveryUrl.pathname}${cleanRecoveryUrl.search}`);
+  };
 
   // Profile Edit State
   const [profileName, setProfileName] = useState<string>('');
@@ -191,7 +213,7 @@ export const AccountPage: React.FC = () => {
     if (!isSupabaseConfigured || !supabase) return;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && !isRecoveryLink()) {
+      if (session?.user && !isPasswordRecoveryActive()) {
         if (session.user.email_confirmed_at) {
           syncVerifiedCustomerFromAuthUser(session.user);
         } else {
@@ -205,6 +227,11 @@ export const AccountPage: React.FC = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        try {
+          window.sessionStorage.setItem(PASSWORD_RECOVERY_SESSION_KEY, '1');
+        } catch {
+          // The auth event still lets this page render the recovery form.
+        }
         setIsPasswordRecovery(true);
         setAuthError('');
         setAuthFeedback('');
@@ -213,6 +240,11 @@ export const AccountPage: React.FC = () => {
         (event === 'SIGNED_IN' || event === 'USER_UPDATED') &&
         session?.user
       ) {
+        if (isPasswordRecoveryActive()) {
+          setIsPasswordRecovery(true);
+          setAuthMode('update_password');
+          return;
+        }
         if (session.user.email_confirmed_at) {
           syncVerifiedCustomerFromAuthUser(session.user);
         } else {
@@ -500,11 +532,6 @@ export const AccountPage: React.FC = () => {
         return;
       }
 
-      try {
-        window.localStorage.setItem('zaven_password_recovery_pending', String(Date.now()));
-      } catch {
-        // The Supabase recovery URL still carries its own recovery marker.
-      }
       setAuthFeedback(t('account.resetSentSuccess'));
       addToast({
         type: 'info',
@@ -540,6 +567,7 @@ export const AccountPage: React.FC = () => {
         return;
       }
 
+      clearRecoveryState();
       if (data.user && data.user.email_confirmed_at) {
         await syncVerifiedCustomerFromAuthUser(data.user);
       }
@@ -549,17 +577,7 @@ export const AccountPage: React.FC = () => {
         title: t('account.passwordUpdatedSuccess'),
       });
       setAuthNewPassword('');
-      setIsPasswordRecovery(false);
       setAuthMode('signin');
-      try {
-        window.localStorage.removeItem('zaven_password_recovery_pending');
-      } catch {
-        // Continue even if local storage is unavailable.
-      }
-      const cleanRecoveryUrl = new URL(window.location.href);
-      cleanRecoveryUrl.searchParams.delete('type');
-      cleanRecoveryUrl.hash = '';
-      window.history.replaceState({}, document.title, `${cleanRecoveryUrl.pathname}${cleanRecoveryUrl.search}`);
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -704,7 +722,7 @@ export const AccountPage: React.FC = () => {
   // ===========================================================================
   // UNAUTHENTICATED OR UNVERIFIED VIEW: EMAIL SIGN-IN / SIGN-UP / VERIFY / RESET
   // ===========================================================================
-  if (!currentCustomer || !currentCustomer.emailVerified) {
+  if (isPasswordRecovery || !currentCustomer || !currentCustomer.emailVerified) {
     return (
       <div className="zaven-page-container py-6 sm:py-12">
         <div className="max-w-xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
@@ -1019,14 +1037,9 @@ export const AccountPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setIsPasswordRecovery(false);
+                    clearRecoveryState();
                     setAuthNewPassword('');
                     setAuthMode('signin');
-                    try { window.localStorage.removeItem('zaven_password_recovery_pending'); } catch { /* Ignore storage errors. */ }
-                    const cleanRecoveryUrl = new URL(window.location.href);
-                    cleanRecoveryUrl.searchParams.delete('type');
-                    cleanRecoveryUrl.hash = '';
-                    window.history.replaceState({}, document.title, `${cleanRecoveryUrl.pathname}${cleanRecoveryUrl.search}`);
                   }}
                   className="w-full text-center text-xs font-bold text-brand-green hover:underline"
                 >

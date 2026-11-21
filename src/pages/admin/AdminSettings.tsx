@@ -48,7 +48,8 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
     banners,
     adminUsers,
     currentAdminRole,
-    setCurrentAdminRole,
+    saveAdminAssignment,
+    removeAdminAssignment,
     updateStoreSettings,
     saveCoupon,
     deleteCoupon,
@@ -174,7 +175,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
       isEnabled: regEnabled,
       fee: Math.max(0, regFee),
       freeDeliveryThreshold:
-        regFreeThreshold && regFreeThreshold > 0 ? regFreeThreshold : null,
+        regFreeThreshold === null ? null : Math.max(0, regFreeThreshold),
       note: regNote.trim(),
     };
 
@@ -1293,13 +1294,54 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
       {/* TAB 6: ADMIN ROLES */}
       {activeTab === 'roles' && (
         <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card space-y-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
-              Admin rollari va ruxsatlar
-            </h2>
-            <p className="text-xs text-gray-500">
-              Joriy faol rol: <strong>{currentAdminRole.toUpperCase()}</strong>
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold text-gray-900 dark:text-gray-100">
+                Admin rollari va ruxsatlar
+              </h2>
+              <p className="text-xs text-gray-500">
+                Owner faqat bu bo‘lim orqali admin tasdiqlay oladi.
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
+              onClick={() => {
+                const name = window.prompt('Admin yoki menejer ismi');
+                if (!name?.trim()) return;
+                const email = window.prompt('Admin email manzili');
+                if (!email?.trim() || !email.includes('@')) {
+                  addToast({ type: 'error', title: 'Email noto‘g‘ri', description: 'Admin uchun haqiqiy email kiriting.' });
+                  return;
+                }
+                const roleInput = window.prompt('Rol: owner, admin, order_manager yoki content_manager', 'admin');
+                const role: AdminRole =
+                  roleInput === 'owner'
+                    ? 'owner'
+                    : roleInput === 'order_manager'
+                      ? 'order_manager'
+                      : roleInput === 'content_manager'
+                        ? 'content_manager'
+                        : 'admin';
+                const permissionsInput = window.prompt('Ruxsatlar (vergul bilan): orders,customers,payments,products,settings', 'orders,customers');
+                const permissions = (permissionsInput || '')
+                  .split(',')
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+                void saveAdminAssignment({
+                  id: email.trim().toLowerCase(),
+                  name: name.trim(),
+                  role,
+                  title: role === 'order_manager' ? 'Buyurtmalar menejeri' : role === 'content_manager' ? 'Kontent menejeri' : 'Admin',
+                  lastActive: '',
+                  roleLabel: role,
+                  permissions,
+                });
+              }}
+            >
+              Admin qo‘shish
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1346,13 +1388,12 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
 
                   <div className="pt-2 border-t border-gray-200/70 dark:border-[#28453B] flex justify-end">
                     <Button
-                      variant={isCurrentRole ? 'primary' : 'secondary'}
+                      variant="secondary"
                       size="sm"
-                      onClick={() =>
-                        setCurrentAdminRole(admin.role as AdminRole)
-                      }
+                      disabled={admin.role === 'owner'}
+                      onClick={() => removeAdminAssignment(admin.id)}
                     >
-                      {isCurrentRole ? 'Faol rol' : 'Ushbu rolga oʻtish'}
+                      {admin.role === 'owner' ? 'Owner himoyalangan' : 'Ruxsatni o‘chirish'}
                     </Button>
                   </div>
                 </div>

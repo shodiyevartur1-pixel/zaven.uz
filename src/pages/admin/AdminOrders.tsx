@@ -839,6 +839,17 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             </div>
           </div>
 
+          {filteredCustomers.length === 0 ? (
+            <EmptyState
+              title={customerSearchQuery.trim() ? 'Mos mijoz topilmadi' : showDeletedCustomers ? 'Oʻchirilgan mijozlar yoʻq' : 'Mijozlar yoʻq'}
+              description={customerSearchQuery.trim() ? 'Qidiruv yoki faol/arxiv filtri shartlarini oʻzgartiring.' : 'Mijozlar buyurtma yoki profil orqali roʻyxatdan oʻtganda shu yerda koʻrinadi.'}
+              actionLabel={customerSearchQuery.trim() || showDeletedCustomers ? 'Filtrlarni tozalash' : undefined}
+              onAction={customerSearchQuery.trim() || showDeletedCustomers ? () => {
+                setCustomerSearchQuery('');
+                setShowDeletedCustomers(false);
+              } : undefined}
+            />
+          ) : (
           <div className="md:hidden space-y-3">
             {filteredCustomers.map((cust) => (
               <div
@@ -903,7 +914,9 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               </div>
             ))}
           </div>
+          )}
 
+          {filteredCustomers.length > 0 && (
           <div className="hidden md:block bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -982,6 +995,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               </table>
             </div>
           </div>
+          )}
         </div>
       )}
 

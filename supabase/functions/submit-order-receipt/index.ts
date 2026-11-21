@@ -234,7 +234,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // 3. Upsert order record into PostgreSQL `public.orders`
-    await adminClient.from('orders').upsert(
+    const { data: existingOrder } = await adminClient
+      .from('orders')
+      .select('id')
+      .eq('order_number', order.orderNumber)
+      .maybeSingle();
+
+    const { error: orderUpsertError } = await adminClient.from('orders').upsert(
       {
         order_number: order.orderNumber,
         customer_name: order.customerName,
@@ -267,6 +273,53 @@ Deno.serve(async (req: Request) => {
       },
       { onConflict: 'order_number' }
     );
+
+    if (orderUpsertError) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `Buyurtmani bazaga yozib boʻlmadi: ${orderUpsertError.message}`,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!existingOrder) {
+      const cleanEmail = order.customerEmail
+        ? String(order.customerEmail).trim().toLowerCase()
+        : null;
+
+      const customerLookup = cleanEmail
+        ? await adminClient.from('customers').select('*').ilike('email', cleanEmail).maybeSingle()
+        : await adminClient.from('customers').select('*').eq('phone', order.customerPhone).maybeSingle();
+
+      const customerPayload = customerLookup.data
+        ? { ...customerLookup.data, auth_user_id: customerLookup.data.auth_user_id ?? null }
+        : {
+            id: `cust-${crypto.randomUUID().slice(0, 8)}`,
+            full_name: order.customerName,
+            phone: order.customerPhone,
+            email: cleanEmail,
+            addresses: [],
+            order_count: 0,
+            total_spent: 0,
+          };
+
+      const { data: savedCustomer, error: customerError } = await adminClient
+        .from('customers')
+        .upsert(customerPayload, { onConflict: 'id' })
+        .select('id')
+        .maybeSingle();
+
+      if (!customerError && savedCustomer?.id) {
+        await adminClient.rpc('recalculate_customer_totals', {
+          p_customer_id: savedCustomer.id,
+        });
+      }
+    }
 
     return new Response(
       JSON.stringify({
