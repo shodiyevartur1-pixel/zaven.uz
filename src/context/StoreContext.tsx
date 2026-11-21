@@ -2057,8 +2057,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('orders').update({ is_deleted: true, deleted_at: now, updated_at: now }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
-      if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani arxivlashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .update({ is_deleted: true, deleted_at: now, updated_at: now })
+          .eq('order_number', target.orderNumber)
+          .select('order_number')
+          .maybeSingle();
+        if (error || !data?.order_number) {
+          const reason = error
+            ? getPersistenceErrorMessage(error, 'Buyurtmani arxivlash')
+            : 'Buyurtma topilmadi yoki egasi hisobiga ruxsat yoʻq.';
+          addToast({
+            type: 'error',
+            title: 'Buyurtmani arxivlashda xatolik',
+            description: reason,
+          });
+          return false;
+        }
+      } catch (error) {
+        addToast({
+          type: 'error',
+          title: 'Buyurtmani arxivlashda xatolik',
+          description: getPersistenceErrorMessage(error, 'Buyurtmani arxivlash'),
+        });
+        return false;
+      }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: true, deletedAt: now, updatedAt: now } : item));
     addToast({ type: 'info', title: `Buyurtma #${formatOrderNumber(target.orderNumber)} arxivlandi` });
@@ -2070,8 +2094,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('orders').update({ is_deleted: false, deleted_at: null, updated_at: now }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
-      if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani tiklashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .update({ is_deleted: false, deleted_at: null, updated_at: now })
+          .eq('order_number', target.orderNumber)
+          .select('order_number')
+          .maybeSingle();
+        if (error || !data?.order_number) {
+          const reason = error
+            ? getPersistenceErrorMessage(error, 'Buyurtmani tiklash')
+            : 'Buyurtma topilmadi yoki egasi hisobiga ruxsat yoʻq.';
+          addToast({
+            type: 'error',
+            title: 'Buyurtmani tiklashda xatolik',
+            description: reason,
+          });
+          return false;
+        }
+      } catch (error) {
+        addToast({
+          type: 'error',
+          title: 'Buyurtmani tiklashda xatolik',
+          description: getPersistenceErrorMessage(error, 'Buyurtmani tiklash'),
+        });
+        return false;
+      }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: false, deletedAt: undefined, updatedAt: now } : item));
     addToast({ type: 'success', title: `Buyurtma #${formatOrderNumber(target.orderNumber)} tiklandi` });
@@ -2391,12 +2439,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       return false;
     }
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase
-        .from('admin_assignments')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', adminId);
-      if (error) {
-        addToast({ type: 'error', title: 'Adminni o‘chirishda xatolik', description: error.message });
+      try {
+        const { data, error } = await supabase
+          .from('admin_assignments')
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq('id', adminId)
+          .select('id')
+          .maybeSingle();
+        if (error || !data?.id) {
+          addToast({
+            type: 'error',
+            title: 'Adminni o‘chirishda xatolik',
+            description: error
+              ? getPersistenceErrorMessage(error, 'Admin ruxsatini oʻchirish')
+              : 'Admin roli topilmadi yoki egasi hisobiga ruxsat yoʻq.',
+          });
+          return false;
+        }
+      } catch (error) {
+        addToast({
+          type: 'error',
+          title: 'Adminni o‘chirishda xatolik',
+          description: getPersistenceErrorMessage(error, 'Admin ruxsatini oʻchirish'),
+        });
         return false;
       }
     }

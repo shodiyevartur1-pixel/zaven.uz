@@ -6,23 +6,13 @@ import {
   AlertTriangle,
   X,
 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 
-/**
- * Requirement #8: Single compact toast notification positioned below the header
- * at the top-right (`max-w-[260px] sm:max-w-[300px]`), showing only the latest
- * notification so it never covers the product title, price, quantity controls,
- * or purchase button.
- */
 export const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useStore();
-  const location = useLocation();
-  const isCheckoutPage = location.pathname.startsWith('/checkout');
 
   if (toasts.length === 0) return null;
 
-  // Render only the single latest toast so notifications never stack over product content
   const latestToast = toasts[toasts.length - 1];
 
   const iconMap = {
@@ -38,23 +28,21 @@ export const ToastContainer: React.FC = () => {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className={isCheckoutPage
-        ? 'relative z-50 pointer-events-none flex justify-end px-3 py-2 sm:px-5'
-        : 'fixed top-16 sm:top-20 right-3 sm:right-5 z-50 pointer-events-none flex justify-end'}
+      className="relative z-40 flex w-full min-w-0 justify-end px-3 py-2 sm:px-5"
     >
       <div
         key={latestToast.id}
-        role="status"
-        className="pointer-events-auto w-auto max-w-[260px] sm:max-w-[300px] bg-[#09261C]/95 dark:bg-[#12211C]/95 text-white rounded-xl border border-[#C89D54]/50 shadow-lg px-3 py-2 flex items-center justify-between gap-2 backdrop-blur-sm transition-all"
+        role={latestToast.type === 'error' ? 'alert' : 'status'}
+        className="pointer-events-auto flex w-full min-w-0 max-w-md items-start justify-between gap-2 rounded-xl border border-[#C89D54]/50 bg-[#09261C]/95 px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all dark:bg-[#12211C]/95"
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
           {iconMap[latestToast.type]}
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] sm:text-xs font-extrabold text-white leading-tight break-words line-clamp-1">
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="break-words text-xs font-extrabold leading-snug text-white [overflow-wrap:anywhere]">
               {latestToast.title}
             </p>
             {latestToast.description && (
-              <p className="text-[10px] sm:text-[11px] text-emerald-100/90 leading-snug mt-0.5 break-words line-clamp-1">
+              <p className="break-words text-[11px] leading-snug text-emerald-100/90 [overflow-wrap:anywhere]">
                 {latestToast.description}
               </p>
             )}
@@ -65,7 +53,7 @@ export const ToastContainer: React.FC = () => {
           type="button"
           onClick={() => removeToast(latestToast.id)}
           aria-label="Yopish / Close notification"
-          className="w-6 h-6 rounded-lg text-emerald-200 hover:text-white hover:bg-white/10 flex items-center justify-center shrink-0 transition-colors"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-emerald-200 transition-colors hover:bg-white/10 hover:text-white"
         >
           <X className="w-3.5 h-3.5" />
         </button>

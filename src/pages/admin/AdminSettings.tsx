@@ -514,7 +514,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                 variant="secondary"
                 size="sm"
                 leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-                onClick={() => setIsEditingGeneral(true)}
+                onClick={() => {
+                  setSettingsSaveError('');
+                  setIsEditingGeneral(true);
+                }}
               >
                 Tahrirlash
               </Button>
@@ -589,6 +592,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
               }}
               className="space-y-4"
             >
+              {settingsSaveError && (
+                <p role="alert" className="break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-relaxed text-red-700">
+                  {settingsSaveError}
+                </p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   label="Doʻkon nomi"
@@ -665,6 +673,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                   size="md"
                   onClick={() => {
                     setDraft(storeSettings);
+                    setSettingsSaveError('');
                     setIsEditingGeneral(false);
                   }}
                 >
@@ -691,7 +700,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                   variant="secondary"
                   size="sm"
                   leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-                  onClick={() => setIsEditingDelivery(true)}
+                  onClick={() => {
+                    setSettingsSaveError('');
+                    setIsEditingDelivery(true);
+                  }}
                 >
                   Tahrirlash
                 </Button>
@@ -913,7 +925,10 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                   variant="secondary"
                   size="sm"
                   leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-                  onClick={() => setIsEditingBankCards(true)}
+                  onClick={() => {
+                    setSettingsSaveError('');
+                    setIsEditingBankCards(true);
+                  }}
                 >
                   Tahrirlash
                 </Button>
@@ -973,6 +988,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                 }}
                 className="space-y-4"
               >
+                {settingsSaveError && (
+                  <p role="alert" className="break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-relaxed text-red-700">
+                    {settingsSaveError}
+                  </p>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="HUMO karta raqami"
@@ -1068,6 +1088,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                     size="md"
                     onClick={() => {
                       setDraft(storeSettings);
+                      setSettingsSaveError('');
                       setIsEditingBankCards(false);
                     }}
                   >

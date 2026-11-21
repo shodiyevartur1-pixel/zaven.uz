@@ -50,12 +50,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
           onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
         />
 
+        <ToastContainer />
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
           {children}
         </main>
       </div>
-
-      <ToastContainer />
     </div>
   );
 };

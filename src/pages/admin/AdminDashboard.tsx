@@ -273,9 +273,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const ok = await resetOrderStatsBaseline();
       if (ok) setIsResetModalOpen(false);
-      else setResetError('Statistikani bazaga saqlab boʻlmadi. Ulanish yoki Supabase sozlamalarini tekshiring.');
+      else setResetError('Statistika saqlanmadi. Supabase Auth email owner_allowlist ruxsatiga ega ekanini va ulanishni tekshiring.');
     } catch {
-      setResetError('Statistikani saqlashda xatolik yuz berdi. Qayta urinib koʻring.');
+      setResetError('Statistikani saqlashda tarmoq xatoligi yuz berdi. Qayta urinib koʻring.');
     } finally {
       setIsResettingStats(false);
     }

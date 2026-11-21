@@ -63,6 +63,18 @@ const CHECKOUT_DRAFT_KEY = 'zaven_checkout_draft_v1';
 const CHECKOUT_ORDER_ATTEMPT_KEY = 'zaven_checkout_order_attempt_v1';
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
+type CheckoutCoordinates = {
+  lat: number;
+  lng: number;
+  accuracyMeters?: number;
+};
+type CheckoutAddressSnapshot = {
+  selectedSavedAddressId: string | 'new';
+  selectedUzRegionId: string;
+  selectedDistrict: string;
+  addressLine: string;
+  sharedCoordinates: CheckoutCoordinates | null;
+};
 
 const getSavedAddressRegion = (address?: CustomerAddress) => {
   if (!address) return undefined;
@@ -173,6 +185,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [isAddressEditing, setIsAddressEditing] = useState(
     !initialSavedAddress
   );
+  const [isNewAddressMode, setIsNewAddressMode] = useState(false);
   const [isSavedAddressPickerOpen, setIsSavedAddressPickerOpen] =
     useState(false);
   const [customerNote, setCustomerNote] = useState<string>('');
@@ -186,6 +199,8 @@ export const CartCheckoutPage: React.FC = () => {
       ? { ...initialSavedAddress.locationCoordinates }
       : null
   );
+  const addressEditingSnapshotRef =
+    useRef<CheckoutAddressSnapshot | null>(null);
   const [mapSelectionFeedback, setMapSelectionFeedback] = useState<{
     type: 'success' | 'warning';
     text: string;
@@ -221,7 +236,9 @@ export const CartCheckoutPage: React.FC = () => {
         !matchedDistrict ||
         address.addressLine.trim().length < 5
     );
+    setIsNewAddressMode(false);
     setIsSavedAddressPickerOpen(false);
+    addressEditingSnapshotRef.current = null;
     setMapSelectionFeedback(null);
     setErrors((previous) => ({ ...previous, region: undefined, district: undefined, address: undefined }));
   };
@@ -319,6 +336,9 @@ export const CartCheckoutPage: React.FC = () => {
         if (typeof parsed.isAddressEditing === 'boolean') {
           setIsAddressEditing(parsed.isAddressEditing);
         }
+        if (typeof parsed.isNewAddressMode === 'boolean') {
+          setIsNewAddressMode(parsed.isNewAddressMode);
+        }
         if (typeof parsed.customerNote === 'string') setCustomerNote(parsed.customerNote);
         if (typeof parsed.appliedCouponCode === 'string') setAppliedCouponCode(parsed.appliedCouponCode);
       }
@@ -345,6 +365,7 @@ export const CartCheckoutPage: React.FC = () => {
           selectedSavedAddressId,
           sharedCoordinates,
           isAddressEditing,
+          isNewAddressMode,
           customerNote,
           appliedCouponCode,
         })
@@ -364,6 +385,7 @@ export const CartCheckoutPage: React.FC = () => {
     selectedSavedAddressId,
     sharedCoordinates,
     isAddressEditing,
+    isNewAddressMode,
     customerNote,
     appliedCouponCode,
   ]);
@@ -427,7 +449,22 @@ export const CartCheckoutPage: React.FC = () => {
     setSelectedSavedAddressId('new');
   };
 
+  const captureAddressSnapshot = (): CheckoutAddressSnapshot => ({
+    selectedSavedAddressId,
+    selectedUzRegionId,
+    selectedDistrict,
+    addressLine,
+    sharedCoordinates: sharedCoordinates ? { ...sharedCoordinates } : null,
+  });
+
+  const startAddressEditing = () => {
+    addressEditingSnapshotRef.current = captureAddressSnapshot();
+    setIsNewAddressMode(false);
+    setIsAddressEditing(true);
+  };
+
   const startNewAddress = () => {
+    addressEditingSnapshotRef.current = captureAddressSnapshot();
     setSelectedSavedAddressId('new');
     setSelectedUzRegionId(UZBEKISTAN_REGIONS[0].id);
     setSelectedDistrict(UZBEKISTAN_REGIONS[0].districts[0] || '');
@@ -441,7 +478,65 @@ export const CartCheckoutPage: React.FC = () => {
       address: undefined,
     }));
     setIsSavedAddressPickerOpen(false);
+    setIsNewAddressMode(true);
     setIsAddressEditing(true);
+  };
+
+  const cancelAddressEditing = () => {
+    const snapshot = addressEditingSnapshotRef.current;
+    if (snapshot) {
+      setSelectedSavedAddressId(snapshot.selectedSavedAddressId);
+      setSelectedUzRegionId(snapshot.selectedUzRegionId);
+      setSelectedDistrict(snapshot.selectedDistrict);
+      setAddressLine(snapshot.addressLine);
+      setSharedCoordinates(snapshot.sharedCoordinates);
+    }
+    setErrors((previous) => ({
+      ...previous,
+      region: undefined,
+      district: undefined,
+      address: undefined,
+    }));
+    addressEditingSnapshotRef.current = null;
+    setIsAddressEditing(false);
+    setIsSavedAddressPickerOpen(isNewAddressMode);
+    setIsNewAddressMode(false);
+  };
+
+  const finishAddressEditing = () => {
+    const region = UZBEKISTAN_REGIONS.find(
+      (item) => item.id === selectedUzRegionId
+    );
+    const nextAddressErrors = {
+      region: region ? undefined : t('cart.region'),
+      district:
+        region && selectedDistrict && region.districts.includes(selectedDistrict)
+          ? undefined
+          : t('cart.districtSelectPlaceholder'),
+      address:
+        addressLine.trim().length >= 5 ? undefined : t('cart.address'),
+    };
+    setErrors((previous) => ({ ...previous, ...nextAddressErrors }));
+    if (
+      nextAddressErrors.region ||
+      nextAddressErrors.district ||
+      nextAddressErrors.address
+    ) {
+      addToast({
+        type: 'error',
+        title: t('cart.step2Title'),
+        description:
+          nextAddressErrors.region ||
+          nextAddressErrors.district ||
+          nextAddressErrors.address,
+      });
+      return;
+    }
+    if (isNewAddressMode) setSelectedSavedAddressId('new');
+    addressEditingSnapshotRef.current = null;
+    setIsAddressEditing(false);
+    setIsSavedAddressPickerOpen(false);
+    setIsNewAddressMode(false);
   };
 
   // Manual region change resets incompatible district immediately
@@ -803,6 +898,10 @@ export const CartCheckoutPage: React.FC = () => {
 
   const handleContinueFromAddress = (e: React.FormEvent) => {
     e.preventDefault();
+    if (savedCustomerAddresses.length > 0 && isAddressEditing) {
+      finishAddressEditing();
+      return;
+    }
     const nextErrors: typeof errors = {};
     if (customerName.trim().length < 3) {
       nextErrors.name = t('cart.fullName');
@@ -837,7 +936,11 @@ export const CartCheckoutPage: React.FC = () => {
       return;
     }
     setIsSavedAddressPickerOpen(false);
-    if (savedCustomerAddresses.length > 0) setIsAddressEditing(false);
+    if (savedCustomerAddresses.length > 0) {
+      setIsAddressEditing(false);
+      setIsNewAddressMode(false);
+      addressEditingSnapshotRef.current = null;
+    }
     goToStep('payment');
   };
 
@@ -1459,7 +1562,8 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
-            {savedCustomerAddresses.length > 0 && (
+            {savedCustomerAddresses.length > 0 &&
+              (isSavedAddressPickerOpen || !isAddressEditing) && (
               <section className="min-w-0 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
                 {isSavedAddressPickerOpen ? (
                   <div className="space-y-3">
@@ -1512,31 +1616,6 @@ export const CartCheckoutPage: React.FC = () => {
                       + Yangi manzil kiritish
                     </button>
                   </div>
-                ) : isAddressEditing ? (
-                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="min-w-0 break-words text-xs leading-relaxed text-gray-600 dark:text-gray-300">
-                      O‘zgartirishlar faqat shu buyurtma uchun qo‘llanadi; saqlangan manzilingiz o‘zgarmaydi.
-                    </p>
-                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsAddressEditing(false);
-                          setIsSavedAddressPickerOpen(true);
-                        }}
-                        className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-bold text-gray-700 dark:border-[#365B4D] dark:text-gray-200"
-                      >
-                        Saqlanganlardan tanlash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddressEditing(false)}
-                        className="min-h-10 rounded-xl bg-brand-green px-4 text-xs font-bold text-white"
-                      >
-                        Tayyor
-                      </button>
-                    </div>
-                  </div>
                 ) : (
                   <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 space-y-1">
@@ -1554,6 +1633,14 @@ export const CartCheckoutPage: React.FC = () => {
                       </p>
                       <p className="break-words text-sm text-gray-600 dark:text-gray-300">
                         {addressLine || 'Ko‘cha va uy manzili kiritilmagan'}
+                      </p>
+                      <p className="break-words text-xs font-semibold text-gray-600 dark:text-gray-300">
+                        {t('cart.deliveryService')}:{' '}
+                        {isDeliveryFeeToBeConfirmed
+                          ? feeToBeConfirmedLabel
+                          : deliveryFee === 0
+                          ? t('cart.freeDelivery')
+                          : formatUZS(deliveryFee)}
                       </p>
                       {sharedCoordinates && (
                         <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1575,7 +1662,7 @@ export const CartCheckoutPage: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setIsAddressEditing(true)}
+                        onClick={startAddressEditing}
                         className="min-h-10 rounded-xl bg-brand-green px-4 text-xs font-bold text-white"
                       >
                         Tahrirlash
@@ -1661,6 +1748,18 @@ export const CartCheckoutPage: React.FC = () => {
             {/* Custom ZAVEN Region/District Pickers + Touch Map Picker (No GPS Button) */}
             {showAddressEditor && (
             <div className="min-w-0 space-y-4 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
+              {savedCustomerAddresses.length > 0 && (
+                <div className="border-b border-gray-200 pb-3 dark:border-[#28453B]">
+                  <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                    {isNewAddressMode
+                      ? 'Yangi manzil'
+                      : 'Manzilni buyurtma uchun tahrirlash'}
+                  </h2>
+                  <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">
+                    O‘zgartirishlar faqat shu buyurtma uchun; saqlangan manzilingiz o‘zgarmaydi.
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
                 <div className="min-w-0">
                   <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
@@ -1782,6 +1881,27 @@ export const CartCheckoutPage: React.FC = () => {
                 leftIcon={<MapPin className="w-4 h-4" />}
                 error={errors.address}
               />
+
+              {savedCustomerAddresses.length > 0 && (
+                <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-3 sm:flex-row sm:justify-end dark:border-[#28453B]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    onClick={cancelAddressEditing}
+                  >
+                    Bekor qilish
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={finishAddressEditing}
+                  >
+                    Tayyor
+                  </Button>
+                </div>
+              )}
             </div>
             )}
 
@@ -1807,14 +1927,16 @@ export const CartCheckoutPage: React.FC = () => {
               >
                 {t('cart.returnToCartBtn')}
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                {t('cart.continueToPaymentBtn')}
-              </Button>
+              {(savedCustomerAddresses.length === 0 || !isAddressEditing) && (
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                >
+                  {t('cart.continueToPaymentBtn')}
+                </Button>
+              )}
             </div>
           </div>
         </form>

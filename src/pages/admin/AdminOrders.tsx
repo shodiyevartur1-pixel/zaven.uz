@@ -147,6 +147,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   } | null>(null);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isArchivingOrder, setIsArchivingOrder] = useState<boolean>(false);
+  const [orderArchiveError, setOrderArchiveError] = useState('');
   const [isSavingOrderAction, setIsSavingOrderAction] = useState(false);
   const [isSavingReceiptDecision, setIsSavingReceiptDecision] = useState(false);
   const receiptDecisionInProgressRef = useRef(false);
@@ -353,6 +354,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
 
   const handleConfirmDeleteOrder = async () => {
     if (!orderToDelete) return;
+    setOrderArchiveError('');
     setIsArchivingOrder(true);
     try {
       const deletedId = orderToDelete.id;
@@ -362,7 +364,15 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         if (selectedOrderId === deletedId) {
           setSelectedOrderId(null);
         }
+      } else {
+        setOrderArchiveError(
+          'Buyurtma arxivlanmadi. Buyurtma mavjudligi va owner_allowlist ruxsatini tekshiring.'
+        );
       }
+    } catch {
+      setOrderArchiveError(
+        'Buyurtma arxivlanmadi. Supabase ulanishini tekshirib qayta urinib koʻring.'
+      );
     } finally {
       setIsArchivingOrder(false);
     }
@@ -1645,7 +1655,11 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
 
       <Modal
         isOpen={Boolean(orderToDelete)}
-        onClose={() => setOrderToDelete(null)}
+        onClose={() => {
+          if (isArchivingOrder) return;
+          setOrderToDelete(null);
+          setOrderArchiveError('');
+        }}
         title="Buyurtmani arxivga oʻtkazish"
         maxWidth="sm"
         footer={
@@ -1654,7 +1668,11 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               variant="outline"
               size="sm"
               fullWidth
-              onClick={() => setOrderToDelete(null)}
+              disabled={isArchivingOrder}
+              onClick={() => {
+                setOrderToDelete(null);
+                setOrderArchiveError('');
+              }}
             >
               Bekor qilish
             </Button>
@@ -1671,12 +1689,22 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         }
       >
         {orderToDelete && (
-          <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-            Buyurtma <strong>#{formatOrderNumber(orderToDelete.orderNumber)}</strong> (
-            {orderToDelete.customerName}) faol roʻyxatdan olib tashlanib,
-            «Arxiv / Savat» boʻlimiga oʻtkaziladi. Buyurtma tarixi yoʻqolmaydi
-            va uni istalgan vaqtda tiklashingiz mumkin.
-          </p>
+          <div className="space-y-3">
+            {orderArchiveError && (
+              <p
+                role="alert"
+                className="break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-relaxed text-red-700"
+              >
+                {orderArchiveError}
+              </p>
+            )}
+            <p className="text-xs leading-relaxed text-gray-700 dark:text-gray-200 sm:text-sm">
+              Buyurtma <strong>#{formatOrderNumber(orderToDelete.orderNumber)}</strong> (
+              {orderToDelete.customerName}) faol roʻyxatdan olib tashlanib,
+              «Arxiv / Savat» boʻlimiga oʻtkaziladi. Buyurtma tarixi yoʻqolmaydi
+              va uni istalgan vaqtda tiklashingiz mumkin.
+            </p>
+          </div>
         )}
       </Modal>
 
