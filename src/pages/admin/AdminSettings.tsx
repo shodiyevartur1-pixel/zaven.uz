@@ -70,6 +70,7 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
   const [isEditingDelivery, setIsEditingDelivery] = useState<boolean>(false);
   const [isEditingBankCards, setIsEditingBankCards] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [settingsSaveError, setSettingsSaveError] = useState('');
   const [lastSavedSection, setLastSavedSection] = useState<string | null>(null);
 
   // Regional Tariff Modal State
@@ -132,10 +133,14 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
     sectionKey: string,
     onSuccessCloseEditor?: () => void
   ) => {
+    setSettingsSaveError('');
     setIsSaving(true);
     try {
-      const ok = await updateStoreSettings(nextSettings);
-      if (!ok) return false;
+      const result = await updateStoreSettings(nextSettings);
+      if (!result.ok) {
+        setSettingsSaveError(result.error || 'Sozlamalar saqlanmadi. Qayta urinib koʻring.');
+        return false;
+      }
       setDraft(nextSettings);
       setLastSavedSection(sectionKey);
       onSuccessCloseEditor?.();
@@ -734,6 +739,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                 }}
                 className="space-y-4"
               >
+                {settingsSaveError && (
+                  <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold leading-relaxed text-red-700 break-words">
+                    {settingsSaveError}
+                  </p>
+                )}
                 <Input
                   label="Taxminiy yetkazib berish muddati (Masalan: Taxminan 10–25 kun)"
                   required
@@ -772,11 +782,13 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                   />
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2.5">
                   <Button
                     type="submit"
                     variant="primary"
                     size="md"
+                    fullWidth
+                    className="sm:w-auto"
                     isLoading={isSaving}
                   >
                     Saqlash
@@ -785,8 +797,11 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ initialSection = '
                     type="button"
                     variant="outline"
                     size="md"
+                    fullWidth
+                    className="sm:w-auto"
                     onClick={() => {
                       setDraft(storeSettings);
+                      setSettingsSaveError('');
                       setIsEditingDelivery(false);
                     }}
                   >

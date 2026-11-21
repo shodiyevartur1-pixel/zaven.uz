@@ -20,7 +20,12 @@ import {
   INITIAL_STORE_SETTINGS,
 } from '../data/mockData';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { formatUZS, normalizeTelegramUsername } from '../utils/format';
+import {
+  formatOrderNumber,
+  formatUZS,
+  getPersistenceErrorMessage,
+  normalizeTelegramUsername,
+} from '../utils/format';
 import {
   AdminRole,
   AdminUser,
@@ -75,7 +80,11 @@ interface StoreContextType {
   syncVerifiedCustomerFromAuthUser: (user: SupabaseUser) => Promise<void>;
   signInCustomerDemo: (phone: string, fullName?: string) => void;
   signOutCustomer: () => Promise<void>;
-  updateCustomerProfile: (updated: Partial<Customer>) => Promise<boolean>;
+  updateCustomerProfile: (
+    updated: Partial<Customer>,
+    options?: { suppressSuccessToast?: boolean }
+  ) => Promise<StoreSaveResult>;
+  updateCustomerPassword: (password: string) => Promise<StoreSaveResult>;
   toggleBlockCustomer: (customerId: string, isBlocked: boolean, reason?: string) => Promise<boolean>;
   deleteCustomer: (customerId: string) => Promise<boolean>;
   restoreCustomer: (customerId: string) => Promise<boolean>;
@@ -115,7 +124,7 @@ interface StoreContextType {
   deleteOrder: (orderId: string) => Promise<boolean>;
   restoreOrder: (orderId: string) => Promise<boolean>;
 
-  saveProduct: (product: Product, isNewProduct?: boolean) => Promise<boolean>;
+  saveProduct: (product: Product, isNewProduct?: boolean) => Promise<StoreSaveResult>;
   deleteProduct: (productId: string) => Promise<boolean>;
   adjustProductStock: (
     productId: string,
@@ -129,7 +138,7 @@ interface StoreContextType {
   saveCoupon: (coupon: Coupon) => Promise<boolean>;
   deleteCoupon: (couponId: string) => Promise<boolean>;
   saveBanner: (banner: HomepageBanner) => Promise<boolean>;
-  updateStoreSettings: (settings: StoreSettings) => Promise<boolean>;
+  updateStoreSettings: (settings: StoreSettings) => Promise<StoreSaveResult>;
   resetOrderStatsBaseline: () => Promise<boolean>;
   updateInquiryStatus: (
     inquiryId: string,
@@ -141,6 +150,11 @@ interface StoreContextType {
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
   resetAllDemoData: () => void;
+}
+
+interface StoreSaveResult {
+  ok: boolean;
+  error?: string;
 }
 
 const STORAGE_KEY = 'zaven_store_state_v2';
@@ -664,10 +678,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       nextSettings: StoreSettings,
       nextCoupons: Coupon[],
       nextBanners: HomepageBanner[]
-    ): Promise<boolean> => {
-      if (!isSupabaseConfigured || !supabase) return true;
+    ): Promise<string | null> => {
+      if (!isSupabaseConfigured || !supabase) return null;
       try {
-        const { data, error } = await supabase.from('store_settings').upsert({
+        const row = {
           id: 1,
           payload: {
             ...nextSettings,
@@ -675,16 +689,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             banners: nextBanners,
           },
           updated_at: new Date().toISOString(),
-        }).select('id').maybeSingle();
-        if (error || !data?.id) {
-          const reason = error?.message || 'Bazadan tasdiq javobi kelmadi. Jadval yoki RLS ruxsatini tekshiring.';
-          addToast({ type: 'error', title: 'Sozlamalarni bazaga yozib boʻlmadi', description: reason });
-          return false;
+        };
+        const { data: updated, error: updateError } = await supabase
+          .from('store_settings')
+          .update({ payload: row.payload, updated_at: row.updated_at })
+          .eq('id', 1)
+          .select('id')
+          .maybeSingle();
+        if (updateError) {
+          const reason = getPersistenceErrorMessage(updateError, 'Sozlamalar');
+          addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
+          return reason;
         }
-        return true;
+        if (updated?.id) return null;
+
+        const { data: inserted, error: insertError } = await supabase
+          .from('store_settings')
+          .insert(row)
+          .select('id')
+          .maybeSingle();
+        if (insertError || !inserted?.id) {
+          const reason = getPersistenceErrorMessage(
+            insertError || new Error('row-level security denied or no row returned'),
+            'Sozlamalar'
+          );
+          addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
+          return reason;
+        }
+        return null;
       } catch (err) {
-        addToast({ type: 'error', title: 'Sozlamalarni saqlashda xatolik', description: err instanceof Error ? err.message : 'Nomaʼlum xatolik' });
-        return false;
+        const reason = getPersistenceErrorMessage(err, 'Sozlamalar');
+        addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
+        return reason;
       }
     },
     [addToast]
@@ -1048,7 +1084,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             if (isGenuinelyNew) {
               addToast({
                 type: 'success',
-                title: `Yangi buyurtma #${incomingOrder.orderNumber}!`,
+                title: `Yangi buyurtma #${formatOrderNumber(incomingOrder.orderNumber)}!`,
                 description: `${incomingOrder.customerName} — ${formatUZS(
                   incomingOrder.totalAmount
                 )}`,
@@ -1380,37 +1416,145 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const updateCustomerProfile = async (updated: Partial<Customer>): Promise<boolean> => {
-    if (!currentCustomer) return false;
+  const updateCustomerProfile = async (
+    updated: Partial<Customer>,
+    options?: { suppressSuccessToast?: boolean }
+  ): Promise<StoreSaveResult> => {
+    if (!currentCustomer) {
+      return { ok: false, error: 'Hisob maʼlumotlari topilmadi. Qayta kiring.' };
+    }
     const normalizedTg =
       updated.telegramUsername !== undefined
         ? normalizeTelegramUsername(updated.telegramUsername)
         : currentCustomer.telegramUsername;
 
-    const nextCustomer: Customer = {
+    let nextCustomer: Customer = {
       ...currentCustomer,
       ...updated,
       telegramUsername: normalizedTg,
     };
     if (isSupabaseConfigured && supabase) {
-      const { error } = await supabase
-        .from('customers')
-        .upsert(mapCustomerToRow(nextCustomer));
-      if (error) {
-        addToast({ type: 'error', title: 'Profilni saqlashda xatolik', description: error.message });
-        return false;
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        const user = authData.user;
+        if (authError || !user?.email || !user.email_confirmed_at) {
+          const reason = 'Profilni saqlash uchun tasdiqlangan hisobga qayta kiring.';
+          addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+
+        const ownedProfile = await supabase
+          .from('customers')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .maybeSingle();
+        if (ownedProfile.error) {
+          const reason = getPersistenceErrorMessage(ownedProfile.error, 'Profil');
+          addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+
+        const emailProfile = ownedProfile.data
+          ? null
+          : await supabase
+              .from('customers')
+              .select('id')
+              .ilike('email', user.email)
+              .maybeSingle();
+        if (emailProfile?.error) {
+          const reason = getPersistenceErrorMessage(emailProfile.error, 'Profil');
+          addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+
+        const existingProfile = ownedProfile.data || emailProfile?.data;
+        nextCustomer = {
+          ...nextCustomer,
+          id: existingProfile?.id || nextCustomer.id || `cust-${user.id.slice(0, 8)}`,
+          authUserId: user.id,
+          email: user.email.toLowerCase(),
+          emailVerified: true,
+        };
+        const profileChanges = {
+          full_name: nextCustomer.fullName,
+          phone: nextCustomer.phone,
+          email: nextCustomer.email,
+          email_verified: true,
+          auth_user_id: user.id,
+          telegram_username: nextCustomer.telegramUsername || null,
+          addresses: nextCustomer.addresses,
+        };
+        const saveResult = existingProfile
+          ? await supabase
+              .from('customers')
+              .update(profileChanges)
+              .eq('id', existingProfile.id)
+              .select('id')
+              .maybeSingle()
+          : await supabase
+              .from('customers')
+              .insert(mapCustomerToRow(nextCustomer))
+              .select('id')
+              .maybeSingle();
+        if (saveResult.error || !saveResult.data?.id) {
+          const reason = getPersistenceErrorMessage(
+            saveResult.error || new Error('row-level security denied or no row returned'),
+            'Profil'
+          );
+          addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+      } catch (error) {
+        const reason = getPersistenceErrorMessage(error, 'Profil');
+        addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
+        return { ok: false, error: reason };
       }
     }
 
     setCurrentCustomer(nextCustomer);
     setCustomers((prev) => prev.map((c) => (c.id === nextCustomer.id ? nextCustomer : c)));
 
-    addToast({
-      type: 'success',
-      title: 'Profil maʼlumotlari saqlandi',
-    });
-    return true;
+    if (!options?.suppressSuccessToast) {
+      addToast({
+        type: 'success',
+        title: 'Profil maʼlumotlari saqlandi',
+      });
+    }
+    return { ok: true };
   };
+
+  const updateCustomerPassword: StoreContextType['updateCustomerPassword'] =
+    async (password) => {
+      if (!isSupabaseConfigured || !supabase) {
+        const reason = 'Parolni yangilash uchun hisobga ulanish talab qilinadi.';
+        return { ok: false, error: reason };
+      }
+
+      try {
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData.user?.email_confirmed_at) {
+          const reason = 'Parolni yangilash uchun tasdiqlangan hisobga qayta kiring.';
+          addToast({ type: 'error', title: 'Parol yangilanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+
+        const { data, error } = await supabase.auth.updateUser({ password });
+        if (error || !data.user) {
+          const reason = error && /password.*(weak|short|character|length)/i.test(error.message)
+            ? 'Yangi parol talabga javob bermaydi. Uzunroq va kuchliroq parol kiriting.'
+            : 'Parolni yangilab boʻlmadi. Ulanishni tekshirib qayta urinib koʻring.';
+          addToast({ type: 'error', title: 'Parol yangilanmadi', description: reason });
+          return { ok: false, error: reason };
+        }
+
+        addToast({ type: 'success', title: 'Parol yangilandi' });
+        return { ok: true };
+      } catch {
+        const reason = 'Parolni yangilab boʻlmadi. Ulanishni tekshirib qayta urinib koʻring.';
+        addToast({ type: 'error', title: 'Parol yangilanmadi', description: reason });
+        return { ok: false, error: reason };
+      }
+    };
 
   const submitCustomerInquiry: StoreContextType['submitCustomerInquiry'] =
     async ({ customerName, phone, subject, message }) => {
@@ -1483,10 +1627,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     let persistedOrderId = '';
 
     if (isSupabaseConfigured && supabase) {
+      const orderRequestController = new AbortController();
+      const orderRequestTimeout = window.setTimeout(
+        () => orderRequestController.abort(),
+        45_000
+      );
       try {
-        const { data, error } = await supabase.functions.invoke(
-          'submit-order-receipt',
-          {
+        let response;
+        try {
+          response = await supabase.functions.invoke('submit-order-receipt', {
             body: {
               order: {
                 ...orderData,
@@ -1496,11 +1645,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
               },
               receiptBase64: orderData.paymentReceipt?.dataUrl || null,
             },
-          }
-        );
+            signal: orderRequestController.signal,
+          });
+        } finally {
+          window.clearTimeout(orderRequestTimeout);
+        }
+        const { data, error } = response;
 
         if (error) {
-          let detail = error.message || 'Buyurtmani serverga yuborib boʻlmadi.';
+          let detail = orderRequestController.signal.aborted
+            ? 'Server javobi 45 soniyada kelmadi. Ulanishni tekshirib qayta urinib koʻring; takroriy soʻrov bir xil buyurtma raqamidan foydalanadi.'
+            : error.message || 'Buyurtmani serverga yuborib boʻlmadi.';
           const response = (error as Error & { context?: unknown }).context;
           if (response instanceof Response) {
             try {
@@ -1532,14 +1687,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           persistedOrderId = data.orderId || undefined;
         }
       } catch (err) {
-        addToast({
-          type: 'error',
-          title: 'Buyurtma saqlanmadi',
-          description:
-            err instanceof Error
-              ? err.message
-              : 'Buyurtmani bazaga yozib boʻlmadi.',
-        });
         throw err instanceof Error ? err : new Error('Buyurtma saqlanmadi.');
       }
     } else {
@@ -1601,7 +1748,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           previousStock: prod.stock,
           newStock: nextStock,
           changeAmount: -item.quantity,
-          reason: `Buyurtma #${orderNumber} uchun band qilindi`,
+          reason: `Buyurtma #${formatOrderNumber(orderNumber)} uchun band qilindi`,
           updatedBy: 'Tizim (Avtomatik)',
           createdAt: now,
         };
@@ -1710,12 +1857,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       return [createdCustomer, ...prev];
     });
 
-    await refreshFromSupabase();
+    void refreshFromSupabase();
     setCart([]);
 
     addToast({
       type: 'success',
-      title: `Buyurtma #${orderNumber} qabul qilindi!`,
+      title: `Buyurtma #${formatOrderNumber(orderNumber)} qabul qilindi!`,
       description:
         orderData.paymentVerificationStatus === 'pending_verification'
           ? 'Holat: Toʻlov tekshirilmoqda. Chek admin panelga yuborildi.'
@@ -1747,11 +1894,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           updated_at: now,
         }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
         if (error || !data?.order_number) {
-          addToast({ type: 'error', title: 'Chek holati saqlanmadi', description: error?.message || 'Buyurtma bazada topilmadi yoki ruxsat yoʻq.' });
+          addToast({
+            type: 'error',
+            title: 'Chek holati saqlanmadi',
+            description: getPersistenceErrorMessage(
+              error || new Error('row-level security denied or no row returned'),
+              'Toʻlov cheki'
+            ),
+          });
           return false;
         }
       } catch (err) {
-        addToast({ type: 'error', title: 'Chekni tekshirishda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
+        addToast({
+          type: 'error',
+          title: 'Chek qarori saqlanmadi',
+          description: getPersistenceErrorMessage(err, 'Toʻlov cheki'),
+        });
         return false;
       }
     }
@@ -1903,7 +2061,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani arxivlashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: true, deletedAt: now, updatedAt: now } : item));
-    addToast({ type: 'info', title: `Buyurtma #${target.orderNumber} arxivlandi` });
+    addToast({ type: 'info', title: `Buyurtma #${formatOrderNumber(target.orderNumber)} arxivlandi` });
     return true;
   };
 
@@ -1916,7 +2074,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       if (error || !data?.order_number) { addToast({ type: 'error', title: 'Buyurtmani tiklashda xatolik', description: error?.message || 'Buyurtma topilmadi yoki ruxsat yoʻq.' }); return false; }
     }
     setOrders((prev) => prev.map((item) => item.id === orderId ? { ...item, isDeleted: false, deletedAt: undefined, updatedAt: now } : item));
-    addToast({ type: 'success', title: `Buyurtma #${target.orderNumber} tiklandi` });
+    addToast({ type: 'success', title: `Buyurtma #${formatOrderNumber(target.orderNumber)} tiklandi` });
     return true;
   };
 
@@ -2028,12 +2186,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           .select('id')
           .maybeSingle();
         if (error || !data?.id) {
-          addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: error?.message || 'Bazadan tasdiq javobi kelmadi.' });
-          return false;
+          const reason = getPersistenceErrorMessage(
+            error || new Error('row-level security denied or no row returned'),
+            'Mahsulot'
+          );
+          addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: reason });
+          return { ok: false, error: reason };
         }
       } catch (err) {
-        addToast({ type: 'error', title: 'Mahsulotni saqlashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
-        return false;
+        const reason = getPersistenceErrorMessage(err, 'Mahsulot');
+        addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: reason });
+        return { ok: false, error: reason };
       }
     }
 
@@ -2045,7 +2208,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       title: isNewProduct ? 'Yangi mahsulot qoʻshildi' : 'Mahsulot yangilandi',
       description: product.name,
     });
-    return true;
+    return { ok: true };
   };
 
   const deleteProduct: StoreContextType['deleteProduct'] = async (productId) => {
@@ -2159,7 +2322,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const nextCoupons = coupons.some((c) => c.id === coupon.id)
       ? coupons.map((c) => (c.id === coupon.id ? coupon : c))
       : [coupon, ...coupons];
-    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners))) return false;
+    if (await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners)) return false;
     setCoupons(nextCoupons);
     addToast({
       type: 'success',
@@ -2171,7 +2334,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const deleteCoupon: StoreContextType['deleteCoupon'] = async (couponId) => {
     const nextCoupons = coupons.filter((c) => c.id !== couponId);
-    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners))) return false;
+    if (await syncStoreSettingsPayloadToSupabase(storeSettings, nextCoupons, banners)) return false;
     setCoupons(nextCoupons);
     addToast({ type: 'info', title: 'Promokod oʻchirildi' });
     return true;
@@ -2181,18 +2344,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const nextBanners = banners.some((b) => b.id === banner.id)
       ? banners.map((b) => (b.id === banner.id ? banner : b))
       : [banner, ...banners];
-    if (!(await syncStoreSettingsPayloadToSupabase(storeSettings, coupons, nextBanners))) return false;
+    if (await syncStoreSettingsPayloadToSupabase(storeSettings, coupons, nextBanners)) return false;
     setBanners(nextBanners);
     addToast({ type: 'success', title: 'Banner saqlandi' });
     return true;
   };
 
   const updateStoreSettings: StoreContextType['updateStoreSettings'] = async (settings) => {
-    const saved = await syncStoreSettingsPayloadToSupabase(settings, coupons, banners);
-    if (!saved) return false;
+    const error = await syncStoreSettingsPayloadToSupabase(settings, coupons, banners);
+    if (error) return { ok: false, error };
     setStoreSettings(settings);
     addToast({ type: 'success', title: 'Doʻkon sozlamalari yangilandi' });
-    return true;
+    return { ok: true };
   };
 
   const saveAdminAssignment: StoreContextType['saveAdminAssignment'] = async (admin) => {
@@ -2244,8 +2407,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const resetOrderStatsBaseline: StoreContextType['resetOrderStatsBaseline'] = async () => {
     const next = { ...storeSettings, statsResetAt: new Date().toISOString() };
-    const saved = await syncStoreSettingsPayloadToSupabase(next, coupons, banners);
-    if (!saved) return false;
+    const error = await syncStoreSettingsPayloadToSupabase(next, coupons, banners);
+    if (error) return false;
     setStoreSettings(next);
     addToast({ type: 'success', title: 'Statistika hisoblagichlari nol qilindi', description: 'Tarixiy buyurtmalar saqlab qolindi.' });
     return true;
@@ -2327,6 +2490,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         signInCustomerDemo,
         signOutCustomer,
         updateCustomerProfile,
+        updateCustomerPassword,
         toggleBlockCustomer,
         deleteCustomer,
         restoreCustomer,

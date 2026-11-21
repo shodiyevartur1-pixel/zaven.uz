@@ -29,6 +29,7 @@ import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { CustomerAddress, Order, OrderItem, PaymentReceiptAttachment } from '../../types';
 import {
+  formatOrderNumber,
   formatUZS,
   formatUzbekPhone,
   isValidUzbekPhone,
@@ -192,6 +193,8 @@ export const CartCheckoutPage: React.FC = () => {
   const [receiptError, setReceiptError] = useState<string>('');
   const [copiedCardField, setCopiedCardField] = useState<string | null>(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
+  const [checkoutSubmitError, setCheckoutSubmitError] = useState('');
+  const submittingOrderRef = useRef(false);
 
   const [couponInput, setCouponInput] = useState<string>('');
   const [appliedCouponCode, setAppliedCouponCode] = useState<string | null>(
@@ -737,7 +740,7 @@ export const CartCheckoutPage: React.FC = () => {
   };
 
   const handleFinalSubmitOrder = async () => {
-    if (isSubmittingOrder) return;
+    if (submittingOrderRef.current) return;
     if (requiresPaymentReceipt && (!hasConfiguredTransferCards || !receiptAttachment)) {
       const message = !hasConfiguredTransferCards ? t('transfer.notConfiguredTitle') : t('transfer.errMissingReceipt');
       addToast({ type: 'error', title: message });
@@ -758,7 +761,9 @@ export const CartCheckoutPage: React.FC = () => {
 
     const normalizedTg = normalizeTelegramUsername(customerTelegram);
 
+    submittingOrderRef.current = true;
     setIsSubmittingOrder(true);
+    setCheckoutSubmitError('');
     try {
       if (!orderAttemptIdRef.current) {
         try {
@@ -806,6 +811,7 @@ export const CartCheckoutPage: React.FC = () => {
       });
 
       setCompletedOrder(createdOrder);
+      setCheckoutSubmitError('');
       try {
         sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
         sessionStorage.removeItem(CHECKOUT_ORDER_ATTEMPT_KEY);
@@ -815,21 +821,19 @@ export const CartCheckoutPage: React.FC = () => {
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
-      addToast({
-        type: 'error',
-        title: 'Buyurtma saqlanmadi',
-        description:
-          error instanceof Error
-            ? error.message
-            : 'Buyurtmani serverda tasdiqlab boʻlmadi. Qayta urinib koʻring.',
-      });
+      setCheckoutSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Buyurtmani serverda tasdiqlab boʻlmadi. Qayta urinib koʻring.'
+      );
     } finally {
+      submittingOrderRef.current = false;
       setIsSubmittingOrder(false);
     }
   };
 
   const handleCopyOrderNumber = (orderNum: string) => {
-    navigator.clipboard?.writeText(orderNum).catch(() => {});
+    navigator.clipboard?.writeText(formatOrderNumber(orderNum)).catch(() => {});
     setCopiedOrderNumber(true);
     setTimeout(() => setCopiedOrderNumber(false), 3000);
   };
@@ -860,7 +864,7 @@ export const CartCheckoutPage: React.FC = () => {
                     {t('cart.orderNumberLabel')}
                   </span>
                   <span className="text-base sm:text-lg font-extrabold text-[#C89D54] font-mono">
-                    #{completedOrder.orderNumber}
+                    #{formatOrderNumber(completedOrder.orderNumber)}
                   </span>
                 </div>
                 <button
@@ -1030,7 +1034,7 @@ export const CartCheckoutPage: React.FC = () => {
   const normalizedPreviewTelegram = normalizeTelegramUsername(customerTelegram);
 
   return (
-    <div className="zaven-page-container py-4 sm:py-8 space-y-5 sm:space-y-6">
+    <div className="checkout-page zaven-page-container min-w-0 py-4 sm:py-8 space-y-5 sm:space-y-6">
       {/* Show checkout progress only after the customer chooses to continue. */}
       {activeStep !== 'cart' && <nav
         aria-label="Checkout progress"
@@ -1661,7 +1665,7 @@ export const CartCheckoutPage: React.FC = () => {
                         )}
                       </div>
                       <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
-                        {pm.description}
+                        {!pmNeedsReceipt && pm.description}
                       </p>
                     </div>
                   </label>
@@ -2016,6 +2020,12 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
             </div>
 
+            {checkoutSubmitError && (
+              <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-semibold leading-relaxed text-red-700 break-words">
+                {checkoutSubmitError}
+              </p>
+            )}
+
             <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <Button
                 type="button"
@@ -2037,7 +2047,7 @@ export const CartCheckoutPage: React.FC = () => {
                   <ShieldCheck className="w-5 h-5 text-[#C89D54] shrink-0" />
                 }
                 onClick={handleFinalSubmitOrder}
-                className="w-full sm:w-auto sm:min-w-[240px] text-sm sm:text-base whitespace-nowrap"
+                className="w-full min-w-0 sm:w-auto sm:min-w-[240px] text-sm sm:text-base"
               >
                 {t('cart.confirmOrderBtn')}
               </Button>

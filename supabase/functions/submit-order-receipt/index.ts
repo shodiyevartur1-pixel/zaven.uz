@@ -77,6 +77,10 @@ const jsonResponse = (status: number, payload: Record<string, unknown>) =>
   });
 
 const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+const displayOrderNumber = (orderNumber: string) => {
+  const match = /^ZVN-([A-F0-9]{32})$/i.exec(orderNumber);
+  return match ? `ZVN-${match[1].slice(0, 12).toUpperCase()}` : orderNumber;
+};
 
 async function findOrCreateCustomer(
   adminClient: ReturnType<typeof createClient>,
@@ -400,7 +404,7 @@ Deno.serve(async (req: Request) => {
           .map((item) => `• ${item.productName} (${item.quantity}x) — ${item.totalPrice} UZS`)
           .join('\n');
         const text = [
-          `🛍 *ZAVEN — YANGI BUYURTMA #${order.orderNumber}*`,
+          `🛍 *ZAVEN — YANGI BUYURTMA #${displayOrderNumber(order.orderNumber)}*`,
           `👤 Mijoz: ${order.customerName}`,
           `📞 Tel: ${order.customerPhone}`,
           `📍 Manzil: ${order.region}, ${order.address}`,

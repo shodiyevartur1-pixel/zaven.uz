@@ -17,7 +17,12 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Category, Product, ProductStatus } from '../../types';
-import { formatUZS, formatDateUz, slugify } from '../../utils/format';
+import {
+  formatDateUz,
+  formatUZS,
+  getPersistenceErrorMessage,
+  slugify,
+} from '../../utils/format';
 import { ProductImage } from '../../components/ui/ProductImage';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -230,7 +235,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       });
     } catch (err) {
       setProductFormError(
-        err instanceof Error ? err.message : 'Rasm yuklashda xatolik yuz berdi'
+        getPersistenceErrorMessage(err, 'Rasm')
       );
     } finally {
       setIsUploadingProductImages(false);
@@ -258,7 +263,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
       });
     } catch (err) {
       setProductFormError(
-        err instanceof Error ? err.message : 'Rasmni almashtirishda xatolik'
+        getPersistenceErrorMessage(err, 'Rasm')
       );
     } finally {
       setIsUploadingProductImages(false);
@@ -355,9 +360,9 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
 
     setIsSavingProduct(true);
     try {
-      const saved = await saveProduct(nextProduct, isNewProductMode);
-      if (saved) setIsProductModalOpen(false);
-      else setProductFormError('Mahsulot saqlanmadi. Kiritilgan maʼlumotlar oynada qoldi; xatoni tuzating va qayta urinib koʻring.');
+      const result = await saveProduct(nextProduct, isNewProductMode);
+      if (result.ok) setIsProductModalOpen(false);
+      else setProductFormError(result.error || 'Mahsulot saqlanmadi. Qayta urinib koʻring.');
     } finally {
       setIsSavingProduct(false);
     }
@@ -506,7 +511,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         stock: stockModalProduct.stock,
         updatedAt: new Date().toISOString(),
       });
-      if (!thresholdSaved) return;
+      if (!thresholdSaved.ok) return;
     }
     const stockSaved = await adjustProductStock(
       stockModalProduct.id,
@@ -1045,10 +1050,10 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         <form
           id="admin-product-form"
           onSubmit={handleSaveProductSubmit}
-          className="space-y-4 text-xs sm:text-sm"
+          className="min-w-0 space-y-4 text-xs sm:text-sm"
         >
           {productFormError && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
+            <div role="alert" className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs font-semibold leading-relaxed text-red-700 break-words">
               {productFormError}
             </div>
           )}
@@ -1140,7 +1145,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                 </span>
                 <span className="text-[11px] text-gray-500">
                   Birinchi rasm asosiy muqova sifatida koʻrsatiladi (JPG, PNG,
-                  WEBP ≤ 5 MB)
+                  WEBP ≤ 4 MB)
                 </span>
               </div>
 
@@ -1154,7 +1159,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                 <input
                   type="file"
                   multiple
-                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={handleProductImageFilesSelected}
                   className="hidden"
                 />
@@ -1166,7 +1171,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                 {prodImages.map((imgUrl, idx) => (
                   <div
                     key={`${idx}-${imgUrl.slice(0, 24)}`}
-                    className="relative rounded-xl border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#12211C] p-1.5 space-y-1.5"
+                    className="relative min-w-0 rounded-xl border border-gray-200 dark:border-[#28453B] bg-white dark:bg-[#12211C] p-1.5 space-y-1.5"
                   >
                     <div className="aspect-square rounded-lg overflow-hidden bg-gray-100">
                       <ProductImage
@@ -1175,24 +1180,24 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                       <label className="text-[10px] font-bold text-brand-green hover:underline px-1 cursor-pointer">
                         <span>{idx === 0 ? 'Asosiy' : `#${idx + 1}`} (Almash.)</span>
                         <input
                           type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          accept="image/jpeg,image/png,image/webp"
                           onChange={(e) =>
                             handleReplaceSingleProductImage(idx, e)
                           }
                           className="hidden"
                         />
                       </label>
-                      <div className="flex items-center gap-1">
+                      <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-1">
                         <button
                           type="button"
                           disabled={idx === 0}
                           onClick={() => handleMoveProductImage(idx, -1)}
-                          className="w-8 h-8 min-w-8 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
+                          className="w-10 h-10 min-w-10 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
                           aria-label="Oldinga surish"
                         >
                           <ArrowUp className="w-3 h-3" />
@@ -1201,7 +1206,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                           type="button"
                           disabled={idx === prodImages.length - 1}
                           onClick={() => handleMoveProductImage(idx, 1)}
-                          className="w-8 h-8 min-w-8 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center"
+                          className="w-10 h-10 min-w-10 rounded-lg bg-gray-100 dark:bg-[#162923] disabled:opacity-30 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
                           aria-label="Orqaga surish"
                         >
                           <ArrowDown className="w-3 h-3" />
@@ -1209,7 +1214,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveProductImage(idx)}
-                          className="w-8 h-8 min-w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center"
+                          className="w-10 h-10 min-w-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
                           aria-label="Rasmni olib tashlash"
                         >
                           <X className="w-3 h-3" />
@@ -1236,7 +1241,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               rows={3}
               value={prodDesc}
               onChange={(e) => setProdDesc(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] px-3.5 py-2 text-xs sm:text-sm"
+              className="w-full min-w-0 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] px-3.5 py-2 text-sm leading-relaxed"
             />
           </div>
 
@@ -1248,7 +1253,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
               rows={3}
               value={prodFeaturesText}
               onChange={(e) => setProdFeaturesText(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] px-3.5 py-2 text-xs sm:text-sm"
+              className="w-full min-w-0 rounded-xl border border-gray-300 dark:border-[#2F5246] bg-white dark:bg-[#0D1915] px-3.5 py-2 text-sm leading-relaxed"
             />
           </div>
 

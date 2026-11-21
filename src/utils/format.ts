@@ -10,6 +10,39 @@ export function formatUZS(amount: number): string {
   return `${formattedNumber} soʻm`;
 }
 
+export function formatOrderNumber(orderNumber: string): string {
+  const match = /^ZVN-([A-F0-9]{32})$/i.exec(orderNumber);
+  return match ? `ZVN-${match[1].slice(0, 12).toUpperCase()}` : orderNumber;
+}
+
+export function getPersistenceErrorMessage(
+  error: unknown,
+  subject: string
+): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error &&
+        typeof error === 'object' &&
+        'message' in error &&
+        typeof error.message === 'string'
+      ? error.message
+      : String(error || '');
+  if (/^(JPG, PNG yoki WEBP rasm tanlang\.|Rasm hajmi .*oshmasin\.)$/i.test(message)) {
+    return message;
+  }
+  if (/row.level security|\bRLS\b|permission denied|not allowed|42501/i.test(message)) {
+    return `${subject}: saqlashga ruxsat yoʻq. Doʻkon egasi hisobiga kirganingizni tekshiring.`;
+  }
+  if (/storage|bucket|upload/i.test(message)) {
+    return `${subject}: fayl omboriga saqlab boʻlmadi. Rasm ombori sozlamalari va ruxsatlarini tekshiring.`;
+  }
+  if (/failed to fetch|network|timed? ?out|connection/i.test(message)) {
+    return `${subject}: serverga ulanib boʻlmadi. Internetni tekshirib qayta urinib koʻring.`;
+  }
+  return `${subject}: saqlanmadi. Kiritilgan maʼlumotlar saqlanib qoldi; qayta urinib koʻring.`;
+}
+
 /**
  * Formats compact numbers for charts/stats
  */

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { OrderStatus, Product } from '../../types';
-import { formatUZS, formatDateUz } from '../../utils/format';
+import { formatOrderNumber, formatUZS, formatDateUz } from '../../utils/format';
 import { ProductImage } from '../../components/ui/ProductImage';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -295,7 +295,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           stock: quickStockProduct.stock,
           updatedAt: new Date().toISOString(),
         });
-        if (!thresholdSaved) return;
+        if (!thresholdSaved.ok) return;
       }
       const stockSaved = await adjustProductStock(
         quickStockProduct.id,
@@ -535,7 +535,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div key={order.id} className="p-4 space-y-2.5 text-xs">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono font-extrabold text-brand-green text-sm">
-                        #{order.orderNumber}
+                        #{formatOrderNumber(order.orderNumber)}
                       </span>
                       <Badge variant={statusMeta.variant} size="sm">
                         {statusMeta.label}
@@ -599,7 +599,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       >
                         <td className="py-3 px-4 whitespace-nowrap">
                           <span className="font-mono font-extrabold text-brand-green block">
-                            #{order.orderNumber}
+                            #{formatOrderNumber(order.orderNumber)}
                           </span>
                           <span className="text-xs text-gray-500">
                             {formatDateUz(order.createdAt, true)}

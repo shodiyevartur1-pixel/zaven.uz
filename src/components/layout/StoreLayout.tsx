@@ -20,17 +20,21 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   // Full informational footer is rendered strictly on the homepage ('/')
   const isHomePage = location.pathname === '/';
+  const isCheckoutPage = location.pathname.startsWith('/checkout');
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 pb-[calc(5.25rem+env(safe-area-inset-bottom))] md:pb-8 transition-colors">
+    <div className={`min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${isCheckoutPage ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))]' : 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'} md:pb-8 transition-colors`}>
       <StoreHeader />
 
-      <main className="flex-1 bg-transparent">{children}</main>
+      <main className={`flex-1 bg-transparent ${isCheckoutPage ? 'min-w-0' : ''}`}>
+        <ToastContainer />
+        {children}
+      </main>
 
       {isHomePage && <StoreFooter />}
 
       {/* Mobile navigation: wishlist is in the header, so the four main destinations stay clear. */}
-      <nav
+      {!isCheckoutPage && <nav
         aria-label="Mobile bottom navigation"
         className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 bg-white/95 dark:bg-[#12211C]/95 backdrop-blur-md border border-gray-200 dark:border-[#28453B] shadow-[0_-8px_28px_rgba(0,0,0,0.16)] grid grid-cols-4 items-center h-[4.25rem] px-1 rounded-2xl transition-opacity duration-150"
       >
@@ -91,7 +95,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
             {t('header.account')}
           </span>
         </Link>
-      </nav>
+      </nav>}
 
       {/* Desktop cart access stays separate from the ZAVEN brand header. */}
       <Link
@@ -103,7 +107,6 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
         <span className="text-sm font-bold">{t('header.cart')}</span>
       </Link>
 
-      <ToastContainer />
     </div>
   );
 };

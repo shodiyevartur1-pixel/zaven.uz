@@ -30,6 +30,7 @@ import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { CustomerAddress, Order, OrderStatus } from '../../types';
 import {
   formatUZS,
+  formatOrderNumber,
   formatUzbekPhone,
   isValidUzbekPhone,
   formatDateUz,
@@ -140,6 +141,7 @@ export const AccountPage: React.FC = () => {
     syncVerifiedCustomerFromAuthUser,
     signOutCustomer,
     updateCustomerProfile,
+    updateCustomerPassword,
     addToCart,
     addToast,
   } = useStore();
@@ -183,6 +185,9 @@ export const AccountPage: React.FC = () => {
   const [profileName, setProfileName] = useState<string>('');
   const [profilePhone, setProfilePhone] = useState<string>('');
   const [profileTelegram, setProfileTelegram] = useState<string>('');
+  const [profileNewPassword, setProfileNewPassword] = useState('');
+  const [profileConfirmPassword, setProfileConfirmPassword] = useState('');
+  const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
   const [profileError, setProfileError] = useState<string>('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -599,16 +604,45 @@ export const AccountPage: React.FC = () => {
       setProfileError(t('cart.telegramInvalidError'));
       return;
     }
+    if (
+      profileNewPassword &&
+      profileNewPassword.length < 8
+    ) {
+      setProfileError('Yangi parol kamida 8 ta belgidan iborat boʻlishi kerak.');
+      return;
+    }
+    if (profileNewPassword !== profileConfirmPassword) {
+      setProfileError('Yangi parollar mos kelmadi.');
+      return;
+    }
 
     setIsSavingProfile(true);
     setProfileSaved(false);
     try {
-      const saved = await updateCustomerProfile({
+      const profileResult = await updateCustomerProfile({
         fullName: profileName.trim(),
         phone: profilePhone.trim(),
         telegramUsername: normalizeTelegramUsername(profileTelegram),
-      });
-      if (saved) setProfileSaved(true);
+      }, { suppressSuccessToast: Boolean(profileNewPassword) });
+      if (!profileResult.ok) {
+        setProfileError(profileResult.error || 'Profilni saqlab boʻlmadi. Qayta urinib koʻring.');
+        return;
+      }
+
+      if (profileNewPassword) {
+        const passwordResult = await updateCustomerPassword(profileNewPassword);
+        if (!passwordResult.ok) {
+          setProfileError(passwordResult.error || 'Parolni yangilab boʻlmadi. Qayta urinib koʻring.');
+          return;
+        }
+      }
+
+      setProfileNewPassword('');
+      setProfileConfirmPassword('');
+      setProfileSaved(true);
+      setIsProfileEditorOpen(false);
+    } catch {
+      setProfileError('Profilni saqlashda xatolik yuz berdi. Maʼlumotlar oynada qoldi; qayta urinib koʻring.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -1154,14 +1188,20 @@ export const AccountPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<Edit3 className="w-4 h-4" />}
-            onClick={() => setActiveTab('profile')}
+          <button
+            type="button"
+            aria-label="Profilni tahrirlash"
+            title="Profilni tahrirlash"
+            onClick={() => {
+              setActiveTab('profile');
+              setIsProfileEditorOpen(true);
+              setProfileError('');
+              setProfileSaved(false);
+            }}
+            className="w-10 h-10 rounded-xl border border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200 inline-flex items-center justify-center hover:border-brand-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold"
           >
-            {t('account.profileInfo') || 'Profil maʼlumotlari'}
-          </Button>
+            <Edit3 className="w-4 h-4" />
+          </button>
           <Button
             variant="outline"
             size="sm"
@@ -1173,6 +1213,136 @@ export const AccountPage: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {activeTab === 'profile' && (
+        <section className="mt-4 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card">
+          {isProfileEditorOpen ? (
+            <form
+              onSubmit={handleSaveProfile}
+              className="max-w-lg space-y-4"
+            >
+              {profileError && (
+                <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold leading-relaxed text-red-700 break-words">
+                  {profileError}
+                </div>
+              )}
+
+              <Input
+                label={t('account.emailLabel')}
+                type="email"
+                value={currentCustomer.email || ''}
+                disabled
+                leftIcon={<Mail className="w-4 h-4" />}
+                helperText={t('account.verifiedBadge')}
+              />
+              <Input
+                label={t('cart.fullName')}
+                required
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                leftIcon={<User className="w-4 h-4" />}
+              />
+              <Input
+                label={t('cart.phone')}
+                required
+                type="tel"
+                value={profilePhone}
+                onChange={(e) =>
+                  setProfilePhone(formatUzbekPhone(e.target.value))
+                }
+                leftIcon={<Phone className="w-4 h-4" />}
+              />
+              <Input
+                label={t('cart.telegramOptional')}
+                value={profileTelegram}
+                onChange={(e) => setProfileTelegram(e.target.value)}
+                placeholder={t('cart.telegramPlaceholder')}
+                leftIcon={<Send className="w-4 h-4" />}
+              />
+
+              <div className="border-t border-gray-200 dark:border-[#28453B] pt-4 space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                  Parolni oʻzgartirish (ixtiyoriy)
+                </h3>
+                <Input
+                  label="Yangi parol"
+                  type="password"
+                  autoComplete="new-password"
+                  value={profileNewPassword}
+                  onChange={(e) => setProfileNewPassword(e.target.value)}
+                />
+                <Input
+                  label="Yangi parolni tasdiqlang"
+                  type="password"
+                  autoComplete="new-password"
+                  value={profileConfirmPassword}
+                  onChange={(e) => setProfileConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  fullWidth
+                  className="sm:w-auto"
+                  disabled={isSavingProfile}
+                  onClick={() => {
+                    setIsProfileEditorOpen(false);
+                    setActiveTab('orders');
+                    setProfileError('');
+                  }}
+                >
+                  {t('footer.cancelBtn')}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  className="sm:w-auto"
+                  isLoading={isSavingProfile}
+                >
+                  {t('account.saveChanges')}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                {profileSaved && (
+                  <p role="status" className="text-xs font-semibold text-emerald-700 mb-2">
+                    {t('account.savedSuccess') || 'Maʼlumotlar saqlandi.'}
+                  </p>
+                )}
+                <p className="font-bold text-gray-900 dark:text-gray-100">
+                  {currentCustomer.fullName}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                  {currentCustomer.phone}
+                  {currentCustomer.telegramUsername
+                    ? ` · ${currentCustomer.telegramUsername}`
+                    : ''}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leftIcon={<Edit3 className="w-4 h-4" />}
+                onClick={() => {
+                  setIsProfileEditorOpen(true);
+                  setProfileSaved(false);
+                  setProfileError('');
+                }}
+              >
+                Tahrirlash
+              </Button>
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <aside className="lg:col-span-3 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#28453B] p-3 shadow-card space-y-1">
@@ -1212,20 +1382,6 @@ export const AccountPage: React.FC = () => {
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-bold transition-colors ${
-              activeTab === 'profile'
-                ? 'bg-[#0F3D2E] text-white'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <User className="w-4 h-4" />
-              <span>{t('account.profileInfo')}</span>
-            </div>
-          </button>
         </aside>
 
         {/* Tappable Order Cards */}
@@ -1257,7 +1413,7 @@ export const AccountPage: React.FC = () => {
                       <div className="px-4 py-3 sm:px-5 sm:py-3.5 bg-gray-50 dark:bg-[#162923] border-b border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <span className="font-mono text-sm font-extrabold text-brand-green group-hover:underline">
-                            #{order.orderNumber}
+                            #{formatOrderNumber(order.orderNumber)}
                           </span>
                           <span className="text-xs text-gray-500">
                             • {formatDateUz(order.createdAt, true)}
@@ -1373,65 +1529,6 @@ export const AccountPage: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'profile' && (
-            <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card">
-              <form
-                onSubmit={handleSaveProfile}
-                className="max-w-lg space-y-4"
-              >
-                {profileSaved && (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700">
-                    {t('account.savedSuccess') || 'Maʼlumotlar saqlandi.'}
-                  </div>
-                )}
-                {profileError && (
-                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-bold text-red-700">
-                    {profileError}
-                  </div>
-                )}
-
-                <Input
-                  label={t('account.emailLabel')}
-                  type="email"
-                  value={currentCustomer.email || ''}
-                  disabled
-                  leftIcon={<Mail className="w-4 h-4" />}
-                  helperText={t('account.verifiedBadge')}
-                />
-
-                <Input
-                  label={t('cart.fullName')}
-                  required
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  leftIcon={<User className="w-4 h-4" />}
-                />
-
-                <Input
-                  label={t('cart.phone')}
-                  required
-                  type="tel"
-                  value={profilePhone}
-                  onChange={(e) =>
-                    setProfilePhone(formatUzbekPhone(e.target.value))
-                  }
-                  leftIcon={<Phone className="w-4 h-4" />}
-                />
-
-                <Input
-                  label={t('cart.telegramOptional')}
-                  value={profileTelegram}
-                  onChange={(e) => setProfileTelegram(e.target.value)}
-                  placeholder={t('cart.telegramPlaceholder')}
-                  leftIcon={<Send className="w-4 h-4" />}
-                />
-
-                <Button type="submit" variant="primary" size="md" isLoading={isSavingProfile}>
-                  {isSavingProfile ? 'Saqlanmoqda…' : t('account.saveChanges')}
-                </Button>
-              </form>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1526,7 +1623,7 @@ export const AccountPage: React.FC = () => {
         onClose={() => setSelectedOrder(null)}
         title={
           selectedOrder
-            ? `${t('cart.orderNumberLabel')}: #${selectedOrder.orderNumber}`
+            ? `${t('cart.orderNumberLabel')}: #${formatOrderNumber(selectedOrder.orderNumber)}`
             : ''
         }
         maxWidth="xl"
@@ -1562,7 +1659,7 @@ export const AccountPage: React.FC = () => {
             <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="font-mono font-extrabold text-brand-green text-sm">
-                  #{selectedOrder.orderNumber}
+                  #{formatOrderNumber(selectedOrder.orderNumber)}
                 </span>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {formatDateUz(selectedOrder.createdAt, true)}

@@ -18,7 +18,7 @@ import {
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
-import { formatUZS } from '../../utils/format';
+import { formatOrderNumber, formatUZS } from '../../utils/format';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
@@ -174,7 +174,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
                         >
                           <div>
                             <span className="font-mono font-bold text-brand-green">
-                              #{ord.orderNumber}
+                              #{formatOrderNumber(ord.orderNumber)}
                             </span>
                             <span className="text-gray-700 ml-2 font-medium">
                               {ord.customerName}
@@ -307,7 +307,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           </button>
 
           {isNotificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden z-50">
+            <div className="fixed left-2 right-2 top-[4.5rem] mx-auto w-auto max-w-sm max-h-[calc(100dvh-5rem)] flex flex-col bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden z-50 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:mx-0 sm:w-96 sm:max-h-[70vh]">
               <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                 <span className="text-xs font-extrabold uppercase tracking-wider text-gray-700">
                   {t('admin.notifications')}
@@ -317,22 +317,22 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
                 </Badge>
               </div>
 
-              <div className="divide-y divide-gray-100 max-h-80 overflow-y-auto text-xs">
+              <div className="min-h-0 flex-1 divide-y divide-gray-100 max-h-[calc(100dvh-9rem)] overflow-y-auto text-xs sm:max-h-80">
                 {newOrders.length > 0 && (
                   <Link
                     to="/admin/orders?status=new"
                     onClick={() => setIsNotificationsOpen(false)}
-                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 transition-colors"
+                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 min-w-0 transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-brand-gold-light text-brand-gold-dark flex items-center justify-center shrink-0">
                       <ShoppingCart className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0 break-words">
                       <p className="font-bold text-gray-900">
                         {newOrders.length} yangi buyurtma / new orders
                       </p>
-                      <p className="text-gray-500 mt-0.5">
-                        #{newOrders[0].orderNumber} ({newOrders[0].customerName})
+                      <p className="text-gray-500 mt-0.5 break-words">
+                        #{formatOrderNumber(newOrders[0].orderNumber)} ({newOrders[0].customerName})
                       </p>
                     </div>
                   </Link>
@@ -342,12 +342,12 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
                   <Link
                     to="/admin/inventory"
                     onClick={() => setIsNotificationsOpen(false)}
-                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 transition-colors"
+                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 min-w-0 transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0 break-words">
                       <p className="font-bold text-gray-900">
                         {lowStockProducts.length} — {t('product.lowStock')}
                       </p>
@@ -359,12 +359,12 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
                   <Link
                     to="/admin/inquiries"
                     onClick={() => setIsNotificationsOpen(false)}
-                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 transition-colors"
+                    className="p-3.5 hover:bg-surface-page flex items-start gap-3 min-w-0 transition-colors"
                   >
                     <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
                       <MessageSquare className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="min-w-0 break-words">
                       <p className="font-bold text-gray-900">
                         {unreadInquiries[0].customerName}: «
                         {unreadInquiries[0].subject}»

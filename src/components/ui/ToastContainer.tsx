@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   X,
 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 
 /**
@@ -16,6 +17,8 @@ import { useStore } from '../../context/StoreContext';
  */
 export const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useStore();
+  const location = useLocation();
+  const isCheckoutPage = location.pathname.startsWith('/checkout');
 
   if (toasts.length === 0) return null;
 
@@ -35,7 +38,9 @@ export const ToastContainer: React.FC = () => {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="fixed top-16 sm:top-20 right-3 sm:right-5 z-50 pointer-events-none flex justify-end"
+      className={isCheckoutPage
+        ? 'relative z-50 pointer-events-none flex justify-end px-3 py-2 sm:px-5'
+        : 'fixed top-16 sm:top-20 right-3 sm:right-5 z-50 pointer-events-none flex justify-end'}
     >
       <div
         key={latestToast.id}

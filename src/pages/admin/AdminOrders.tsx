@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -28,7 +28,12 @@ import {
 import { useStore } from '../../context/StoreContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
 import { Customer, CustomerInquiry, Order, OrderStatus } from '../../types';
-import { formatUZS, formatDateUz } from '../../utils/format';
+import {
+  formatOrderNumber,
+  formatUZS,
+  formatDateUz,
+  getPersistenceErrorMessage,
+} from '../../utils/format';
 import { ProductImage } from '../../components/ui/ProductImage';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -67,6 +72,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     orders,
     customers,
     inquiries,
+    storeSettings,
     updateOrderStatus,
     addOrderInternalNote,
     reviewOrderReceipt,
@@ -142,6 +148,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
   const [isArchivingOrder, setIsArchivingOrder] = useState<boolean>(false);
   const [isSavingOrderAction, setIsSavingOrderAction] = useState(false);
+  const [isSavingReceiptDecision, setIsSavingReceiptDecision] = useState(false);
+  const receiptDecisionInProgressRef = useRef(false);
 
   // Customer Management Modals
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
@@ -175,6 +183,15 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     () => orders.find((o) => o.id === selectedOrderId) || null,
     [orders, selectedOrderId]
   );
+  const paymentReceiptNeedsApproval = (order: Order) => {
+    const method = storeSettings.paymentMethods.find(
+      (option) => option.id === order.paymentMethodId
+    );
+    return (
+      order.paymentVerificationStatus !== 'not_required' ||
+      Boolean(method?.requiresReceipt ?? method?.type === 'card_transfer')
+    );
+  };
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === selectedCustomerId) || null,
@@ -274,7 +291,9 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   };
 
   const handleConfirmReceiptDecision = async () => {
-    if (!pendingReceiptDecision || isSavingOrderAction) return;
+    if (!pendingReceiptDecision || receiptDecisionInProgressRef.current) return;
+    receiptDecisionInProgressRef.current = true;
+    setIsSavingReceiptDecision(true);
     setIsSavingOrderAction(true);
     try {
       const saved = await reviewOrderReceipt(
@@ -287,7 +306,15 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         setReceiptReviewNote('');
         setPendingReceiptDecision(null);
       }
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Chek qarori saqlanmadi',
+        description: getPersistenceErrorMessage(error, 'Toʻlov cheki'),
+      });
     } finally {
+      receiptDecisionInProgressRef.current = false;
+      setIsSavingReceiptDecision(false);
       setIsSavingOrderAction(false);
     }
   };
@@ -536,7 +563,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                       <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-gray-100 dark:border-[#28453B]">
                         <div>
                           <span className="font-mono font-extrabold text-brand-green text-sm block">
-                            #{order.orderNumber}
+                            #{formatOrderNumber(order.orderNumber)}
                           </span>
                           <span className="text-[11px] text-gray-500">
                             {formatDateUz(order.createdAt, true)}
@@ -665,7 +692,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                           >
                             <td className="py-3.5 px-4 whitespace-nowrap">
                               <span className="font-mono font-extrabold text-brand-green block">
-                                #{order.orderNumber}
+                                #{formatOrderNumber(order.orderNumber)}
                               </span>
                               <span className="text-xs text-gray-500">
                                 {formatDateUz(order.createdAt, true)}
@@ -1175,7 +1202,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         onClose={() => setSelectedOrderId(null)}
         title={
           selectedOrder
-            ? `Buyurtma #${selectedOrder.orderNumber} tafsilotlari`
+            ? `Buyurtma #${formatOrderNumber(selectedOrder.orderNumber)} tafsilotlari`
             : ''
         }
         maxWidth="2xl"
@@ -1298,6 +1325,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                 </Badge>
               </div>
 
+              {!paymentReceiptNeedsApproval(selectedOrder) ||
+              selectedOrder.paymentVerificationStatus === 'verified' ? (
               <div className="flex flex-wrap items-center gap-2">
                 {(
                   [
@@ -1330,8 +1359,13 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   );
                 })}
               </div>
+              ) : (
+                <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  Yetkazib berish holatini boshqarish uchun avval toʻlov chekini tasdiqlang.
+                </p>
+              )}
 
-              <div className="pt-2 border-t border-gray-200/70 dark:border-[#28453B] flex items-center justify-between gap-2">
+              <div className="pt-2 border-t border-gray-200/70 dark:border-[#28453B] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <span className="text-xs text-gray-500">
                   Telegram bot xabarnomasi:
                 </span>
@@ -1420,7 +1454,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                     value={receiptReviewNote}
                     onChange={(e) => setReceiptReviewNote(e.target.value)}
                     placeholder="Tekshiruv izohi (ixtiyoriy)..."
-                    className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs"
+                    className="flex-1 min-w-0 rounded-xl border border-gray-300 px-3 py-2 text-xs"
                   />
                   <Button
                     type="button"
@@ -1519,20 +1553,25 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
 
       <Modal
         isOpen={Boolean(pendingReceiptDecision)}
-        onClose={() => setPendingReceiptDecision(null)}
+        onClose={() => {
+          if (!isSavingReceiptDecision) setPendingReceiptDecision(null);
+        }}
         title="Toʻlov cheki qarorini tasdiqlang"
         maxWidth="sm"
         footer={
           <div className="w-full grid grid-cols-2 gap-2.5">
             <Button
+              type="button"
               variant="outline"
               size="sm"
               fullWidth
+              disabled={isSavingReceiptDecision}
               onClick={() => setPendingReceiptDecision(null)}
             >
               Bekor qilish
             </Button>
             <Button
+              type="button"
               variant={
                 pendingReceiptDecision?.decision === 'verified'
                   ? 'primary'
@@ -1540,6 +1579,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               }
               size="sm"
               fullWidth
+              isLoading={isSavingReceiptDecision}
+              disabled={isSavingReceiptDecision}
               onClick={handleConfirmReceiptDecision}
             >
               {pendingReceiptDecision?.decision === 'verified'
@@ -1552,7 +1593,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
         {pendingReceiptDecision && (
           <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
             Buyurtma{' '}
-            <strong>#{pendingReceiptDecision.order.orderNumber}</strong> uchun
+            <strong>#{formatOrderNumber(pendingReceiptDecision.order.orderNumber)}</strong> uchun
             toʻlov chekini{' '}
             <strong>
               {pendingReceiptDecision.decision === 'verified'
@@ -1592,7 +1633,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
       >
         {pendingStatusChange && (
           <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-            Buyurtma <strong>#{pendingStatusChange.order.orderNumber}</strong>{' '}
+            Buyurtma <strong>#{formatOrderNumber(pendingStatusChange.order.orderNumber)}</strong>{' '}
             holatini{' '}
             <strong>
               «{ORDER_STATUS_META[pendingStatusChange.nextStatus].label}»
@@ -1631,7 +1672,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
       >
         {orderToDelete && (
           <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
-            Buyurtma <strong>#{orderToDelete.orderNumber}</strong> (
+            Buyurtma <strong>#{formatOrderNumber(orderToDelete.orderNumber)}</strong> (
             {orderToDelete.customerName}) faol roʻyxatdan olib tashlanib,
             «Arxiv / Savat» boʻlimiga oʻtkaziladi. Buyurtma tarixi yoʻqolmaydi
             va uni istalgan vaqtda tiklashingiz mumkin.
