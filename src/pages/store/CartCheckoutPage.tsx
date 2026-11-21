@@ -59,6 +59,7 @@ const ALLOWED_RECEIPT_MIMES = [
 ];
 const MAX_RECEIPT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const CHECKOUT_DRAFT_KEY = 'zaven_checkout_draft_v1';
+const CHECKOUT_ORDER_ATTEMPT_KEY = 'zaven_checkout_order_attempt_v1';
 
 type CheckoutStep = 'cart' | 'address' | 'payment' | 'confirm';
 
@@ -214,6 +215,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [hasRestoredCheckoutDraft, setHasRestoredCheckoutDraft] =
     useState(false);
   const hasSavedCheckoutDraftRef = useRef(false);
+  const orderAttemptIdRef = useRef<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
 
@@ -758,7 +760,24 @@ export const CartCheckoutPage: React.FC = () => {
 
     setIsSubmittingOrder(true);
     try {
+      if (!orderAttemptIdRef.current) {
+        try {
+          orderAttemptIdRef.current =
+            sessionStorage.getItem(CHECKOUT_ORDER_ATTEMPT_KEY) ||
+            crypto.randomUUID();
+          sessionStorage.setItem(
+            CHECKOUT_ORDER_ATTEMPT_KEY,
+            orderAttemptIdRef.current
+          );
+        } catch {
+          throw new Error(
+            'Buyurtma takrorlanmasligini kafolatlash uchun sessiya xotirasi kerak. Brauzer sozlamalarini tekshirib qayta urinib ko‘ring.'
+          );
+        }
+      }
+
       const createdOrder = await placeOrder({
+        idempotencyKey: orderAttemptIdRef.current,
         customerId: currentCustomer?.id,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
@@ -789,10 +808,21 @@ export const CartCheckoutPage: React.FC = () => {
       setCompletedOrder(createdOrder);
       try {
         sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
+        sessionStorage.removeItem(CHECKOUT_ORDER_ATTEMPT_KEY);
+        orderAttemptIdRef.current = null;
       } catch {
         // Order confirmation must not depend on session storage availability.
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Buyurtma saqlanmadi',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Buyurtmani serverda tasdiqlab boʻlmadi. Qayta urinib koʻring.',
+      });
     } finally {
       setIsSubmittingOrder(false);
     }

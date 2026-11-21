@@ -97,7 +97,7 @@ interface StoreContextType {
       | 'updatedAt'
       | 'status'
       | 'internalNotes'
-    >
+    > & { idempotencyKey: string }
   ) => Promise<Order>;
   updateOrderStatus: (
     orderId: string,
@@ -1462,7 +1462,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const placeOrder: StoreContextType['placeOrder'] = async (orderData) => {
     const now = new Date().toISOString();
-    const orderNumber = `ZVN-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+    const key = orderData.idempotencyKey.replace(/-/g, '').toUpperCase();
+    if (!/^[A-F0-9]{32}$/.test(key)) {
+      throw new Error('Buyurtma so‘rovi identifikatori noto‘g‘ri. Sahifani yangilab qayta urinib ko‘ring.');
+    }
+    const orderNumber = `ZVN-${key}`;
     const normalizedTelegram = normalizeTelegramUsername(
       orderData.customerTelegram
     );
@@ -1476,6 +1480,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     let telegramStatus: Order['telegramNotificationStatus'] = 'not_configured';
     let telegramError: string | undefined = undefined;
     let storedPath: string | undefined = undefined;
+    let persistedOrderId = '';
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -1495,19 +1500,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         );
 
         if (error) {
-          throw new Error(error.message || 'Buyurtmani serverga yuborib boʻlmadi.');
+          let detail = error.message || 'Buyurtmani serverga yuborib boʻlmadi.';
+          const response = (error as Error & { context?: unknown }).context;
+          if (response instanceof Response) {
+            try {
+              const body = await response.clone().json() as { error?: unknown; message?: unknown };
+              if (typeof body.error === 'string') detail = body.error;
+              else if (typeof body.message === 'string') detail = body.message;
+            } catch {
+              // Keep the SDK error when the response is not JSON.
+            }
+          }
+          throw new Error(detail);
         }
-        if (!data?.ok) {
+        if (
+          !data?.ok ||
+          typeof data.orderId !== 'string' ||
+          data.orderNumber !== orderNumber ||
+          (orderData.paymentReceipt && typeof data.storedReceiptPath !== 'string')
+        ) {
           throw new Error(
             typeof data?.error === 'string'
               ? data.error
-              : 'Buyurtma bazaga tasdiqlanmagan.'
+              : 'Buyurtma yoki toʻlov cheki bazada tasdiqlanmagan.'
           );
         }
         if (data) {
           telegramStatus = data.telegramNotificationStatus || 'not_configured';
           telegramError = data.telegramNotificationError;
           storedPath = data.storedReceiptPath || undefined;
+          persistedOrderId = data.orderId || undefined;
         }
       } catch (err) {
         addToast({
@@ -1527,7 +1549,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const newOrder: Order = {
       ...orderData,
       customerTelegram: normalizedTelegram,
-      id: `ord-${Date.now()}`,
+      id: persistedOrderId,
       orderNumber,
       paymentReceipt: orderData.paymentReceipt
         ? {
