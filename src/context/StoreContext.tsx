@@ -6,7 +6,11 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { RealtimeChannel, User as SupabaseUser } from '@supabase/supabase-js';
+import {
+  RealtimeChannel,
+  Session as SupabaseSession,
+  User as SupabaseUser,
+} from '@supabase/supabase-js';
 import {
   ADMIN_USERS,
   INITIAL_BANNERS,
@@ -58,6 +62,8 @@ interface StoreContextType {
   storeSettings: StoreSettings;
   adminUsers: AdminUser[];
   isSyncingSupabase: boolean;
+  isCustomerAuthRestoring: boolean;
+  customerAuthRestoreFailed: boolean;
 
   cart: CartItem[];
   favoriteIds: string[];
@@ -644,6 +650,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(ADMIN_USERS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+  const [isCustomerAuthRestoring, setIsCustomerAuthRestoring] =
+    useState<boolean>(isSupabaseConfigured);
+  const [customerAuthRestoreFailed, setCustomerAuthRestoreFailed] =
+    useState<boolean>(false);
+  const authRestoreCompleteRef = useRef(!isSupabaseConfigured);
 
   // Requirement #8: Deduplicate toasts so one user action creates strictly one notification
   const lastToastRef = useRef<{
@@ -879,7 +890,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!isSupabaseConfigured || !supabase) return;
     setIsSyncingSupabase(true);
 
+    let session: SupabaseSession | null = null;
+    const isInitialAuthRestore = !authRestoreCompleteRef.current;
     try {
+      try {
+        const {
+          data: { session: restoredSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        session = restoredSession;
+
+        if (session?.user && !isPasswordRecoveryActive()) {
+          if (session.user.email_confirmed_at) {
+            await syncVerifiedCustomerFromAuthUser(session.user);
+          } else if (isInitialAuthRestore) {
+            setCurrentCustomer(null);
+          }
+        } else if (!session && isInitialAuthRestore) {
+          setCurrentCustomer(null);
+        }
+
+        if (isInitialAuthRestore) setCustomerAuthRestoreFailed(false);
+      } catch (error) {
+        if (isInitialAuthRestore) {
+          setCustomerAuthRestoreFailed(true);
+          setCurrentCustomer(null);
+        }
+        console.error(
+          'Customer Auth session restore failed:',
+          error instanceof Error ? error.name : 'Unknown error'
+        );
+      } finally {
+        if (isInitialAuthRestore) {
+          authRestoreCompleteRef.current = true;
+          setIsCustomerAuthRestoring(false);
+        }
+      }
+
       const [catRes, prodRes, settingsRes, adminRes] = await Promise.all([
         supabase
           .from('categories')
@@ -950,15 +998,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
       if (session?.user && !isPasswordRecoveryActive()) {
-        if (session.user.email_confirmed_at) {
-          await syncVerifiedCustomerFromAuthUser(session.user);
-        }
-
         const [ordersRes, custRes, logsRes, inqRes] = await Promise.all([
           supabase
             .from('orders')
@@ -1240,6 +1280,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         const user = session.user;
         authEventTimer = window.setTimeout(() => {
           if (user.email_confirmed_at && !isPasswordRecoveryActive()) {
+            setCustomerAuthRestoreFailed(false);
             void syncVerifiedCustomerFromAuthUser(user);
           }
           void refreshFromSupabase();
@@ -1251,6 +1292,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           authEventTimer = undefined;
         }
         setCurrentCustomer(null);
+        setCustomerAuthRestoreFailed(false);
         if (realtimeChannel && supabase) {
           supabase.removeChannel(realtimeChannel);
           realtimeChannel = null;
@@ -1461,10 +1503,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         const { data: authData, error: authError } =
           await supabase.auth.getSession();
         const user = authData.session?.user;
-        if (authError || !user?.email || !user.email_confirmed_at) {
+        if (authError || !user?.id || !user.email) {
           const reason = authError
             ? 'Hisob sessiyasini tekshirib boʻlmadi. Internet ulanishini tekshirib qayta urinib koʻring.'
-            : 'Hisob sessiyasi tugagan yoki email tasdiqlanmagan. Hisob sahifasidan qayta kiring.';
+            : 'Hisob sessiyasi tugagan. Profilni saqlash uchun qayta kiring.';
           addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
           return { ok: false, error: reason };
         }
@@ -1559,10 +1601,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getSession();
-        if (authError || !authData.session?.user?.email_confirmed_at) {
+        if (authError || !authData.session?.user?.id) {
           const reason = authError
             ? 'Hisob sessiyasini tekshirib boʻlmadi. Internet ulanishini tekshiring.'
-            : 'Hisob sessiyasi tugagan yoki email tasdiqlanmagan. Hisob sahifasidan qayta kiring.';
+            : 'Hisob sessiyasi tugagan. Parolni yangilash uchun qayta kiring.';
           addToast({ type: 'error', title: 'Parol yangilanmadi', description: reason });
           return { ok: false, error: reason };
         }
@@ -2598,6 +2640,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         storeSettings,
         adminUsers,
         isSyncingSupabase,
+        isCustomerAuthRestoring,
+        customerAuthRestoreFailed,
         cart,
         favoriteIds,
         recentlyViewedIds,

@@ -9,14 +9,25 @@ import {
 export type AuthMode = 'supabase' | 'dev_demo' | 'unauthenticated';
 type OwnerVerificationResult =
   | { allowed: true }
-  | { allowed: false; reason: 'not_allowlisted' | 'check_failed' };
+  | {
+      allowed: false;
+      reason: 'not_allowlisted' | 'email_not_verified' | 'check_failed';
+    };
+
+type OwnerAuthIdentity = {
+  id?: string;
+  email?: string;
+  email_confirmed_at?: string | null;
+};
 
 const ownerVerificationError = (
-  reason: 'not_allowlisted' | 'check_failed'
+  reason: 'not_allowlisted' | 'email_not_verified' | 'check_failed'
 ) =>
   reason === 'check_failed'
     ? 'Doʻkon egasi ruxsati tekshirilmadi. Supabase ulanishini tekshiring.'
-    : 'Supabase Auth emailingiz owner_allowlist jadvaliga kiritilmagan.';
+    : reason === 'email_not_verified'
+      ? 'Admin panelga kirish uchun Supabase Auth emailingiz tasdiqlangan boʻlishi kerak.'
+      : 'Tasdiqlangan Supabase Auth emailingiz owner_allowlist jadvaliga kiritilmagan.';
 
 interface OwnerAuthContextType {
   isOwnerAuthenticated: boolean;
@@ -52,10 +63,13 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Verify whether a signed-in Supabase user is the allowlisted single owner
   const verifySupabaseOwner = async (
-    email: string | undefined
+    user: OwnerAuthIdentity
   ): Promise<OwnerVerificationResult> => {
-    if (!email || !supabase) {
+    if (!user.id || !user.email || !supabase) {
       return { allowed: false, reason: 'check_failed' };
+    }
+    if (!user.email_confirmed_at) {
+      return { allowed: false, reason: 'email_not_verified' };
     }
     // Match the database's RLS predicate instead of treating the frontend
     // owner-email setting as proof of database authorization. This also keeps
@@ -74,13 +88,14 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     let isMounted = true;
 
-    const verifySession = async (email: string) => {
+    const verifySession = async (user: OwnerAuthIdentity) => {
       const sequence = ++verificationSequenceRef.current;
-      const verification = await verifySupabaseOwner(email);
+      const verification = await verifySupabaseOwner(user);
       if (!isMounted || sequence !== verificationSequenceRef.current) return;
 
+      const verifiedEmail = user.email?.trim().toLowerCase() || null;
       setIsOwnerAuthenticated(verification.allowed);
-      setOwnerEmail(verification.allowed ? email : null);
+      setOwnerEmail(verification.allowed ? verifiedEmail : null);
       setAuthMode(verification.allowed ? 'supabase' : 'unauthenticated');
       setAuthError(
         verification.allowed ? null : ownerVerificationError(verification.reason)
@@ -99,7 +114,7 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
           } = await supabase.auth.getSession();
 
           if (session?.user?.email) {
-            await verifySession(session.user.email);
+            await verifySession(session.user);
             return;
           }
         } catch {
@@ -146,12 +161,13 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const {
         data: { subscription },
       } = configuredSupabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user?.email) {
+        const user = session?.user;
+        if (user?.email) {
           setIsLoadingAuth(true);
           // Supabase auth callbacks must return synchronously; defer the RPC
           // until after its internal lock has been released.
           window.setTimeout(() => {
-            void verifySession(session.user.email!);
+            void verifySession(user);
           }, 0);
         } else {
           verificationSequenceRef.current += 1;
@@ -203,7 +219,7 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return false;
       }
 
-      const verification = await verifySupabaseOwner(data.user.email);
+      const verification = await verifySupabaseOwner(data.user);
       if (!verification.allowed) {
         setIsOwnerAuthenticated(false);
         setOwnerEmail(null);
@@ -213,7 +229,7 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       setIsOwnerAuthenticated(true);
-      setOwnerEmail(data.user.email);
+      setOwnerEmail(data.user.email.trim().toLowerCase());
       setAuthMode('supabase');
       setAuthError(null);
       return true;

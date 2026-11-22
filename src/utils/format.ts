@@ -32,7 +32,7 @@ export function getPersistenceErrorMessage(
     return message;
   }
   if (/row.level security|\bRLS\b|permission denied|not allowed|42501/i.test(message)) {
-    return `${subject}: RLS ruxsati yoʻq. Supabase Auth emailingiz owner_allowlist jadvaliga kiritilganini tekshiring.`;
+    return `${subject}: bazaga ruxsat berilmadi. Faol hisob va ushbu amal uchun Supabase RLS siyosatini tekshiring.`;
   }
   if (/storage|bucket|upload/i.test(message)) {
     return `${subject}: fayl omboriga saqlab boʻlmadi. Rasm ombori sozlamalari va ruxsatlarini tekshiring.`;

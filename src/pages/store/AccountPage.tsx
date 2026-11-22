@@ -135,6 +135,8 @@ export const AccountPage: React.FC = () => {
     searchParams.get('redirect') === '/checkout' ? '/checkout' : '';
   const {
     currentCustomer,
+    isCustomerAuthRestoring,
+    customerAuthRestoreFailed,
     orders,
     products,
     storeSettings,
@@ -292,6 +294,17 @@ export const AccountPage: React.FC = () => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
   }, [currentCustomer, orders]);
+
+  if (isCustomerAuthRestoring && !isPasswordRecovery) {
+    return (
+      <div className="zaven-page-container flex min-h-56 items-center justify-center py-10">
+        <div role="status" className="flex items-center gap-2 text-sm font-semibold text-gray-600 dark:text-gray-300">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          {t('account.restoringSession')}
+        </div>
+      </div>
+    );
+  }
 
   // ===========================================================================
   // 1. EMAIL SIGN-IN HANDLER (Requires email_confirmed_at before treating as verified)
@@ -848,6 +861,15 @@ export const AccountPage: React.FC = () => {
               <div className="min-w-0 p-3.5 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5 text-xs font-semibold text-red-700">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-relaxed">{authError}</span>
+              </div>
+            )}
+
+            {customerAuthRestoreFailed && !currentCustomer && (
+              <div role="alert" className="min-w-0 p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs font-semibold text-amber-900">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-relaxed">
+                  {t('account.sessionRestoreError')}
+                </span>
               </div>
             )}
 

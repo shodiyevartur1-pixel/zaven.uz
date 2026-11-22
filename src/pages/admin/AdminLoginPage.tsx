@@ -46,7 +46,7 @@ export const AdminLoginPage: React.FC = () => {
       supabaseConnected: 'Supabase Auth himoyasi faol',
       supabaseNotConfigured: 'Supabase backend hali sozlanmagan (.env.local)',
       supabaseSetupHint:
-        'Haqiqiy ishlab chiqarish (production) himoyasi uchun .env.local fayliga VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY va VITE_OWNER_EMAIL qiymatlarini kiriting.',
+        '.env.local faylida faqat VITE_SUPABASE_URL va VITE_SUPABASE_ANON_KEY kerak. Owner Supabase Auth emailini tasdiqlab, public.owner_allowlist jadvaliga alohida qoʻshing.',
       devPreviewTitle: 'Lokal Dasturchi Sinov Rejimi (Faqat DEV muhitida)',
       devPreviewDesc:
         'Siz hozirda lokal dasturlash muhitidasiz (import.meta.env.DEV). Production buildda ushbu tugma avtomatik oʻchiriladi.',
@@ -64,7 +64,7 @@ export const AdminLoginPage: React.FC = () => {
       supabaseConnected: 'Защита Supabase Auth активна',
       supabaseNotConfigured: 'Supabase еще не подключен (.env.local)',
       supabaseSetupHint:
-        'Для промышленной эксплуатации укажите VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY и VITE_OWNER_EMAIL в файле .env.local.',
+        'В .env.local укажите только VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY. Подтвердите email владельца в Supabase Auth и отдельно добавьте его в public.owner_allowlist.',
       devPreviewTitle: 'Локальный режим разработчика (Только в DEV)',
       devPreviewDesc:
         'Доступно только при локальной разработке. В production-сборке этот обход полностью отключен.',
@@ -82,7 +82,7 @@ export const AdminLoginPage: React.FC = () => {
       supabaseConnected: 'Supabase Auth Protection Active',
       supabaseNotConfigured: 'Supabase Backend Not Configured (.env.local)',
       supabaseSetupHint:
-        'Supply VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_OWNER_EMAIL in .env.local to enable live Supabase authentication.',
+        'Only VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY belong in .env.local. Verify the owner email in Supabase Auth and add it separately to public.owner_allowlist.',
       devPreviewTitle: 'Local Developer Preview Mode (DEV Only)',
       devPreviewDesc:
         'Available only during local development. Automatically stripped and disabled in production builds.',
