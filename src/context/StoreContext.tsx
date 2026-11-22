@@ -95,7 +95,7 @@ interface StoreContextType {
     phone: string;
     subject: string;
     message: string;
-  }) => void;
+  }) => Promise<StoreSaveResult>;
 
   placeOrder: (
     orderData: Omit<
@@ -546,6 +546,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const savedState = loadInitialState();
 
+  const initialFavoriteOwner = isSupabaseConfigured
+    ? null
+    : savedState?.currentCustomer || null;
   const [products, setProducts] = useState<Product[]>(
     savedState?.products || INITIAL_PRODUCTS
   );
@@ -556,19 +559,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     savedState?.banners || INITIAL_BANNERS
   );
   const [orders, setOrders] = useState<Order[]>(
-    savedState?.orders || INITIAL_ORDERS
+    isSupabaseConfigured ? [] : savedState?.orders || INITIAL_ORDERS
   );
   const [customers, setCustomers] = useState<Customer[]>(
-    savedState?.customers || INITIAL_CUSTOMERS
+    isSupabaseConfigured ? [] : savedState?.customers || INITIAL_CUSTOMERS
   );
   const [coupons, setCoupons] = useState<Coupon[]>(
     savedState?.coupons || INITIAL_COUPONS
   );
   const [stockLogs, setStockLogs] = useState<StockLogEntry[]>(
-    savedState?.stockLogs || INITIAL_STOCK_LOGS
+    isSupabaseConfigured ? [] : savedState?.stockLogs || INITIAL_STOCK_LOGS
   );
   const [inquiries, setInquiries] = useState<CustomerInquiry[]>(
-    savedState?.inquiries || INITIAL_INQUIRIES
+    isSupabaseConfigured ? [] : savedState?.inquiries || INITIAL_INQUIRIES
   );
   const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
     if (savedState?.storeSettings) {
@@ -584,7 +587,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     return INITIAL_STORE_SETTINGS;
   });
-  const initialFavoriteOwner = savedState?.currentCustomer || null;
   const initialCartOwnerKey = getCartStorageKey(initialFavoriteOwner);
   const [cart, setCart] = useState<CartItem[]>(() =>
     loadCartForKey(
@@ -603,10 +605,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       : []
   );
   const [currentCustomer, setCurrentCustomer] = useState<Customer | null>(
-    savedState?.currentCustomer !== undefined
+    !isSupabaseConfigured && savedState?.currentCustomer !== undefined
       ? savedState.currentCustomer
       : null
   );
+  const customersRef = useRef(customers);
+  customersRef.current = customers;
+  const customerSyncInFlightRef = useRef(new Map<string, Promise<void>>());
   const favoriteOwnerKey = getFavoritesStorageKey(currentCustomer);
   const cartOwnerKey = getCartStorageKey(currentCustomer);
   const favoriteOwnerKeyRef = useRef(
@@ -729,105 +734,126 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const syncVerifiedCustomerFromAuthUser = useCallback(
     async (user: SupabaseUser) => {
       const email = user.email?.trim().toLowerCase();
-      const isConfirmed = Boolean(user.email_confirmed_at);
+      if (!email || !user.email_confirmed_at) return;
 
-      if (!email || !isConfirmed) {
-        return;
-      }
+      const activeSync = customerSyncInFlightRef.current.get(user.id);
+      if (activeSync) return activeSync;
 
-      if (isSupabaseConfigured && supabase) {
-        let { data: ownRecord, error } = await supabase
-          .from('customers')
-          .select('is_blocked,is_deleted,blocked_reason')
-          .eq('auth_user_id', user.id)
-          .maybeSingle();
-        if (!error && !ownRecord) {
-          const emailLookup = await supabase
-            .from('customers')
-            .select('is_blocked,is_deleted,blocked_reason')
-            .eq('email', email)
-            .maybeSingle();
-          ownRecord = emailLookup.data;
-          error = emailLookup.error;
-        }
-        if (!error && (ownRecord?.is_blocked || ownRecord?.is_deleted)) {
-          await supabase.auth.signOut().catch(() => {});
-          setCurrentCustomer(null);
-          addToast({
-            type: 'error',
-            title: 'Hisobingizga kirish cheklangan',
-            description: ownRecord.blocked_reason || 'Doʻkon maʼmuriyatiga murojaat qiling.',
-          });
-          return;
-        }
-      }
-
-      const metaFullName =
-        typeof user.user_metadata?.full_name === 'string'
-          ? user.user_metadata.full_name.trim()
-          : '';
-      const metaPhone =
-        typeof user.user_metadata?.phone === 'string'
-          ? user.user_metadata.phone.trim()
-          : '';
-      const metaTelegram = normalizeTelegramUsername(
-        typeof user.user_metadata?.telegram_username === 'string'
-          ? user.user_metadata.telegram_username
-          : undefined
-      );
-
-      setCustomers((prev) => {
-        const cleanMetaPhone = metaPhone.replace(/\D/g, '');
-        const existing = prev.find(
-          (c) =>
-            c.authUserId === user.id ||
-            (c.email && c.email.toLowerCase() === email) ||
-            (cleanMetaPhone.length >= 9 &&
-              c.phone.replace(/\D/g, '') === cleanMetaPhone)
+      const syncTask = (async () => {
+        const metaFullName =
+          typeof user.user_metadata?.full_name === 'string'
+            ? user.user_metadata.full_name.trim()
+            : '';
+        const metaPhone =
+          typeof user.user_metadata?.phone === 'string'
+            ? user.user_metadata.phone.trim()
+            : '';
+        const metaTelegram = normalizeTelegramUsername(
+          typeof user.user_metadata?.telegram_username === 'string'
+            ? user.user_metadata.telegram_username
+            : undefined
         );
 
-        if (existing) {
-          const merged: Customer = {
-            ...existing,
-            authUserId: user.id,
-            email,
-            emailVerified: true,
-            fullName: metaFullName || existing.fullName,
-            phone: metaPhone || existing.phone,
-            telegramUsername: metaTelegram || existing.telegramUsername,
-          };
-          setCurrentCustomer(merged);
-          if (isSupabaseConfigured && supabase) {
-            supabase
+        let persistedCustomer: Customer | undefined;
+        if (isSupabaseConfigured && supabase) {
+          try {
+            let profileResult = await supabase
               .from('customers')
-              .upsert(mapCustomerToRow(merged))
-              .then(() => {});
+              .select('*')
+              .eq('auth_user_id', user.id)
+              .maybeSingle();
+
+            if (!profileResult.error && !profileResult.data) {
+              profileResult = await supabase
+                .from('customers')
+                .select('*')
+                .ilike('email', email)
+                .maybeSingle();
+            }
+
+            if (!profileResult.error && profileResult.data) {
+              persistedCustomer = mapRowToCustomer(profileResult.data);
+              if (persistedCustomer.isBlocked || persistedCustomer.isDeleted) {
+                await supabase.auth.signOut();
+                setCurrentCustomer(null);
+                addToast({
+                  type: 'error',
+                  title: 'Hisobingizga kirish cheklangan',
+                  description:
+                    persistedCustomer.blockedReason ||
+                    'Doʻkon maʼmuriyatiga murojaat qiling.',
+                });
+                return;
+              }
+            }
+          } catch {
+            // Keep the valid Auth session usable; explicit profile saves report
+            // database errors without forcing the customer to sign in again.
           }
-          return prev.map((c) => (c.id === existing.id ? merged : c));
         }
 
-        const created: Customer = {
-          id: `cust-${user.id.slice(0, 8)}`,
+        const cachedCustomer = customersRef.current.find(
+          (customer) =>
+            customer.authUserId === user.id ||
+            customer.email?.toLowerCase() === email
+        );
+        const merged: Customer = {
+          ...(cachedCustomer || persistedCustomer || {
+            id: `cust-${user.id.slice(0, 8)}`,
+            fullName: '',
+            phone: '',
+            addresses: [],
+            orderCount: 0,
+            totalSpent: 0,
+            createdAt: new Date().toISOString(),
+          }),
+          ...(persistedCustomer || {}),
           authUserId: user.id,
-          fullName: metaFullName || email.split('@')[0] || 'Xaridor',
-          phone: metaPhone || '+998 90 000-00-00',
           email,
           emailVerified: true,
-          telegramUsername: metaTelegram,
-          addresses: [],
-          orderCount: 0,
-          totalSpent: 0,
-          createdAt: new Date().toISOString(),
+          fullName:
+            persistedCustomer?.fullName ||
+            cachedCustomer?.fullName ||
+            metaFullName ||
+            email.split('@')[0] ||
+            'Xaridor',
+          phone:
+            persistedCustomer?.phone ||
+            cachedCustomer?.phone ||
+            metaPhone ||
+            '+998 90 000-00-00',
+          telegramUsername:
+            persistedCustomer?.telegramUsername ||
+            cachedCustomer?.telegramUsername ||
+            metaTelegram,
+          addresses:
+            persistedCustomer?.addresses || cachedCustomer?.addresses || [],
         };
-        setCurrentCustomer(created);
-        if (isSupabaseConfigured && supabase) {
-          supabase
-            .from('customers')
-            .upsert(mapCustomerToRow(created))
-            .then(() => {});
+
+        setCurrentCustomer(merged);
+        setCustomers((previous) => {
+          const match = previous.find(
+            (customer) =>
+              customer.id === merged.id ||
+              customer.authUserId === user.id ||
+              customer.email?.toLowerCase() === email
+          );
+          return match
+            ? previous.map((customer) =>
+                customer.id === match.id ? merged : customer
+              )
+            : [merged, ...previous];
+        });
+      })();
+
+      customerSyncInFlightRef.current.set(user.id, syncTask);
+      try {
+        await syncTask;
+      } finally {
+        if (customerSyncInFlightRef.current.get(user.id) === syncTask) {
+          customerSyncInFlightRef.current.delete(user.id);
         }
-        return [created, ...prev];
-      });
+      }
     },
     [addToast]
   );
@@ -1195,6 +1221,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshFromSupabase();
     setupRealtimeChannel();
 
+    let authEventTimer: number | undefined;
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -1207,17 +1234,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
       if (
-        (event === 'SIGNED_IN' ||
-          event === 'TOKEN_REFRESHED' ||
-          event === 'USER_UPDATED') &&
+        (event === 'SIGNED_IN' || event === 'USER_UPDATED') &&
         session?.user
       ) {
-        if (session.user.email_confirmed_at && !isPasswordRecoveryActive()) {
-          syncVerifiedCustomerFromAuthUser(session.user);
-        }
-        refreshFromSupabase();
-        setupRealtimeChannel();
+        const user = session.user;
+        authEventTimer = window.setTimeout(() => {
+          if (user.email_confirmed_at && !isPasswordRecoveryActive()) {
+            void syncVerifiedCustomerFromAuthUser(user);
+          }
+          void refreshFromSupabase();
+          void setupRealtimeChannel();
+        }, 0);
       } else if (event === 'SIGNED_OUT') {
+        if (authEventTimer !== undefined) {
+          window.clearTimeout(authEventTimer);
+          authEventTimer = undefined;
+        }
         setCurrentCustomer(null);
         if (realtimeChannel && supabase) {
           supabase.removeChannel(realtimeChannel);
@@ -1228,6 +1260,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
     return () => {
       isMounted = false;
+      if (authEventTimer !== undefined) window.clearTimeout(authEventTimer);
       subscription.unsubscribe();
       if (realtimeChannel && supabase) {
         supabase.removeChannel(realtimeChannel);
@@ -1241,16 +1274,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         products,
         categories,
         banners,
-        orders,
-        customers,
         coupons,
-        stockLogs,
-        inquiries,
         storeSettings,
         cart,
         favoriteIds,
         recentlyViewedIds,
-        currentCustomer,
         currentAdminRole,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
@@ -1261,16 +1289,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     products,
     categories,
     banners,
-    orders,
-    customers,
     coupons,
-    stockLogs,
-    inquiries,
     storeSettings,
     cart,
     favoriteIds,
     recentlyViewedIds,
-    currentCustomer,
     currentAdminRole,
   ]);
 
@@ -1435,10 +1458,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     };
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        const user = authData.user;
+        const { data: authData, error: authError } =
+          await supabase.auth.getSession();
+        const user = authData.session?.user;
         if (authError || !user?.email || !user.email_confirmed_at) {
-          const reason = 'Profilni saqlash uchun tasdiqlangan hisobga qayta kiring.';
+          const reason = authError
+            ? 'Hisob sessiyasini tekshirib boʻlmadi. Internet ulanishini tekshirib qayta urinib koʻring.'
+            : 'Hisob sessiyasi tugagan yoki email tasdiqlanmagan. Hisob sahifasidan qayta kiring.';
           addToast({ type: 'error', title: 'Profil saqlanmadi', description: reason });
           return { ok: false, error: reason };
         }
@@ -1531,9 +1557,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       try {
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError || !authData.user?.email_confirmed_at) {
-          const reason = 'Parolni yangilash uchun tasdiqlangan hisobga qayta kiring.';
+        const { data: authData, error: authError } =
+          await supabase.auth.getSession();
+        if (authError || !authData.session?.user?.email_confirmed_at) {
+          const reason = authError
+            ? 'Hisob sessiyasini tekshirib boʻlmadi. Internet ulanishini tekshiring.'
+            : 'Hisob sessiyasi tugagan yoki email tasdiqlanmagan. Hisob sahifasidan qayta kiring.';
           addToast({ type: 'error', title: 'Parol yangilanmadi', description: reason });
           return { ok: false, error: reason };
         }
@@ -1570,29 +1599,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       };
 
       if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from('inquiries')
-          .insert({
-            customer_name: newInquiry.customerName,
-            phone: newInquiry.phone,
-            subject: newInquiry.subject,
-            message: newInquiry.message,
-            status: 'unread',
-          })
-          .select('*')
-          .maybeSingle();
+        try {
+          const { data, error } = await supabase
+            .from('inquiries')
+            .insert({
+              customer_name: newInquiry.customerName,
+              phone: newInquiry.phone,
+              subject: newInquiry.subject,
+              message: newInquiry.message,
+              status: 'unread',
+            })
+            .select('*')
+            .maybeSingle();
 
-        if (error || !data) {
+          if (error || !data) {
+            const reason = getPersistenceErrorMessage(
+              error || new Error('Murojaat bazadan tasdiqlanmadi.'),
+              'Murojaat'
+            );
+            addToast({
+              type: 'error',
+              title: 'Murojaat saqlanmadi',
+              description: reason,
+            });
+            return { ok: false, error: reason };
+          }
+          const synced = mapRowToInquiry(data);
+          setInquiries((prev) => [synced, ...prev]);
+        } catch (error) {
+          const reason = getPersistenceErrorMessage(error, 'Murojaat');
           addToast({
             type: 'error',
             title: 'Murojaat saqlanmadi',
-            description: error?.message || 'Bazaga murojaatni yozib bo‘lmadi.',
+            description: reason,
           });
-          return;
-        }
-        if (data) {
-          const synced = mapRowToInquiry(data);
-          setInquiries((prev) => [synced, ...prev]);
+          return { ok: false, error: reason };
         }
       } else {
         setInquiries((prev) => [newInquiry, ...prev]);
@@ -1602,6 +1643,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         type: 'success',
         title: 'Murojaatingiz yuborildi!',
       });
+      return { ok: true };
     };
 
   const placeOrder: StoreContextType['placeOrder'] = async (orderData) => {
@@ -2007,6 +2049,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateOrderStatus: StoreContextType['updateOrderStatus'] = async (orderId, status, note) => {
     const target = orders.find((order) => order.id === orderId);
     if (!target) return false;
+    const targetPaymentMethod = storeSettings.paymentMethods.find(
+      (method) => method.id === target.paymentMethodId
+    );
+    const receiptIsRequired = targetPaymentMethod
+      ? (targetPaymentMethod.requiresReceipt ??
+        targetPaymentMethod.type === 'card_transfer')
+      : target.paymentVerificationStatus !== 'not_required';
+    if (
+      receiptIsRequired &&
+      target.paymentVerificationStatus !== 'verified' &&
+      status !== 'cancelled'
+    ) {
+      addToast({
+        type: 'error',
+        title: 'Toʻlov tasdiqlanmagan',
+        description:
+          'Yetkazib berish holatini oʻzgartirishdan oldin toʻlov chekini tasdiqlang.',
+      });
+      return false;
+    }
     const now = new Date().toISOString();
     const updatedNotes = note ? [...target.internalNotes, `${note} (${new Date().toLocaleTimeString('uz-UZ')})`] : target.internalNotes;
 

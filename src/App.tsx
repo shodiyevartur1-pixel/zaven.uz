@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -15,21 +15,70 @@ import {
 } from './context/ThemeLanguageContext';
 import { OwnerAuthProvider } from './context/OwnerAuthContext';
 import { StoreLayout } from './components/layout/StoreLayout';
-import { AdminLayout } from './components/admin/AdminLayout';
 import { PrototypeToolbar } from './components/layout/PrototypeToolbar';
-import { HomePage } from './pages/store/HomePage';
-import { CatalogPage } from './pages/store/CatalogPage';
-import { ProductDetailPage } from './pages/store/ProductDetailPage';
-import { FavoritesPage } from './pages/store/FavoritesPage';
-import { CartCheckoutPage } from './pages/store/CartCheckoutPage';
-import { AccountPage } from './pages/store/AccountPage';
-import { AdminLoginPage } from './pages/admin/AdminLoginPage';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AdminProducts } from './pages/admin/AdminProducts';
-import { AdminOrders } from './pages/admin/AdminOrders';
-import { AdminSettings } from './pages/admin/AdminSettings';
 import { Button } from './components/ui/Button';
 import { Badge } from './components/ui/Badge';
+
+const HomePage = lazy(() =>
+  import('./pages/store/HomePage').then((module) => ({
+    default: module.HomePage,
+  }))
+);
+const CatalogPage = lazy(() =>
+  import('./pages/store/CatalogPage').then((module) => ({
+    default: module.CatalogPage,
+  }))
+);
+const ProductDetailPage = lazy(() =>
+  import('./pages/store/ProductDetailPage').then((module) => ({
+    default: module.ProductDetailPage,
+  }))
+);
+const FavoritesPage = lazy(() =>
+  import('./pages/store/FavoritesPage').then((module) => ({
+    default: module.FavoritesPage,
+  }))
+);
+const CartCheckoutPage = lazy(() =>
+  import('./pages/store/CartCheckoutPage').then((module) => ({
+    default: module.CartCheckoutPage,
+  }))
+);
+const AccountPage = lazy(() =>
+  import('./pages/store/AccountPage').then((module) => ({
+    default: module.AccountPage,
+  }))
+);
+const AdminLayout = lazy(() =>
+  import('./components/admin/AdminLayout').then((module) => ({
+    default: module.AdminLayout,
+  }))
+);
+const AdminLoginPage = lazy(() =>
+  import('./pages/admin/AdminLoginPage').then((module) => ({
+    default: module.AdminLoginPage,
+  }))
+);
+const AdminDashboard = lazy(() =>
+  import('./pages/admin/AdminDashboard').then((module) => ({
+    default: module.AdminDashboard,
+  }))
+);
+const AdminProducts = lazy(() =>
+  import('./pages/admin/AdminProducts').then((module) => ({
+    default: module.AdminProducts,
+  }))
+);
+const AdminOrders = lazy(() =>
+  import('./pages/admin/AdminOrders').then((module) => ({
+    default: module.AdminOrders,
+  }))
+);
+const AdminSettings = lazy(() =>
+  import('./pages/admin/AdminSettings').then((module) => ({
+    default: module.AdminSettings,
+  }))
+);
 
 const RouteEffectsManager: React.FC = () => {
   const location = useLocation();
@@ -172,6 +221,16 @@ export function App() {
         <StoreProvider>
           <BrowserRouter>
             <RouteEffectsManager />
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  className="zaven-page-container flex min-h-40 items-center justify-center py-10 text-sm font-semibold text-gray-600 dark:text-gray-300"
+                >
+                  Sahifa yuklanmoqda…
+                </div>
+              }
+            >
             <Routes>
               {/* Customer Storefront Routes */}
               <Route
@@ -357,6 +416,7 @@ export function App() {
                 }
               />
             </Routes>
+            </Suspense>
 
             <PrototypeToolbar />
           </BrowserRouter>

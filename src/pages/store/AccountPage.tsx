@@ -217,17 +217,6 @@ export const AccountPage: React.FC = () => {
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && !isPasswordRecoveryActive()) {
-        if (session.user.email_confirmed_at) {
-          syncVerifiedCustomerFromAuthUser(session.user);
-        } else {
-          setPendingEmail(session.user.email || '');
-          setAuthMode('verify_pending');
-        }
-      }
-    });
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -250,9 +239,7 @@ export const AccountPage: React.FC = () => {
           setAuthMode('update_password');
           return;
         }
-        if (session.user.email_confirmed_at) {
-          syncVerifiedCustomerFromAuthUser(session.user);
-        } else {
+        if (!session.user.email_confirmed_at) {
           setPendingEmail(session.user.email || '');
           setAuthMode('verify_pending');
         }

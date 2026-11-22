@@ -51,6 +51,7 @@ interface StoredOrder {
   customer_phone: string;
   total_amount: number;
   payment_receipt_path: string | null;
+  idempotency_payload_hash: string | null;
   telegram_notification_status?: string | null;
   telegram_notification_error?: string | null;
 }
@@ -242,13 +243,20 @@ Deno.serve(async (req: Request) => {
     if (!isSubmitOrderPayload(order)) {
       return jsonResponse(400, { ok: false, error: 'Buyurtma maʼlumotlari notoʻgʻri.' });
     }
+    const fingerprintBytes = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(JSON.stringify(order))
+    );
+    const idempotencyPayloadHash = Array.from(new Uint8Array(fingerprintBytes))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
     const receiptBase64 =
       typeof body.receiptBase64 === 'string' ? body.receiptBase64 : null;
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: existingOrder, error: lookupError } = await adminClient
       .from('orders')
-      .select('id,order_number,customer_phone,total_amount,payment_receipt_path,telegram_notification_status,telegram_notification_error')
+      .select('id,order_number,customer_phone,total_amount,payment_receipt_path,idempotency_payload_hash,telegram_notification_status,telegram_notification_error')
       .eq('order_number', order.orderNumber)
       .maybeSingle();
     if (lookupError) {
@@ -258,15 +266,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const existing = existingOrder as StoredOrder | null;
+    let existing = existingOrder as StoredOrder | null;
     if (
       existing &&
-      (normalizePhone(existing.customer_phone) !== normalizePhone(order.customerPhone) ||
-        Number(existing.total_amount) !== Math.round(Number(order.totalAmount)))
+      ((existing.idempotency_payload_hash &&
+        existing.idempotency_payload_hash !== idempotencyPayloadHash) ||
+        (!existing.idempotency_payload_hash &&
+          (normalizePhone(existing.customer_phone) !== normalizePhone(order.customerPhone) ||
+            Number(existing.total_amount) !== Math.round(Number(order.totalAmount)))))
     ) {
       return jsonResponse(409, {
         ok: false,
-        error: 'Takroriy soʻrov kaliti boshqa buyurtma maʼlumotlari bilan ishlatilgan.',
+        error: 'Bu buyurtma urinishidagi maʼlumotlar oʻzgargan. Yangi buyurtma urinishini boshlang.',
       });
     }
 
@@ -303,7 +314,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const safeName = receiptName.replace(/[^a-zA-Z0-9._-]/g, '_');
-      receiptPath = `${order.orderNumber}/receipt_${safeName}`;
+      receiptPath = `${order.orderNumber}/receipt_${idempotencyPayloadHash.slice(0, 16)}_${safeName}`;
       const { error: uploadError } = await adminClient.storage
         .from('payment-receipts')
         .upload(receiptPath, receiptBytes, {
@@ -341,9 +352,9 @@ Deno.serve(async (req: Request) => {
     } else {
       const { data, error: saveOrderError } = await adminClient
         .from('orders')
-        .upsert(
-          {
+        .insert({
             order_number: order.orderNumber,
+            idempotency_payload_hash: idempotencyPayloadHash,
             customer_name: order.customerName,
             customer_phone: order.customerPhone,
             customer_email: order.customerEmail || null,
@@ -369,19 +380,59 @@ Deno.serve(async (req: Request) => {
             payment_verification_status:
               order.paymentVerificationStatus || 'not_required',
             status: 'new',
-          },
-          { onConflict: 'order_number' }
-        )
+          })
         .select('id,order_number,customer_phone,total_amount,payment_receipt_path')
         .maybeSingle();
 
-      if (saveOrderError || !data?.id || !data.order_number) {
+      if (saveOrderError?.code === '23505') {
+        const duplicateLookup = await adminClient
+          .from('orders')
+          .select('id,order_number,customer_phone,total_amount,payment_receipt_path,idempotency_payload_hash,telegram_notification_status,telegram_notification_error')
+          .eq('order_number', order.orderNumber)
+          .maybeSingle();
+        if (duplicateLookup.error || !duplicateLookup.data) {
+          return jsonResponse(500, {
+            ok: false,
+            error: 'Takroriy buyurtma holatini bazadan tasdiqlab boʻlmadi. Qayta urinib koʻring.',
+          });
+        }
+        existing = duplicateLookup.data as StoredOrder;
+        if (
+          (existing.idempotency_payload_hash &&
+            existing.idempotency_payload_hash !== idempotencyPayloadHash) ||
+          (!existing.idempotency_payload_hash &&
+            (normalizePhone(existing.customer_phone) !== normalizePhone(order.customerPhone) ||
+              Number(existing.total_amount) !== Math.round(Number(order.totalAmount))))
+        ) {
+          if (receiptPath && receiptPath !== existing.payment_receipt_path) {
+            const { error: cleanupError } = await adminClient.storage
+              .from('payment-receipts')
+              .remove([receiptPath]);
+            if (cleanupError) {
+              return jsonResponse(500, {
+                ok: false,
+                error:
+                  'Takroriy soʻrov aniqlandi, ammo vaqtinchalik chek nusxasini tozalash tasdiqlanmadi. Yordam xizmatiga murojaat qiling.',
+              });
+            }
+          }
+          return jsonResponse(409, {
+            ok: false,
+            error: 'Bu buyurtma urinishidagi maʼlumotlar oʻzgargan. Yangi buyurtma urinishini boshlang.',
+          });
+        }
+        persistedOrder = existing;
+      } else if (saveOrderError || !data?.id || !data.order_number) {
         return jsonResponse(500, {
           ok: false,
           error: `Buyurtma saqlanmadi: ${saveOrderError?.message || 'Bazadan tasdiq kelmadi.'}`,
         });
+      } else {
+        persistedOrder = {
+          ...(data as StoredOrder),
+          idempotency_payload_hash: idempotencyPayloadHash,
+        };
       }
-      persistedOrder = data as StoredOrder;
     }
 
     if (

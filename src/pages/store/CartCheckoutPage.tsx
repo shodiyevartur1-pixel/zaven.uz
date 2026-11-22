@@ -288,6 +288,7 @@ export const CartCheckoutPage: React.FC = () => {
   const hasSavedCheckoutDraftRef = useRef(false);
   const hasInitializedSavedAddressRef = useRef(false);
   const orderAttemptIdRef = useRef<string | null>(null);
+  const orderAttemptFingerprintRef = useRef<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [copiedOrderNumber, setCopiedOrderNumber] = useState<boolean>(false);
 
@@ -831,8 +832,8 @@ export const CartCheckoutPage: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleApplyCoupon = (e?: React.FormEvent) => {
+    e?.preventDefault();
     setCouponError('');
     const code = couponInput.trim().toUpperCase();
     if (!code) return;
@@ -988,54 +989,116 @@ export const CartCheckoutPage: React.FC = () => {
     }));
 
     const normalizedTg = normalizeTelegramUsername(customerTelegram);
+    const requestPayload = {
+      customerId: currentCustomer?.id,
+      customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
+      customerEmail: customerEmail.trim() || undefined,
+      customerTelegram: normalizedTg,
+      region: currentUzRegionObj.nameUz,
+      district: selectedDistrict.trim(),
+      address: addressLine.trim(),
+      locationCoordinates: sharedCoordinates || undefined,
+      customerNote: customerNote.trim() || undefined,
+      items: orderItems,
+      subtotal: productsSubtotal,
+      discountAmount: couponDiscountAmount,
+      couponCode: appliedCoupon ? appliedCoupon.code : undefined,
+      deliveryFee,
+      totalAmount: finalTotalAmount,
+      paymentMethodId: selectedPaymentId,
+      paymentMethodLabel:
+        selectedPaymentMethod?.name || 'Qabul qilganda toʻlov',
+      paymentVerificationStatus: requiresPaymentReceipt
+        ? 'pending_verification' as const
+        : 'not_required' as const,
+      paymentReceipt: requiresPaymentReceipt
+        ? receiptAttachment || undefined
+        : undefined,
+    };
 
     submittingOrderRef.current = true;
     setIsSubmittingOrder(true);
     setCheckoutSubmitError('');
     try {
-      if (!orderAttemptIdRef.current) {
-        try {
-          orderAttemptIdRef.current =
-            sessionStorage.getItem(CHECKOUT_ORDER_ATTEMPT_KEY) ||
-            crypto.randomUUID();
-          sessionStorage.setItem(
-            CHECKOUT_ORDER_ATTEMPT_KEY,
-            orderAttemptIdRef.current
-          );
-        } catch {
-          throw new Error(
-            'Buyurtma takrorlanmasligini kafolatlash uchun sessiya xotirasi kerak. Brauzer sozlamalarini tekshirib qayta urinib ko‘ring.'
-          );
+      const receiptFingerprint = receiptAttachment
+        ? Array.from(
+            new Uint8Array(
+              await crypto.subtle.digest(
+                'SHA-256',
+                new TextEncoder().encode(receiptAttachment.dataUrl)
+              )
+            )
+          )
+              .map((byte) => byte.toString(16).padStart(2, '0'))
+              .join('')
+        : null;
+      const requestFingerprint = JSON.stringify({
+        ...requestPayload,
+        paymentReceipt: receiptAttachment
+          ? {
+              fileName: receiptAttachment.fileName,
+              mimeType: receiptAttachment.mimeType,
+              fileSize: receiptAttachment.fileSize,
+              sha256: receiptFingerprint,
+            }
+          : null,
+      });
+
+      try {
+        if (
+          orderAttemptIdRef.current &&
+          orderAttemptFingerprintRef.current !== requestFingerprint
+        ) {
+          orderAttemptIdRef.current = crypto.randomUUID();
         }
+        if (!orderAttemptIdRef.current) {
+          const storedAttempt = sessionStorage.getItem(
+            CHECKOUT_ORDER_ATTEMPT_KEY
+          );
+          let storedId: string | null = null;
+          let storedFingerprint: string | null = null;
+          if (storedAttempt) {
+            try {
+              const parsed = JSON.parse(storedAttempt) as {
+                id?: unknown;
+                fingerprint?: unknown;
+              };
+              if (typeof parsed.id === 'string') {
+                storedId = parsed.id;
+                storedFingerprint =
+                  typeof parsed.fingerprint === 'string'
+                    ? parsed.fingerprint
+                    : null;
+              }
+            } catch {
+              storedId = storedAttempt;
+            }
+          }
+          orderAttemptIdRef.current =
+            storedId &&
+            (!storedFingerprint ||
+              storedFingerprint === requestFingerprint)
+              ? storedId
+              : crypto.randomUUID();
+        }
+        orderAttemptFingerprintRef.current = requestFingerprint;
+        sessionStorage.setItem(
+          CHECKOUT_ORDER_ATTEMPT_KEY,
+          JSON.stringify({
+            id: orderAttemptIdRef.current,
+            fingerprint: requestFingerprint,
+          })
+        );
+      } catch {
+        throw new Error(
+          'Buyurtma takrorlanmasligini kafolatlash uchun sessiya xotirasi kerak. Brauzer sozlamalarini tekshirib qayta urinib ko‘ring.'
+        );
       }
 
       const createdOrder = await placeOrder({
+        ...requestPayload,
         idempotencyKey: orderAttemptIdRef.current,
-        customerId: currentCustomer?.id,
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim() || undefined,
-        customerTelegram: normalizedTg,
-        region: currentUzRegionObj.nameUz,
-        district: selectedDistrict.trim(),
-        address: addressLine.trim(),
-        locationCoordinates: sharedCoordinates || undefined,
-        customerNote: customerNote.trim() || undefined,
-        items: orderItems,
-        subtotal: productsSubtotal,
-        discountAmount: couponDiscountAmount,
-        couponCode: appliedCoupon ? appliedCoupon.code : undefined,
-        deliveryFee,
-        totalAmount: finalTotalAmount,
-        paymentMethodId: selectedPaymentId,
-        paymentMethodLabel:
-          selectedPaymentMethod?.name || 'Qabul qilganda toʻlov',
-        paymentVerificationStatus: requiresPaymentReceipt
-          ? 'pending_verification'
-          : 'not_required',
-        paymentReceipt: requiresPaymentReceipt
-          ? receiptAttachment || undefined
-          : undefined,
       });
 
       setCompletedOrder(createdOrder);
@@ -1044,6 +1107,7 @@ export const CartCheckoutPage: React.FC = () => {
         sessionStorage.removeItem(CHECKOUT_DRAFT_KEY);
         sessionStorage.removeItem(CHECKOUT_ORDER_ATTEMPT_KEY);
         orderAttemptIdRef.current = null;
+        orderAttemptFingerprintRef.current = null;
       } catch {
         // Order confirmation must not depend on session storage availability.
       }
@@ -1613,7 +1677,7 @@ export const CartCheckoutPage: React.FC = () => {
                       onClick={startNewAddress}
                       className="min-h-10 w-full rounded-xl border border-dashed border-brand-green px-3 py-2 text-left text-sm font-bold text-brand-green hover:bg-white/70"
                     >
-                      + Yangi manzil kiritish
+                      + Yangi manzil qoʻshish
                     </button>
                   </div>
                 ) : (
@@ -1670,6 +1734,15 @@ export const CartCheckoutPage: React.FC = () => {
                     </div>
                   </div>
                 )}
+                {!isSavedAddressPickerOpen && (
+                  <button
+                    type="button"
+                    onClick={startNewAddress}
+                    className="mt-3 min-h-10 w-full rounded-xl border border-dashed border-brand-green px-3 py-2 text-left text-sm font-bold text-brand-green hover:bg-white/70"
+                  >
+                    + Yangi manzil qoʻshish
+                  </button>
+                )}
               </section>
             )}
             <section className="rounded-xl border border-gray-200 dark:border-[#28453B] bg-[#F8F9FA] dark:bg-[#162923] p-3.5 sm:p-4 space-y-2.5">
@@ -1694,7 +1767,7 @@ export const CartCheckoutPage: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                <form onSubmit={handleApplyCoupon} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                   <input
                     type="text"
                     value={couponInput}
@@ -1702,13 +1775,19 @@ export const CartCheckoutPage: React.FC = () => {
                       setCouponInput(e.target.value);
                       setCouponError('');
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyCoupon();
+                      }
+                    }}
                     placeholder="ZAVEN10"
                     className="flex-1 min-w-[140px] h-10 rounded-xl border border-gray-300 dark:border-[#2F5246] px-3 text-xs font-semibold uppercase bg-white dark:bg-[#0D1915] text-gray-900 dark:text-gray-100"
                   />
-                  <Button type="submit" variant="secondary" size="sm">
+                  <Button type="button" variant="secondary" size="sm" onClick={() => handleApplyCoupon()}>
                     {t('cart.applyBtn')}
                   </Button>
-                </form>
+                </div>
               )}
               {couponError && <p className="text-xs text-red-600 font-medium">{couponError}</p>}
             </section>
@@ -1967,12 +2046,13 @@ export const CartCheckoutPage: React.FC = () => {
 
           <div className="p-4 sm:p-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {enabledPayments.map((pm) => {
+              {enabledPayments
+                .filter(
+                  (pm) =>
+                    !(pm.requiresReceipt ?? pm.type === 'card_transfer')
+                )
+                .map((pm) => {
                 const isSelected = selectedPaymentId === pm.id;
-                const pmNeedsReceipt =
-                  pm.requiresReceipt !== undefined
-                    ? pm.requiresReceipt
-                    : pm.type === 'card_transfer';
 
                 return (
                   <label
@@ -1998,42 +2078,74 @@ export const CartCheckoutPage: React.FC = () => {
                             {pm.name}
                           </span>
                         </div>
-                        {pmNeedsReceipt && (
-                          <Badge variant="gold" size="sm">
-                            Chek
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-xs text-gray-600 mt-2 pl-6 leading-relaxed">
-                        {!pmNeedsReceipt && pm.description}
+                        {pm.description}
                       </p>
                     </div>
                   </label>
                 );
-              })}
+                })}
             </div>
 
-            {requiresPaymentReceipt && !hasConfiguredTransferCards && (
-              <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900">
-                {t('transfer.notConfiguredDesc')} Boshqa toʻlov usulini tanlang yoki doʻkon egasidan karta rekvizitlarini kiritishni soʻrang.
-              </div>
-            )}
+            {enabledPayments
+              .filter(
+                (pm) =>
+                  (pm.requiresReceipt ?? pm.type === 'card_transfer') &&
+                  pm.id !== selectedPaymentId
+              )
+              .map((pm) => (
+                <label
+                  key={pm.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand-green dark:border-[#28453B] dark:bg-[#12211C]"
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={pm.id}
+                    checked={false}
+                    onChange={() => setSelectedPaymentId(pm.id)}
+                    className="mt-0.5 h-4 w-4 shrink-0 text-brand-green"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-bold text-gray-900 dark:text-gray-100">
+                      {pm.name}
+                    </span>
+                    <span className="mt-1 block break-words text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+                      {pm.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+
             {errors.payment && (
               <p role="alert" className="text-xs font-bold text-red-600">{errors.payment}</p>
             )}
-            {requiresPaymentReceipt && hasConfiguredTransferCards && (
+            {requiresPaymentReceipt && (
               <div className="rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/40 p-4 sm:p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-gold-border pb-3">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-brand-green" />
-                    <h3 className="text-xs sm:text-sm font-extrabold text-gray-900">
-                      {t('transfer.boxTitle')}
-                    </h3>
+                <div className="flex flex-col gap-3 border-b border-brand-gold-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-w-0 cursor-pointer items-center gap-2.5">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value={selectedPaymentMethod?.id}
+                      checked
+                      onChange={() => undefined}
+                      className="h-4 w-4 shrink-0 text-brand-green"
+                    />
+                    <CreditCard className="h-5 w-5 shrink-0 text-brand-green" />
+                    <span className="break-words text-sm font-extrabold text-gray-900">
+                      {selectedPaymentMethod?.name}
+                    </span>
+                  </label>
+                  <div className="rounded-xl border border-brand-gold-border bg-white/80 px-4 py-2 text-center sm:text-right">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-600">
+                      {t('transfer.exactAmountLabel')}
+                    </p>
+                    <p className="text-2xl font-black leading-tight text-brand-green sm:text-3xl">
+                      {formatUZS(finalTotalAmount)}
+                    </p>
                   </div>
-                  <Badge variant="gold" size="md">
-                    {t('transfer.exactAmountLabel')}{' '}
-                    {formatUZS(finalTotalAmount)}
-                  </Badge>
                 </div>
 
                 <p className="text-xs text-gray-700 leading-relaxed">

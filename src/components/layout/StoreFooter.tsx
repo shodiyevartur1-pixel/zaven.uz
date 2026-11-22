@@ -32,6 +32,7 @@ export const StoreFooter: React.FC = () => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
 
   // Requirement 8: Collapsible mobile footer link groups (Closed by default on mobile)
   const [openMobileGroup, setOpenMobileGroup] = useState<
@@ -55,8 +56,9 @@ export const StoreFooter: React.FC = () => {
     setIsInquiryModalOpen(true);
   };
 
-  const handleSubmitInquiry = (e: React.FormEvent) => {
+  const handleSubmitInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingInquiry) return;
     if (!customerName.trim() || customerName.trim().length < 2) {
       setError(t('cart.fullName'));
       return;
@@ -70,13 +72,31 @@ export const StoreFooter: React.FC = () => {
       return;
     }
 
-    submitCustomerInquiry({
-      customerName,
-      phone,
-      subject: subject.trim() || 'Veb-sayt orqali savol',
-      message,
-    });
-    setIsInquiryModalOpen(false);
+    setIsSubmittingInquiry(true);
+    setError('');
+    try {
+      const result = await submitCustomerInquiry({
+        customerName,
+        phone,
+        subject: subject.trim() || 'Veb-sayt orqali savol',
+        message,
+      });
+      if (result.ok) {
+        setIsInquiryModalOpen(false);
+      } else {
+        setError(result.error || 'Murojaat yuborilmadi. Qayta urinib koʻring.');
+      }
+    } catch {
+      setError(
+        'Murojaat yuborilmadi. Internet ulanishini tekshirib qayta urinib koʻring.'
+      );
+    } finally {
+      setIsSubmittingInquiry(false);
+    }
+  };
+
+  const closeInquiryModal = () => {
+    if (!isSubmittingInquiry) setIsInquiryModalOpen(false);
   };
 
   return (
@@ -263,7 +283,7 @@ export const StoreFooter: React.FC = () => {
       {/* Customer Inquiry Modal */}
       <Modal
         isOpen={isInquiryModalOpen}
-        onClose={() => setIsInquiryModalOpen(false)}
+        onClose={closeInquiryModal}
         title={t('footer.inquiryModalTitle')}
         footer={
           <div className="w-full grid grid-cols-2 gap-3">
@@ -271,7 +291,8 @@ export const StoreFooter: React.FC = () => {
               variant="outline"
               size="md"
               fullWidth
-              onClick={() => setIsInquiryModalOpen(false)}
+              disabled={isSubmittingInquiry}
+              onClick={closeInquiryModal}
             >
               {t('footer.cancelBtn')}
             </Button>
@@ -281,6 +302,8 @@ export const StoreFooter: React.FC = () => {
               variant="primary"
               size="md"
               fullWidth
+              disabled={isSubmittingInquiry}
+              isLoading={isSubmittingInquiry}
             >
               {t('footer.sendBtn')}
             </Button>

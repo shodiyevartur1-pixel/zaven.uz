@@ -20,7 +20,8 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   // Full informational footer is rendered strictly on the homepage ('/')
   const isHomePage = location.pathname === '/';
-  const isCheckoutPage = location.pathname.startsWith('/checkout');
+  const isCheckoutPage =
+    location.pathname === '/cart' || location.pathname.startsWith('/checkout');
 
   return (
     <div className={`min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${isCheckoutPage ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))]' : 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'} md:pb-8 transition-colors`}>

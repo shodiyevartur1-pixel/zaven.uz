@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   getConfiguredOwnerEmail,
   isDevDemoAuthAllowed,
@@ -46,6 +46,7 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [ownerEmail, setOwnerEmail] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>('unauthenticated');
   const [authError, setAuthError] = useState<string | null>(null);
+  const verificationSequenceRef = useRef(0);
 
   const allowedOwnerEmail = getConfiguredOwnerEmail();
 
@@ -56,15 +57,9 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!email || !supabase) {
       return { allowed: false, reason: 'check_failed' };
     }
-    const normalized = email.trim().toLowerCase();
-
-    // 1. If VITE_OWNER_EMAIL is set, enforce exact match immediately
-    if (allowedOwnerEmail && normalized !== allowedOwnerEmail) {
-      return { allowed: false, reason: 'not_allowlisted' };
-    }
-
     // Match the database's RLS predicate instead of treating the frontend
-    // owner-email setting as proof of database authorization.
+    // owner-email setting as proof of database authorization. This also keeps
+    // a stale frontend setting from blocking the database-authorized owner.
     try {
       const { data, error } = await supabase.rpc('is_store_owner');
       if (error) return { allowed: false, reason: 'check_failed' };
@@ -79,29 +74,40 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     let isMounted = true;
 
+    const verifySession = async (email: string) => {
+      const sequence = ++verificationSequenceRef.current;
+      const verification = await verifySupabaseOwner(email);
+      if (!isMounted || sequence !== verificationSequenceRef.current) return;
+
+      setIsOwnerAuthenticated(verification.allowed);
+      setOwnerEmail(verification.allowed ? email : null);
+      setAuthMode(verification.allowed ? 'supabase' : 'unauthenticated');
+      setAuthError(
+        verification.allowed ? null : ownerVerificationError(verification.reason)
+      );
+      setIsLoadingAuth(false);
+    };
+
     const initAuth = async () => {
       setIsLoadingAuth(true);
 
       // Priority 1: Real Supabase Auth session
       if (isSupabaseConfigured && supabase) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
 
-        if (session?.user?.email) {
-          const verification = await verifySupabaseOwner(session.user.email);
+          if (session?.user?.email) {
+            await verifySession(session.user.email);
+            return;
+          }
+        } catch {
           if (isMounted) {
-            if (verification.allowed) {
-              setIsOwnerAuthenticated(true);
-              setOwnerEmail(session.user.email);
-              setAuthMode('supabase');
-            } else {
-              await supabase.auth.signOut();
-              setIsOwnerAuthenticated(false);
-              setOwnerEmail(null);
-              setAuthMode('unauthenticated');
-              setAuthError(ownerVerificationError(verification.reason));
-            }
+            setIsOwnerAuthenticated(false);
+            setOwnerEmail(null);
+            setAuthMode('unauthenticated');
+            setAuthError(ownerVerificationError('check_failed'));
             setIsLoadingAuth(false);
           }
           return;
@@ -139,25 +145,21 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (isSupabaseConfigured && configuredSupabase) {
       const {
         data: { subscription },
-      } = configuredSupabase.auth.onAuthStateChange(async (_event, session) => {
+      } = configuredSupabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user?.email) {
-          const verification = await verifySupabaseOwner(session.user.email);
-          if (verification.allowed) {
-            setIsOwnerAuthenticated(true);
-            setOwnerEmail(session.user.email);
-            setAuthMode('supabase');
-            setAuthError(null);
-          } else {
-            await configuredSupabase.auth.signOut();
-            setIsOwnerAuthenticated(false);
-            setOwnerEmail(null);
-            setAuthMode('unauthenticated');
-            setAuthError(ownerVerificationError(verification.reason));
-          }
-        } else if (authMode === 'supabase') {
+          setIsLoadingAuth(true);
+          // Supabase auth callbacks must return synchronously; defer the RPC
+          // until after its internal lock has been released.
+          window.setTimeout(() => {
+            void verifySession(session.user.email!);
+          }, 0);
+        } else {
+          verificationSequenceRef.current += 1;
           setIsOwnerAuthenticated(false);
           setOwnerEmail(null);
           setAuthMode('unauthenticated');
+          setAuthError(null);
+          setIsLoadingAuth(false);
         }
       });
 
@@ -186,41 +188,41 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    if (allowedOwnerEmail && cleanEmail !== allowedOwnerEmail) {
-      setAuthError(
-        'Ruxsat rad etildi: Faqat doʻkon egasi (Owner) hisobiga kirish mumkin.'
-      );
-      return false;
-    }
-
     setIsLoadingAuth(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
 
-    if (error || !data.user?.email) {
-      setIsLoadingAuth(false);
-      setAuthError(
-        error?.message ||
-          'Login yoki parol notoʻgʻri. Iltimos, qaytadan tekshiring.'
-      );
+      if (error || !data.user?.email) {
+        setAuthError(
+          error?.message ||
+            'Login yoki parol notoʻgʻri. Iltimos, qaytadan tekshiring.'
+        );
+        return false;
+      }
+
+      const verification = await verifySupabaseOwner(data.user.email);
+      if (!verification.allowed) {
+        setIsOwnerAuthenticated(false);
+        setOwnerEmail(null);
+        setAuthMode('unauthenticated');
+        setAuthError(ownerVerificationError(verification.reason));
+        return false;
+      }
+
+      setIsOwnerAuthenticated(true);
+      setOwnerEmail(data.user.email);
+      setAuthMode('supabase');
+      setAuthError(null);
+      return true;
+    } catch {
+      setAuthError(ownerVerificationError('check_failed'));
       return false;
-    }
-
-    const verification = await verifySupabaseOwner(data.user.email);
-    if (!verification.allowed) {
-      await supabase.auth.signOut();
+    } finally {
       setIsLoadingAuth(false);
-      setAuthError(ownerVerificationError(verification.reason));
-      return false;
     }
-
-    setIsOwnerAuthenticated(true);
-    setOwnerEmail(data.user.email);
-    setAuthMode('supabase');
-    setIsLoadingAuth(false);
-    return true;
   };
 
   const signInDevPreviewOwner = (emailInput?: string): boolean => {
