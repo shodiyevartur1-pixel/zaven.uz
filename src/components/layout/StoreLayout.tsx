@@ -12,7 +12,7 @@ interface StoreLayoutProps {
 }
 
 export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
-  const { cart } = useStore();
+  const { cart, currentCustomer } = useStore();
   const { t } = useThemeLanguage();
   const location = useLocation();
 
@@ -20,11 +20,23 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   // Full informational footer is rendered strictly on the homepage ('/')
   const isHomePage = location.pathname === '/';
-  const isCheckoutPage =
-    location.pathname === '/cart' || location.pathname.startsWith('/checkout');
+  const isCheckoutPage = location.pathname.startsWith('/checkout');
+  const isRecoveryPage =
+    new URLSearchParams(location.search).get('type') === 'recovery' ||
+    new URLSearchParams(location.hash.replace(/^#/, '')).get('type') ===
+      'recovery';
+  const isAuthenticationPage =
+    location.pathname === '/account' &&
+    (!currentCustomer?.emailVerified || isRecoveryPage);
+  const showMobileBottomNav = !isCheckoutPage && !isAuthenticationPage;
+  const mobileBottomNavPadding = showMobileBottomNav
+    ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
+    : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]';
 
   return (
-    <div className={`min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${isCheckoutPage ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))]' : 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'} md:pb-8 transition-colors`}>
+    <div
+      className={`min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${mobileBottomNavPadding} md:pb-8 transition-colors`}
+    >
       <StoreHeader />
 
       <main className={`flex-1 bg-transparent ${isCheckoutPage ? 'min-w-0' : ''}`}>
@@ -35,7 +47,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
       {isHomePage && <StoreFooter />}
 
       {/* Mobile navigation: wishlist is in the header, so the four main destinations stay clear. */}
-      {!isCheckoutPage && <nav
+      {showMobileBottomNav && <nav
         aria-label="Mobile bottom navigation"
         className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-3 right-3 z-40 bg-white/95 dark:bg-[#12211C]/95 backdrop-blur-md border border-gray-200 dark:border-[#28453B] shadow-[0_-8px_28px_rgba(0,0,0,0.16)] grid grid-cols-4 items-center h-[4.25rem] px-1 rounded-2xl transition-opacity duration-150"
       >

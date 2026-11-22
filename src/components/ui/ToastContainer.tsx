@@ -28,12 +28,15 @@ export const ToastContainer: React.FC = () => {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="relative z-40 flex w-full min-w-0 justify-end px-3 py-2 sm:px-5"
+      className="pointer-events-none fixed inset-x-0 z-[60] flex w-full min-w-0 justify-center px-3 sm:justify-end sm:px-5"
+      style={{
+        top: 'calc(var(--zaven-store-header-height, 5rem) + env(safe-area-inset-top) + 0.5rem)',
+      }}
     >
       <div
         key={latestToast.id}
         role={latestToast.type === 'error' ? 'alert' : 'status'}
-        className="pointer-events-auto flex w-full min-w-0 max-w-md items-start justify-between gap-2 rounded-xl border border-[#C89D54]/50 bg-[#09261C]/95 px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all dark:bg-[#12211C]/95"
+        className="pointer-events-auto flex max-h-[70vh] w-full min-w-0 max-w-md items-start justify-between gap-2 overflow-y-auto rounded-xl border border-[#C89D54]/50 bg-[#09261C]/95 px-3 py-2 text-white shadow-lg backdrop-blur-sm transition-all dark:bg-[#12211C]/95"
       >
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {iconMap[latestToast.type]}

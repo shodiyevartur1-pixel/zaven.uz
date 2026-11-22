@@ -39,12 +39,41 @@ export const StoreHeader: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  const headerRef = useRef<HTMLElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const navigate = useNavigate();
   const location = useLocation();
 
   const isAccountPage = location.pathname === '/account';
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+
+    const updateHeaderHeight = () => {
+      document.documentElement.style.setProperty(
+        '--zaven-store-header-height',
+        `${header.getBoundingClientRect().height}px`
+      );
+    };
+
+    updateHeaderHeight();
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(updateHeaderHeight);
+    observer?.observe(header);
+    window.addEventListener('resize', updateHeaderHeight);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateHeaderHeight);
+      document.documentElement.style.removeProperty(
+        '--zaven-store-header-height'
+      );
+    };
+  }, []);
 
   const configuredSupportPhone =
     storeSettings.supportPhone?.trim() === '+998 78 113-45-67'
@@ -98,7 +127,10 @@ export const StoreHeader: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm">
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-40 bg-[#0F3D2E] text-white border-b border-[#09261C] shadow-sm"
+    >
       {/* Desktop Top Utility Bar */}
       <div className="hidden md:block bg-[#09261C] text-emerald-50 text-xs">
         <div className="zaven-page-container h-8 flex items-center justify-between gap-3">

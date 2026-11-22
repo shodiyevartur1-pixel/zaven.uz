@@ -109,6 +109,15 @@ export const CartCheckoutPage: React.FC = () => {
   } = useStore();
   const { t, language, getProductText } = useThemeLanguage();
 
+  const continueShopping = () => {
+    const historyIndex = window.history.state?.idx;
+    if (typeof historyIndex === 'number' && historyIndex > 0) {
+      navigate(-1);
+    } else {
+      navigate('/catalog');
+    }
+  };
+
   const isCheckoutRoute = location.pathname.startsWith('/checkout');
   const isCustomerSignedIn = Boolean(currentCustomer?.emailVerified);
   const [activeStep, setActiveStep] = useState<CheckoutStep>(
@@ -1304,13 +1313,20 @@ export const CartCheckoutPage: React.FC = () => {
   // 2. Empty Cart View
   if (detailedCartItems.length === 0) {
     return (
-      <div className="zaven-page-container py-12">
+      <div className="zaven-page-container space-y-4 py-6 sm:py-12">
+        <Button
+          type="button"
+          variant="outline"
+          size="md"
+          leftIcon={<ArrowLeft className="h-4 w-4" />}
+          onClick={continueShopping}
+        >
+          {t('cart.continueShoppingBtn')}
+        </Button>
         <EmptyState
           icon={<ShoppingBag className="w-7 h-7" />}
           title={t('cart.emptyTitle')}
           description={t('cart.emptyDesc')}
-          actionLabel={t('cart.continueShopping')}
-          onAction={() => navigate('/catalog')}
         />
       </div>
     );
@@ -1412,6 +1428,15 @@ export const CartCheckoutPage: React.FC = () => {
       {/* ===================================================================== */}
       {activeStep === 'cart' && (
         <div className="space-y-10">
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            onClick={continueShopping}
+          >
+            {t('cart.continueShoppingBtn')}
+          </Button>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-7 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
               <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
@@ -2122,9 +2147,9 @@ export const CartCheckoutPage: React.FC = () => {
               <p role="alert" className="text-xs font-bold text-red-600">{errors.payment}</p>
             )}
             {requiresPaymentReceipt && (
-              <div className="rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/40 p-4 sm:p-5 space-y-4">
-                <div className="flex flex-col gap-3 border-b border-brand-gold-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="flex min-w-0 cursor-pointer items-center gap-2.5">
+              <div className="space-y-5 rounded-2xl border-2 border-[#C89D54] bg-[#FBF6EC] p-4 sm:p-5 dark:bg-[#17231D]">
+                <div className="flex flex-col gap-3 border-b border-[#E5C992] pb-4 dark:border-[#7B663D] sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-w-0 cursor-pointer items-center gap-3">
                     <input
                       type="radio"
                       name="paymentMethod"
@@ -2133,34 +2158,36 @@ export const CartCheckoutPage: React.FC = () => {
                       onChange={() => undefined}
                       className="h-4 w-4 shrink-0 text-brand-green"
                     />
-                    <CreditCard className="h-5 w-5 shrink-0 text-brand-green" />
-                    <span className="break-words text-sm font-extrabold text-gray-900">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E7F1ED] dark:bg-[#1A332A]">
+                      <CreditCard className="h-5 w-5 text-[#0F3D2E] dark:text-[#E5C992]" />
+                    </span>
+                    <span className="min-w-0 break-words text-sm font-extrabold leading-snug text-[#09261C] dark:text-gray-100">
                       {selectedPaymentMethod?.name}
                     </span>
                   </label>
-                  <div className="rounded-xl border border-brand-gold-border bg-white/80 px-4 py-2 text-center sm:text-right">
-                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-gray-600">
+                  <div className="w-full min-w-0 rounded-xl border border-[#D6B874] bg-white px-3.5 py-3 text-center dark:border-[#7B663D] dark:bg-[#0D1915] sm:w-auto sm:min-w-[220px] sm:px-4">
+                    <p className="text-xs font-bold uppercase leading-snug tracking-wide text-gray-700 dark:text-gray-300">
                       {t('transfer.exactAmountLabel')}
                     </p>
-                    <p className="text-2xl font-black leading-tight text-brand-green sm:text-3xl">
+                    <p className="mt-1 break-words text-xl font-black leading-tight text-[#0F3D2E] dark:text-[#F1D49A] sm:text-2xl">
                       {formatUZS(finalTotalAmount)}
                     </p>
                   </div>
                 </div>
 
-                <p className="text-xs text-gray-700 leading-relaxed">
+                <p className="break-words text-sm leading-6 text-gray-700 [overflow-wrap:anywhere] dark:text-gray-200">
                   {bankTransferConfig.transferInstructions}
                 </p>
 
                 {hasConfiguredTransferCards ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {bankTransferConfig.humoCardNumber.trim() && (
-                      <div className="p-3.5 rounded-xl bg-white border border-gray-200 space-y-1.5 shadow-sm">
+                      <div className="min-w-0 space-y-2 rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm dark:border-[#28453B] dark:bg-[#0D1915]">
                         <Badge variant="green" size="sm">
                           HUMO
                         </Badge>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-sm font-extrabold text-gray-900">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <span className="min-w-0 flex-1 font-mono text-sm font-extrabold leading-relaxed text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100">
                             {bankTransferConfig.humoCardNumber}
                           </span>
                           <button
@@ -2171,7 +2198,8 @@ export const CartCheckoutPage: React.FC = () => {
                                 'HUMO'
                               )
                             }
-                            className="p-1.5 rounded-lg bg-surface-page hover:bg-[#0F3D2E] hover:text-white text-gray-700"
+                            aria-label={`HUMO ${t('transfer.copyCardNumber')}`}
+                            className="shrink-0 rounded-lg bg-surface-page p-2 text-gray-700 hover:bg-[#0F3D2E] hover:text-white dark:bg-[#1A332A] dark:text-gray-100"
                           >
                             {copiedCardField === 'HUMO' ? (
                               <Check className="w-4 h-4 text-emerald-600" />
@@ -2181,21 +2209,23 @@ export const CartCheckoutPage: React.FC = () => {
                           </button>
                         </div>
                         {bankTransferConfig.humoCardHolder && (
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs leading-relaxed text-gray-600 [overflow-wrap:anywhere] dark:text-gray-300">
                             {t('transfer.recipientLabel')}{' '}
-                            <strong>{bankTransferConfig.humoCardHolder}</strong>
+                            <strong className="text-gray-900 dark:text-gray-100">
+                              {bankTransferConfig.humoCardHolder}
+                            </strong>
                           </p>
                         )}
                       </div>
                     )}
 
                     {bankTransferConfig.uzcardCardNumber.trim() && (
-                      <div className="p-3.5 rounded-xl bg-white border border-gray-200 space-y-1.5 shadow-sm">
+                      <div className="min-w-0 space-y-2 rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm dark:border-[#28453B] dark:bg-[#0D1915]">
                         <Badge variant="info" size="sm">
                           UZCARD
                         </Badge>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-sm font-extrabold text-gray-900">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <span className="min-w-0 flex-1 font-mono text-sm font-extrabold leading-relaxed text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100">
                             {bankTransferConfig.uzcardCardNumber}
                           </span>
                           <button
@@ -2206,7 +2236,8 @@ export const CartCheckoutPage: React.FC = () => {
                                 'UZCARD'
                               )
                             }
-                            className="p-1.5 rounded-lg bg-surface-page hover:bg-[#0F3D2E] hover:text-white text-gray-700"
+                            aria-label={`UZCARD ${t('transfer.copyCardNumber')}`}
+                            className="shrink-0 rounded-lg bg-surface-page p-2 text-gray-700 hover:bg-[#0F3D2E] hover:text-white dark:bg-[#1A332A] dark:text-gray-100"
                           >
                             {copiedCardField === 'UZCARD' ? (
                               <Check className="w-4 h-4 text-emerald-600" />
@@ -2216,9 +2247,9 @@ export const CartCheckoutPage: React.FC = () => {
                           </button>
                         </div>
                         {bankTransferConfig.uzcardCardHolder && (
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs leading-relaxed text-gray-600 [overflow-wrap:anywhere] dark:text-gray-300">
                             {t('transfer.recipientLabel')}{' '}
-                            <strong>
+                            <strong className="text-gray-900 dark:text-gray-100">
                               {bankTransferConfig.uzcardCardHolder}
                             </strong>
                           </p>
@@ -2240,8 +2271,8 @@ export const CartCheckoutPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="space-y-2 pt-2 border-t border-brand-gold-border">
-                  <label className="block text-xs font-bold text-gray-900">
+                <div className="space-y-2 border-t border-[#E5C992] pt-3 dark:border-[#7B663D]">
+                  <label className="block text-sm font-bold text-gray-900 dark:text-gray-100">
                     {t('transfer.uploadLabel')}
                   </label>
 
@@ -2278,12 +2309,12 @@ export const CartCheckoutPage: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <label className="w-full py-4 px-4 rounded-xl border-2 border-dashed border-brand-green/50 bg-white hover:bg-brand-green-light/30 transition-colors flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center">
-                      <Upload className="w-5 h-5 text-brand-green" />
-                      <span className="text-xs font-bold text-brand-green">
+                    <label className="flex w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-brand-green/50 bg-white px-4 py-4 text-center transition-colors hover:bg-brand-green-light/30 dark:bg-[#0D1915] dark:hover:bg-[#12211C]">
+                      <Upload className="h-5 w-5 text-brand-green dark:text-[#E5C992]" />
+                      <span className="text-sm font-bold text-brand-green dark:text-[#E5C992]">
                         {t('transfer.selectFileBtn')}
                       </span>
-                      <span className="text-[11px] text-gray-500">
+                      <span className="text-xs text-gray-600 dark:text-gray-300">
                         JPG, PNG, WEBP, PDF (≤ 5 MB)
                       </span>
                       <input

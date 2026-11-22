@@ -48,7 +48,7 @@ import {
 } from '../../components/checkout/DeliveryMapModal';
 import { UZBEKISTAN_REGIONS } from '../../utils/uzbekistanLocations';
 
-type AccountTab = 'orders' | 'addresses' | 'profile';
+type AccountTab = 'orders' | 'addresses';
 type AuthMode = 'signin' | 'signup' | 'reset' | 'verify_pending' | 'update_password';
 const PASSWORD_RECOVERY_SESSION_KEY = 'zaven_password_recovery_active';
 
@@ -474,7 +474,7 @@ export const AccountPage: React.FC = () => {
       if (error || !data.user) {
         setAuthMode('signin');
         setAuthFeedback(
-          'Email tasdiqlangan boʻlsa, parolingiz bilan tizimga kiring.'
+          t('account.signInAfterVerification')
         );
         return;
       }
@@ -489,6 +489,14 @@ export const AccountPage: React.FC = () => {
       } else {
         setAuthError(t('account.notVerifiedYet'));
       }
+    } catch (error) {
+      setAuthError(
+        getFriendlyAuthError(
+          error,
+          t('account.connectionError'),
+          t('account.emailRateLimit')
+        )
+      );
     } finally {
       setIsAuthSubmitting(false);
     }
@@ -748,10 +756,12 @@ export const AccountPage: React.FC = () => {
       <div className="zaven-page-container py-6 sm:py-12">
         <div className="max-w-xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
           {/* Top Header */}
-          <div className="bg-[#0F3D2E] text-white p-5 sm:p-6 space-y-2">
-            <Badge variant="gold" size="sm">
-              {t('account.emailAuthBadge')}
-            </Badge>
+          <div className={`bg-[#0F3D2E] text-white p-5 sm:p-6 ${authMode === 'verify_pending' ? '' : 'space-y-2'}`}>
+            {authMode !== 'verify_pending' && (
+              <Badge variant="gold" size="sm">
+                {t('account.emailAuthBadge')}
+              </Badge>
+            )}
             <h1 className="text-lg sm:text-2xl font-extrabold text-white">
               {authMode === 'signup'
                 ? t('account.signUpTitle')
@@ -763,19 +773,19 @@ export const AccountPage: React.FC = () => {
                 ? t('account.updatePasswordTitle')
                 : t('account.signInTitle')}
             </h1>
-            <p className="text-xs text-emerald-100/90 leading-relaxed">
-              {authMode === 'signup'
-                ? t('account.signUpSub')
-                : authMode === 'reset'
-                ? t('account.resetSub')
-                : authMode === 'verify_pending'
-                ? t('account.verifyPendingDesc')
-                : t('account.signInSub')}
-            </p>
+            {authMode !== 'verify_pending' && (
+              <p className="text-xs text-emerald-100/90 leading-relaxed">
+                {authMode === 'signup'
+                  ? t('account.signUpSub')
+                  : authMode === 'reset'
+                  ? t('account.resetSub')
+                  : t('account.signInSub')}
+              </p>
+            )}
           </div>
 
-          <div className="p-5 sm:p-6 space-y-5">
-            {safeRedirectPath && (
+          <div className={`p-5 sm:p-6 ${authMode === 'verify_pending' ? 'space-y-4' : 'space-y-5'}`}>
+            {safeRedirectPath && authMode !== 'verify_pending' && (
               <div className="p-3.5 rounded-xl bg-brand-green-light/70 dark:bg-[#162923] border border-brand-green/30 flex items-start gap-2.5 text-xs font-semibold text-brand-green">
                 <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{t('account.checkoutRedirectNotice')}</span>
@@ -841,7 +851,7 @@ export const AccountPage: React.FC = () => {
               </div>
             )}
 
-            {authFeedback && (
+            {authFeedback && authMode !== 'verify_pending' && (
               <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-2.5 text-xs font-semibold text-emerald-800">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
                 <span className="min-w-0 break-words [overflow-wrap:anywhere] leading-relaxed">{authFeedback}</span>
@@ -974,6 +984,7 @@ export const AccountPage: React.FC = () => {
                   fullWidth
                   isLoading={isAuthSubmitting}
                   leftIcon={<Mail className="w-4 h-4 text-[#C89D54]" />}
+                  className="min-h-14 gap-2.5 px-3 py-3 text-sm leading-snug sm:px-5 sm:text-base"
                 >
                   {t('account.signUpBtn')}
                 </Button>
@@ -1072,19 +1083,16 @@ export const AccountPage: React.FC = () => {
             {/* VIEW E: EMAIL VERIFICATION PENDING SCREEN */}
             {authMode === 'verify_pending' && (
               <div className="space-y-4">
-                <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2 text-xs sm:text-sm">
-                  <div className="flex items-center gap-2 font-bold text-brand-green">
-                    <Mail className="w-4 h-4 shrink-0" />
-                    <span className="truncate">
-                      {pendingEmail || authEmail}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                <div className="space-y-2 text-center">
+                  <p className="break-all text-sm font-bold text-brand-green">
+                    {pendingEmail || authEmail}
+                  </p>
+                  <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
                     {t('account.verifyPendingDesc')}
                   </p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="flex flex-col gap-2.5 sm:flex-row">
                   <Button
                     type="button"
                     variant="primary"
@@ -1112,7 +1120,14 @@ export const AccountPage: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="pt-2 border-t border-gray-100 dark:border-[#28453B] flex items-center justify-between text-xs">
+                {authFeedback &&
+                  authFeedback !== t('account.notVerifiedYet') && (
+                    <p role="status" className="text-center text-xs leading-relaxed text-emerald-700 dark:text-emerald-300">
+                      {authFeedback}
+                    </p>
+                  )}
+
+                <div className="pt-2 border-t border-gray-100 dark:border-[#28453B] text-center text-xs">
                   <button
                     type="button"
                     onClick={() => {
@@ -1123,13 +1138,6 @@ export const AccountPage: React.FC = () => {
                     className="font-bold text-brand-green hover:underline"
                   >
                     ← {t('account.signInTab')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={signOutCustomer}
-                    className="text-gray-500 hover:underline"
-                  >
-                    {t('account.signOut')}
                   </button>
                 </div>
               </div>
@@ -1171,23 +1179,33 @@ export const AccountPage: React.FC = () => {
                 </span>
               )}
             </div>
+            {profileSaved && (
+              <p role="status" className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {t('account.savedSuccess')}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            aria-label="Profilni tahrirlash"
-            title="Profilni tahrirlash"
+            aria-label={t('account.editProfile')}
+            title={t('account.editProfile')}
             onClick={() => {
-              setActiveTab('profile');
+              setProfileName(currentCustomer.fullName);
+              setProfilePhone(currentCustomer.phone || '+998 ');
+              setProfileTelegram(currentCustomer.telegramUsername || '');
+              setProfileNewPassword('');
+              setProfileConfirmPassword('');
               setIsProfileEditorOpen(true);
               setProfileError('');
               setProfileSaved(false);
             }}
-            className="w-10 h-10 rounded-xl border border-gray-200 dark:border-[#2F5246] text-gray-700 dark:text-gray-200 inline-flex items-center justify-center hover:border-brand-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-sm font-bold text-gray-700 hover:border-brand-green focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-gold dark:border-[#2F5246] dark:text-gray-200"
           >
-            <Edit3 className="w-4 h-4" />
+            <Edit3 className="h-4 w-4" />
+            <span>{t('account.editProfile')}</span>
           </button>
           <Button
             variant="outline"
@@ -1201,133 +1219,95 @@ export const AccountPage: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'profile' && (
+      {isProfileEditorOpen && (
         <section className="mt-4 bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-5 sm:p-6 shadow-card">
-          {isProfileEditorOpen ? (
-            <form
-              onSubmit={handleSaveProfile}
-              className="max-w-lg space-y-4"
-            >
-              {profileError && (
-                <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold leading-relaxed text-red-700 break-words">
-                  {profileError}
-                </div>
-              )}
-
-              <Input
-                label={t('account.emailLabel')}
-                type="email"
-                value={currentCustomer.email || ''}
-                disabled
-                leftIcon={<Mail className="w-4 h-4" />}
-                helperText={t('account.verifiedBadge')}
-              />
-              <Input
-                label={t('cart.fullName')}
-                required
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                leftIcon={<User className="w-4 h-4" />}
-              />
-              <Input
-                label={t('cart.phone')}
-                required
-                type="tel"
-                value={profilePhone}
-                onChange={(e) =>
-                  setProfilePhone(formatUzbekPhone(e.target.value))
-                }
-                leftIcon={<Phone className="w-4 h-4" />}
-              />
-              <Input
-                label={t('cart.telegramOptional')}
-                value={profileTelegram}
-                onChange={(e) => setProfileTelegram(e.target.value)}
-                placeholder={t('cart.telegramPlaceholder')}
-                leftIcon={<Send className="w-4 h-4" />}
-              />
-
-              <div className="border-t border-gray-200 dark:border-[#28453B] pt-4 space-y-3">
-                <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                  Parolni oʻzgartirish (ixtiyoriy)
-                </h3>
-                <Input
-                  label="Yangi parol"
-                  type="password"
-                  autoComplete="new-password"
-                  value={profileNewPassword}
-                  onChange={(e) => setProfileNewPassword(e.target.value)}
-                />
-                <Input
-                  label="Yangi parolni tasdiqlang"
-                  type="password"
-                  autoComplete="new-password"
-                  value={profileConfirmPassword}
-                  onChange={(e) => setProfileConfirmPassword(e.target.value)}
-                />
+          <form onSubmit={handleSaveProfile} className="max-w-lg space-y-4">
+            {profileError && (
+              <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold leading-relaxed text-red-700 break-words">
+                {profileError}
               </div>
+            )}
 
-              <div className="flex flex-col-reverse sm:flex-row gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  fullWidth
-                  className="sm:w-auto"
-                  disabled={isSavingProfile}
-                  onClick={() => {
-                    setIsProfileEditorOpen(false);
-                    setActiveTab('orders');
-                    setProfileError('');
-                  }}
-                >
-                  {t('footer.cancelBtn')}
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                  className="sm:w-auto"
-                  isLoading={isSavingProfile}
-                >
-                  {t('account.saveChanges')}
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                {profileSaved && (
-                  <p role="status" className="text-xs font-semibold text-emerald-700 mb-2">
-                    {t('account.savedSuccess') || 'Maʼlumotlar saqlandi.'}
-                  </p>
-                )}
-                <p className="font-bold text-gray-900 dark:text-gray-100">
-                  {currentCustomer.fullName}
-                </p>
-                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                  {currentCustomer.phone}
-                  {currentCustomer.telegramUsername
-                    ? ` · ${currentCustomer.telegramUsername}`
-                    : ''}
-                </p>
-              </div>
+            <Input
+              label={t('account.emailLabel')}
+              type="email"
+              value={currentCustomer.email || ''}
+              disabled
+              leftIcon={<Mail className="w-4 h-4" />}
+              helperText={t('account.verifiedBadge')}
+            />
+            <Input
+              label={t('cart.fullName')}
+              required
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              leftIcon={<User className="w-4 h-4" />}
+            />
+            <Input
+              label={t('cart.phone')}
+              required
+              type="tel"
+              value={profilePhone}
+              onChange={(e) =>
+                setProfilePhone(formatUzbekPhone(e.target.value))
+              }
+              leftIcon={<Phone className="w-4 h-4" />}
+            />
+            <Input
+              label={t('cart.telegramOptional')}
+              value={profileTelegram}
+              onChange={(e) => setProfileTelegram(e.target.value)}
+              placeholder={t('cart.telegramPlaceholder')}
+              leftIcon={<Send className="w-4 h-4" />}
+            />
+
+            <div className="border-t border-gray-200 dark:border-[#28453B] pt-4 space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                Parolni oʻzgartirish (ixtiyoriy)
+              </h3>
+              <Input
+                label="Yangi parol"
+                type="password"
+                autoComplete="new-password"
+                value={profileNewPassword}
+                onChange={(e) => setProfileNewPassword(e.target.value)}
+              />
+              <Input
+                label="Yangi parolni tasdiqlang"
+                type="password"
+                autoComplete="new-password"
+                value={profileConfirmPassword}
+                onChange={(e) => setProfileConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
-                leftIcon={<Edit3 className="w-4 h-4" />}
+                size="md"
+                fullWidth
+                className="sm:w-auto"
+                disabled={isSavingProfile}
                 onClick={() => {
-                  setIsProfileEditorOpen(true);
-                  setProfileSaved(false);
+                  setIsProfileEditorOpen(false);
                   setProfileError('');
                 }}
               >
-                Tahrirlash
+                {t('footer.cancelBtn')}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                fullWidth
+                className="sm:w-auto"
+                isLoading={isSavingProfile}
+              >
+                {t('account.saveChanges')}
               </Button>
             </div>
-          )}
+          </form>
         </section>
       )}
 

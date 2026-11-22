@@ -292,7 +292,7 @@ export const HomePage: React.FC = () => {
           <div
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
-            className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-white to-[#F2F6F4] dark:from-[#12211C] dark:to-[#0C1713] border border-gray-200/90 dark:border-[#28453B] shadow-card select-none"
+            className="relative min-h-[160px] overflow-hidden rounded-3xl border border-gray-200/90 bg-gradient-to-b from-white to-[#F2F6F4] shadow-card select-none dark:border-[#28453B] dark:from-[#12211C] dark:to-[#0C1713] sm:min-h-[220px] lg:min-h-[280px]"
           >
             {/* Sliding Image Track */}
             <div
