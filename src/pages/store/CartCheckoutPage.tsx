@@ -100,6 +100,8 @@ export const CartCheckoutPage: React.FC = () => {
     cart,
     coupons,
     currentCustomer,
+    isCustomerAuthRestoring,
+    isCartHydrating,
     storeSettings,
     updateCartQuantity,
     removeFromCart,
@@ -135,6 +137,7 @@ export const CartCheckoutPage: React.FC = () => {
     if (location.pathname === '/cart') {
       setActiveStep('cart');
     } else if (location.pathname.startsWith('/checkout')) {
+      if (isCustomerAuthRestoring || isCartHydrating) return;
       if (!isCustomerSignedIn) {
         setActiveStep('cart');
         setIsAuthPromptModalOpen(true);
@@ -142,7 +145,12 @@ export const CartCheckoutPage: React.FC = () => {
         setActiveStep((step) => (step === 'cart' ? 'address' : step));
       }
     }
-  }, [location.pathname, isCustomerSignedIn]);
+  }, [
+    location.pathname,
+    isCustomerSignedIn,
+    isCustomerAuthRestoring,
+    isCartHydrating,
+  ]);
 
   const enabledRegions = useMemo(
     () => storeSettings.delivery.regions.filter((r) => r.isEnabled),
@@ -1138,6 +1146,21 @@ export const CartCheckoutPage: React.FC = () => {
     setCopiedOrderNumber(true);
     setTimeout(() => setCopiedOrderNumber(false), 3000);
   };
+
+  if (!completedOrder && (isCustomerAuthRestoring || isCartHydrating)) {
+    return (
+      <div
+        className="zaven-page-container flex min-h-[45vh] items-center justify-center py-10"
+        role="status"
+        aria-live="polite"
+      >
+        <div className="flex items-center gap-3 text-sm font-medium text-gray-600 dark:text-gray-300">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-brand-green" />
+          <span>Savatcha yuklanmoqda...</span>
+        </div>
+      </div>
+    );
+  }
 
   // 1. Order Confirmation Screen
   if (completedOrder) {

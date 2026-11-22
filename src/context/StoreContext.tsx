@@ -64,6 +64,7 @@ interface StoreContextType {
   isSyncingSupabase: boolean;
   isCustomerAuthRestoring: boolean;
   customerAuthRestoreFailed: boolean;
+  isCartHydrating: boolean;
 
   cart: CartItem[];
   favoriteIds: string[];
@@ -242,9 +243,26 @@ const loadCartForKey = (key: string, fallback: CartItem[] = []): CartItem[] => {
 const saveCartForKey = (key: string, cart: CartItem[]) => {
   try {
     localStorage.setItem(key, JSON.stringify(cart));
+    return true;
   } catch {
-    // Keep the cart available in memory if browser storage is unavailable.
+    return false;
   }
+};
+
+const mergeCartItems = (...carts: CartItem[][]): CartItem[] => {
+  const quantities = new Map<string, number>();
+  for (const items of carts) {
+    for (const item of items) {
+      quantities.set(
+        item.productId,
+        (quantities.get(item.productId) || 0) + item.quantity
+      );
+    }
+  }
+  return Array.from(quantities, ([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
 };
 
 function mapRowToCategory(row: Record<string, unknown>): Category {
@@ -594,13 +612,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return INITIAL_STORE_SETTINGS;
   });
   const initialCartOwnerKey = getCartStorageKey(initialFavoriteOwner);
+  const initialCartFallback = isSupabaseConfigured
+    ? []
+    : savedState?.cart || [{ productId: 'prod-1', quantity: 1 }];
   const [cart, setCart] = useState<CartItem[]>(() =>
-    loadCartForKey(
-      initialCartOwnerKey,
-      initialFavoriteOwner
-        ? []
-        : savedState?.cart || [{ productId: 'prod-1', quantity: 1 }]
-    )
+    loadCartForKey(initialCartOwnerKey, initialCartFallback)
   );
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
     loadFavoritesForKey(getFavoritesStorageKey(initialFavoriteOwner))
@@ -615,6 +631,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       ? savedState.currentCustomer
       : null
   );
+  const [isCustomerAuthRestoring, setIsCustomerAuthRestoring] =
+    useState<boolean>(isSupabaseConfigured);
+  const [customerAuthRestoreFailed, setCustomerAuthRestoreFailed] =
+    useState<boolean>(false);
+  const [isCartHydrating, setIsCartHydrating] =
+    useState<boolean>(isSupabaseConfigured);
+  const authRestoreCompleteRef = useRef(!isSupabaseConfigured);
   const customersRef = useRef(customers);
   customersRef.current = customers;
   const customerSyncInFlightRef = useRef(new Map<string, Promise<void>>());
@@ -625,6 +648,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   );
   const cartOwnerKeyRef = useRef(initialCartOwnerKey);
   const skipCartSaveRef = useRef(false);
+  const pendingGuestCartMigrationRef = useRef<{
+    sourceKey: string;
+    targetKey: string;
+  } | null>(null);
 
   useEffect(() => {
     if (favoriteOwnerKeyRef.current === favoriteOwnerKey) return;
@@ -633,28 +660,61 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [favoriteOwnerKey]);
 
   useEffect(() => {
-    if (cartOwnerKeyRef.current === cartOwnerKey) return;
+    const previousCartOwnerKey = cartOwnerKeyRef.current;
+    if (previousCartOwnerKey === cartOwnerKey) {
+      if (isCartHydrating && !isCustomerAuthRestoring) {
+        setIsCartHydrating(false);
+      }
+      return;
+    }
+
     cartOwnerKeyRef.current = cartOwnerKey;
     skipCartSaveRef.current = true;
-    setCart(loadCartForKey(cartOwnerKey));
-  }, [cartOwnerKey]);
+    const guestCartKey = `${CART_STORAGE_PREFIX}guest`;
+    const movingGuestCart =
+      previousCartOwnerKey === guestCartKey && cartOwnerKey !== guestCartKey;
+    let hasGuestCart = false;
+    try {
+      hasGuestCart = localStorage.getItem(previousCartOwnerKey) !== null;
+    } catch {
+      // Cart state is still merged in memory if storage is unavailable.
+    }
+
+    const cartToMerge = movingGuestCart ? cart : [];
+    const nextCart = mergeCartItems(
+      loadCartForKey(cartOwnerKey, []),
+      cartToMerge
+    );
+    pendingGuestCartMigrationRef.current =
+      movingGuestCart && hasGuestCart
+        ? { sourceKey: previousCartOwnerKey, targetKey: cartOwnerKey }
+        : null;
+    setCart(nextCart);
+    setIsCartHydrating(false);
+  }, [cartOwnerKey, cart, isCartHydrating, isCustomerAuthRestoring]);
 
   useEffect(() => {
     if (skipCartSaveRef.current) {
       skipCartSaveRef.current = false;
       return;
     }
-    saveCartForKey(cartOwnerKey, cart);
-  }, [cartOwnerKey, cart]);
+    if (isCustomerAuthRestoring || isCartHydrating) return;
+
+    const saved = saveCartForKey(cartOwnerKey, cart);
+    const pendingMigration = pendingGuestCartMigrationRef.current;
+    if (saved && pendingMigration?.targetKey === cartOwnerKey) {
+      try {
+        localStorage.removeItem(pendingMigration.sourceKey);
+        pendingGuestCartMigrationRef.current = null;
+      } catch {
+        // Keep the guest copy if it cannot be safely removed.
+      }
+    }
+  }, [cartOwnerKey, cart, isCustomerAuthRestoring, isCartHydrating]);
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(ADMIN_USERS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
-  const [isCustomerAuthRestoring, setIsCustomerAuthRestoring] =
-    useState<boolean>(isSupabaseConfigured);
-  const [customerAuthRestoreFailed, setCustomerAuthRestoreFailed] =
-    useState<boolean>(false);
-  const authRestoreCompleteRef = useRef(!isSupabaseConfigured);
 
   // Requirement #8: Deduplicate toasts so one user action creates strictly one notification
   const lastToastRef = useRef<{
@@ -786,6 +846,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
               persistedCustomer = mapRowToCustomer(profileResult.data);
               if (persistedCustomer.isBlocked || persistedCustomer.isDeleted) {
                 await supabase.auth.signOut();
+                setIsCartHydrating(true);
                 setCurrentCustomer(null);
                 addToast({
                   type: 'error',
@@ -841,6 +902,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             persistedCustomer?.addresses || cachedCustomer?.addresses || [],
         };
 
+        if (getCartStorageKey(merged) !== cartOwnerKeyRef.current) {
+          setIsCartHydrating(true);
+        }
         setCurrentCustomer(merged);
         setCustomers((previous) => {
           const match = previous.find(
@@ -878,6 +942,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     );
     if (!ownRecord || (!ownRecord.isBlocked && !ownRecord.isDeleted)) return;
     if (isSupabaseConfigured && supabase) supabase.auth.signOut().catch(() => {});
+    setIsCartHydrating(true);
     setCurrentCustomer(null);
     addToast({
       type: 'error',
@@ -1291,6 +1356,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           window.clearTimeout(authEventTimer);
           authEventTimer = undefined;
         }
+        setIsCartHydrating(true);
         setCurrentCustomer(null);
         setCustomerAuthRestoreFailed(false);
         if (realtimeChannel && supabase) {
@@ -1318,7 +1384,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         banners,
         coupons,
         storeSettings,
-        cart,
+        ...(!isSupabaseConfigured ? { cart } : {}),
         favoriteIds,
         recentlyViewedIds,
         currentAdminRole,
@@ -1436,6 +1502,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       (c) => c.phone.replace(/\D/g, '') === phone.replace(/\D/g, '')
     );
     if (existing) {
+      if (getCartStorageKey(existing) !== cartOwnerKeyRef.current) {
+        setIsCartHydrating(true);
+      }
       setCurrentCustomer(existing);
       addToast({
         type: 'success',
@@ -1454,6 +1523,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       createdAt: new Date().toISOString(),
     };
     setCustomers((prev) => [newCustomer, ...prev]);
+    if (getCartStorageKey(newCustomer) !== cartOwnerKeyRef.current) {
+      setIsCartHydrating(true);
+    }
     setCurrentCustomer(newCustomer);
 
     if (isSupabaseConfigured && supabase) {
@@ -1471,9 +1543,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const signOutCustomer = async () => {
+    setIsCartHydrating(true);
     if (isSupabaseConfigured && supabase) {
       await supabase.auth.signOut().catch(() => {});
     }
+    setIsCartHydrating(true);
     setCurrentCustomer(null);
     addToast({
       type: 'info',
@@ -2642,6 +2716,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         isSyncingSupabase,
         isCustomerAuthRestoring,
         customerAuthRestoreFailed,
+        isCartHydrating,
         cart,
         favoriteIds,
         recentlyViewedIds,
