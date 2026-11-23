@@ -46,6 +46,7 @@ export const StoreHeader: React.FC = () => {
   const location = useLocation();
 
   const isAccountPage = location.pathname === '/account';
+  const isCheckoutPage = location.pathname.startsWith('/checkout');
 
   useEffect(() => {
     const header = headerRef.current;
@@ -201,7 +202,7 @@ export const StoreHeader: React.FC = () => {
             </div>
 
             {/* Desktop & Tablet Inline Search Bar */}
-            {!isAccountPage && (
+            {!isAccountPage && !isCheckoutPage && (
             <div className="hidden md:block flex-1 max-w-2xl relative">
               <form onSubmit={handleSearchSubmit} className="relative">
                 <input
@@ -313,7 +314,7 @@ export const StoreHeader: React.FC = () => {
           </div>
 
           {/* Mobile Single Search Bar */}
-          {!isAccountPage && <div className="mt-2 md:hidden relative">
+          {!isAccountPage && !isCheckoutPage && <div className="mt-2 md:hidden relative">
             <form onSubmit={handleSearchSubmit} className="relative">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -348,7 +349,7 @@ export const StoreHeader: React.FC = () => {
           </div>}
 
           {/* Live Search Suggestions Dropdown */}
-          {!isAccountPage && isSearchFocused && searchQuery.trim().length >= 1 && (
+          {!isAccountPage && !isCheckoutPage && isSearchFocused && searchQuery.trim().length >= 1 && (
             <div className="relative max-w-2xl mx-auto">
               <div className="absolute left-0 right-0 mt-1.5 bg-white dark:bg-[#12211C] rounded-xl border border-gray-200 dark:border-[#2F5246] shadow-xl overflow-hidden z-50 text-gray-900 dark:text-gray-100">
                 {searchResults.length > 0 ? (

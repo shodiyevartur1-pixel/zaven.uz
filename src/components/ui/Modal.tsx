@@ -26,7 +26,34 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'lg',
 }) => {
   const { t } = useThemeLanguage();
+  const [visualViewportBounds, setVisualViewportBounds] = React.useState<{
+    height: number;
+    offsetTop: number;
+  } | null>(null);
   useBodyScrollLock(isOpen);
+
+  useEffect(() => {
+    if (!isOpen || !window.visualViewport) {
+      setVisualViewportBounds(null);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const updateViewportBounds = () => {
+      setVisualViewportBounds({
+        height: viewport.height,
+        offsetTop: viewport.offsetTop,
+      });
+    };
+
+    updateViewportBounds();
+    viewport.addEventListener('resize', updateViewportBounds);
+    viewport.addEventListener('scroll', updateViewportBounds);
+    return () => {
+      viewport.removeEventListener('resize', updateViewportBounds);
+      viewport.removeEventListener('scroll', updateViewportBounds);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -54,7 +81,16 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center px-3.5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6"
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden px-3.5 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6"
+      style={
+        visualViewportBounds
+          ? {
+              top: `${visualViewportBounds.offsetTop}px`,
+              bottom: 'auto',
+              height: `${visualViewportBounds.height}px`,
+            }
+          : undefined
+      }
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
@@ -68,7 +104,14 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Dialog Box — Constrained to visible screen space with safe-area padding */}
       <div
-        className={`relative w-full min-w-0 ${maxWidthClass} bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#2F5246] shadow-2xl overflow-hidden z-10 flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[86vh]`}
+        className={`zaven-modal-dialog relative flex w-full min-w-0 ${maxWidthClass} flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-[#2F5246] dark:bg-[#12211C] z-10`}
+        style={
+          visualViewportBounds
+            ? {
+              maxHeight: `calc(${visualViewportBounds.height}px - max(1rem, env(safe-area-inset-top, 0px)) - max(1rem, env(safe-area-inset-bottom, 0px)) - 1rem)`,
+              }
+            : undefined
+        }
       >
         {/* Sticky Header */}
         <div className="px-4 py-3 sm:px-5 sm:py-3.5 bg-gray-50 dark:bg-[#162923] border-b border-gray-200 dark:border-[#28453B] flex items-center justify-between gap-3 shrink-0">

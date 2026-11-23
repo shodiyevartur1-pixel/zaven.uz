@@ -56,7 +56,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     inquiries,
     storeSettings,
     adjustProductStock,
-    saveProduct,
     resetOrderStatsBaseline,
   } = useStore();
 
@@ -102,6 +101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [quickThresholdVal, setQuickThresholdVal] = useState<number>(5);
   const [quickStockReason, setQuickStockReason] = useState<string>('');
   const [isSavingQuickStock, setIsSavingQuickStock] = useState(false);
+  const [quickStockError, setQuickStockError] = useState('');
 
   const resetTimestampMs = useMemo(() => {
     if (!storeSettings.statsResetAt) return 0;
@@ -285,24 +285,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!quickStockProduct || isSavingQuickStock) return;
 
+    setQuickStockError('');
     setIsSavingQuickStock(true);
     try {
-      const nextThreshold = Math.max(1, quickThresholdVal);
-      if (nextThreshold !== quickStockProduct.lowStockThreshold) {
-        const thresholdSaved = await saveProduct({
-          ...quickStockProduct,
-          lowStockThreshold: nextThreshold,
-          stock: quickStockProduct.stock,
-          updatedAt: new Date().toISOString(),
-        });
-        if (!thresholdSaved.ok) return;
-      }
-      const stockSaved = await adjustProductStock(
+      const result = await adjustProductStock(
         quickStockProduct.id,
         Math.max(0, quickStockVal),
-        quickStockReason.trim() || 'Boshqaruv panelidan tezkor zaxira yangilandi'
+        quickStockReason,
+        Math.max(1, quickThresholdVal)
       );
-      if (stockSaved) setQuickStockProduct(null);
+      if (result.ok) setQuickStockProduct(null);
+      else setQuickStockError(result.error || 'Zaxira saqlanmadi. Qayta urinib koʻring.');
+    } catch (error) {
+      setQuickStockError(
+        error instanceof Error ? error.message : 'Zaxira saqlanmadi. Qayta urinib koʻring.'
+      );
     } finally {
       setIsSavingQuickStock(false);
     }
@@ -785,6 +782,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           setQuickStockVal(prod.stock);
                           setQuickThresholdVal(prod.lowStockThreshold);
                           setQuickStockReason('');
+                          setQuickStockError('');
                         }}
                         className="text-[11px] font-extrabold text-brand-green hover:underline"
                       >
@@ -853,7 +851,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Quick Stock Adjustment Modal */}
       <Modal
         isOpen={Boolean(quickStockProduct)}
-        onClose={() => setQuickStockProduct(null)}
+        onClose={() => {
+          if (!isSavingQuickStock) setQuickStockProduct(null);
+        }}
         title={
           quickStockProduct
             ? `Zaxirani yangilash: ${quickStockProduct.sku}`
@@ -866,6 +866,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               variant="outline"
               size="sm"
               fullWidth
+              disabled={isSavingQuickStock}
               onClick={() => setQuickStockProduct(null)}
             >
               Bekor qilish
@@ -890,6 +891,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onSubmit={handleSaveQuickStock}
             className="space-y-4 text-xs sm:text-sm"
           >
+            {quickStockError && (
+              <p role="alert" className="break-words rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-semibold leading-relaxed text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+                {quickStockError}
+              </p>
+            )}
             <p className="font-bold text-gray-900 dark:text-gray-100">
               {quickStockProduct.name}
             </p>

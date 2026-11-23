@@ -31,6 +31,9 @@ export function getPersistenceErrorMessage(
   if (/^(JPG, PNG yoki WEBP rasm tanlang\.|Rasm hajmi .*oshmasin\.)$/i.test(message)) {
     return message;
   }
+  if (/PGRST202|could not find (the )?function|schema cache/i.test(message)) {
+    return `${subject}: bazadagi yangilash amali oʻrnatilmagan. Tegishli Supabase migratsiyasini qoʻllang va qayta urinib koʻring.`;
+  }
   if (/row.level security|\bRLS\b|permission denied|not allowed|42501/i.test(message)) {
     return `${subject}: bazaga ruxsat berilmadi. Faol hisob va ushbu amal uchun Supabase RLS siyosatini tekshiring.`;
   }

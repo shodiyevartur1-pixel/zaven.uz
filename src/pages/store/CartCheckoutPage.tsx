@@ -218,6 +218,8 @@ export const CartCheckoutPage: React.FC = () => {
   );
   const addressEditingSnapshotRef =
     useRef<CheckoutAddressSnapshot | null>(null);
+  const addressEditorRef = useRef<HTMLDivElement>(null);
+  const focusNewAddressOnRenderRef = useRef(false);
   const [mapSelectionFeedback, setMapSelectionFeedback] = useState<{
     type: 'success' | 'warning';
     text: string;
@@ -463,6 +465,31 @@ export const CartCheckoutPage: React.FC = () => {
   );
   const showAddressEditor =
     savedCustomerAddresses.length === 0 || isAddressEditing;
+  useEffect(() => {
+    if (
+      !focusNewAddressOnRenderRef.current ||
+      activeStep !== 'address' ||
+      !showAddressEditor
+    ) {
+      return;
+    }
+
+    focusNewAddressOnRenderRef.current = false;
+    const addressEditor = addressEditorRef.current;
+    if (!addressEditor) return;
+
+    const prefersReducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    addressEditor.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    addressEditor
+      .querySelector<HTMLElement>('button[aria-haspopup="dialog"], input, select, textarea')
+      ?.focus({ preventScroll: true });
+  }, [activeStep, showAddressEditor]);
+
   const markAddressAsCustom = () => {
     setSelectedSavedAddressId('new');
   };
@@ -483,6 +510,7 @@ export const CartCheckoutPage: React.FC = () => {
 
   const startNewAddress = () => {
     addressEditingSnapshotRef.current = captureAddressSnapshot();
+    focusNewAddressOnRenderRef.current = true;
     setSelectedSavedAddressId('new');
     setSelectedUzRegionId(UZBEKISTAN_REGIONS[0].id);
     setSelectedDistrict(UZBEKISTAN_REGIONS[0].districts[0] || '');
@@ -1351,6 +1379,27 @@ export const CartCheckoutPage: React.FC = () => {
           title={t('cart.emptyTitle')}
           description={t('cart.emptyDesc')}
         />
+        {recommendedForCart.length > 0 && (
+          <section
+            aria-labelledby="empty-cart-recommendations-title"
+            className="space-y-3.5 border-t border-gray-200 pt-6 dark:border-[#28453B]"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#C89D54]" />
+              <h2
+                id="empty-cart-recommendations-title"
+                className="text-sm font-extrabold text-gray-900 dark:text-gray-100 sm:text-lg"
+              >
+                {t('home.recommendedTitle')}
+              </h2>
+            </div>
+            <div className="zaven-product-grid zaven-product-grid-4">
+              {recommendedForCart.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     );
   }
@@ -1419,7 +1468,7 @@ export const CartCheckoutPage: React.FC = () => {
                     goToStep(step.id);
                   }
                 }}
-                className={`min-h-[40px] py-1.5 px-1.5 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1 min-w-0 ${
+                className={`min-h-[44px] py-1.5 px-1.5 sm:px-3 rounded-xl border text-center transition-all flex items-center justify-center gap-1 min-w-0 ${
                   isCurrent
                     ? 'bg-[#0F3D2E] text-white border-[#0F3D2E] font-extrabold shadow-sm'
                     : isCompleted
@@ -1434,8 +1483,8 @@ export const CartCheckoutPage: React.FC = () => {
                     {step.num}.
                   </span>
                 )}
-                <span className="sm:hidden text-[11px] leading-tight">
-                  {step.fullLabel.replace(/^\d+\.\s*/, '')}
+                <span className="sm:hidden whitespace-nowrap text-[11px] leading-tight">
+                  {step.shortLabel}
                 </span>
                 <span className="hidden sm:inline text-xs">
                   {step.fullLabel.replace(/^\d+\.\s*/, '')}
@@ -1623,10 +1672,13 @@ export const CartCheckoutPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 fullWidth
-                rightIcon={<ArrowRight className="w-5 h-5" />}
+                className="gap-2 px-3 sm:px-6"
+                rightIcon={<ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />}
                 onClick={() => goToStep('address')}
               >
-                {t('cart.proceedToPurchaseBtn')}
+                <span className="whitespace-nowrap text-sm leading-tight sm:text-base">
+                  {t('cart.proceedToPurchaseBtn')}
+                </span>
               </Button>
             </aside>
           </div>
@@ -1673,7 +1725,167 @@ export const CartCheckoutPage: React.FC = () => {
             </Badge>
           </div>
 
-          <div className="p-4 sm:p-6 space-y-5">
+          <div className="p-4 sm:p-6 flex flex-col gap-5">
+            {showAddressEditor && (
+              <div
+                ref={addressEditorRef}
+                className="min-w-0 space-y-4 scroll-mt-32 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]"
+              >
+                {savedCustomerAddresses.length > 0 && (
+                  <div className="border-b border-gray-200 pb-3 dark:border-[#28453B]">
+                    <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                      {isNewAddressMode
+                        ? 'Yangi manzil'
+                        : 'Manzilni buyurtma uchun tahrirlash'}
+                    </h2>
+                    <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">
+                      O‘zgartirishlar faqat shu buyurtma uchun; saqlangan manzilingiz o‘zgarmaydi.
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-col justify-between gap-2.5 border-b border-gray-200 pb-3 dark:border-[#28453B] sm:flex-row sm:items-center">
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
+                      {t('cart.region')} & {t('cart.district')}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                      {t('cart.deliveryService')}{' '}
+                      <strong className="text-brand-green">
+                        {isDeliveryFeeToBeConfirmed
+                          ? feeToBeConfirmedLabel
+                          : deliveryFee === 0
+                          ? t('cart.freeDelivery')
+                          : formatUZS(deliveryFee)}
+                      </strong>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<MapIcon className="h-4 w-4 text-brand-green" />}
+                    onClick={() => setIsMapModalOpen(true)}
+                  >
+                    {t('cart.openMapBtn')}
+                  </Button>
+                </div>
+
+                {mapSelectionFeedback && (
+                  <div
+                    className={`flex items-start justify-between gap-2 rounded-xl border p-3 text-xs ${
+                      mapSelectionFeedback.type === 'success'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-amber-200 bg-amber-50 text-amber-800'
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="break-words font-semibold">
+                        {mapSelectionFeedback.text}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMapSelectionFeedback(null)}
+                      className="shrink-0 text-xs font-extrabold underline"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <SearchableSelectSheet
+                    label={t('cart.region')}
+                    sheetTitle={t('cart.regionPickerTitle')}
+                    searchPlaceholder={t('cart.regionSearchPlaceholder')}
+                    noResultsText={t('cart.pickerNoResults')}
+                    required
+                    value={selectedUzRegionId}
+                    onChange={handleRegionChange}
+                    options={UZBEKISTAN_REGIONS.map((reg) => {
+                      const rule = resolveRegionTariffRule(
+                        reg.nameUz,
+                        enabledRegions
+                      );
+                      return {
+                        value: reg.id,
+                        label: getRegionDisplayName(reg),
+                        sublabel: rule?.note,
+                        badgeText: rule
+                          ? formatUZS(rule.fee)
+                          : feeToBeConfirmedLabel,
+                      };
+                    })}
+                    error={errors.region}
+                    helperText={
+                      selectedRegionRule
+                        ? selectedRegionRule.note
+                        : feeToBeConfirmedLabel
+                    }
+                  />
+                  <SearchableSelectSheet
+                    label={t('cart.district')}
+                    sheetTitle={t('cart.districtPickerTitle')}
+                    searchPlaceholder={t('cart.districtSearchPlaceholder')}
+                    noResultsText={t('cart.pickerNoResults')}
+                    required
+                    value={selectedDistrict}
+                    onChange={(dist) => {
+                      markAddressAsCustom();
+                      setSelectedDistrict(dist);
+                      if (errors.district)
+                        setErrors((prev) => ({
+                          ...prev,
+                          district: undefined,
+                        }));
+                    }}
+                    options={currentUzRegionObj.districts.map((dist) => ({
+                      value: dist,
+                      label: dist,
+                    }))}
+                    error={errors.district}
+                  />
+                </div>
+
+                <Input
+                  label={t('cart.address')}
+                  required
+                  value={addressLine}
+                  onChange={(e) => {
+                    markAddressAsCustom();
+                    setAddressLine(e.target.value);
+                    if (errors.address)
+                      setErrors((prev) => ({ ...prev, address: undefined }));
+                  }}
+                  placeholder={t('cart.addressPlaceholder')}
+                  leftIcon={<MapPin className="h-4 w-4" />}
+                  error={errors.address}
+                />
+
+                {savedCustomerAddresses.length > 0 && (
+                  <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-3 dark:border-[#28453B] sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="md"
+                      onClick={cancelAddressEditing}
+                    >
+                      Bekor qilish
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      onClick={finishAddressEditing}
+                    >
+                      Tayyor
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {savedCustomerAddresses.length > 0 &&
               (isSavedAddressPickerOpen || !isAddressEditing) && (
               <section className="min-w-0 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
@@ -1723,7 +1935,7 @@ export const CartCheckoutPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={startNewAddress}
-                      className="min-h-10 w-full rounded-xl border border-dashed border-brand-green px-3 py-2 text-left text-sm font-bold text-brand-green hover:bg-white/70"
+                      className="min-h-12 w-full min-w-0 break-words rounded-xl border border-[#C89D54]/60 bg-[#0F3D2E] px-4 py-3 text-left text-sm font-bold text-white transition-colors hover:bg-[#16533F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C89D54]"
                     >
                       + Yangi manzil qoʻshish
                     </button>
@@ -1786,7 +1998,7 @@ export const CartCheckoutPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={startNewAddress}
-                    className="mt-3 min-h-10 w-full rounded-xl border border-dashed border-brand-green px-3 py-2 text-left text-sm font-bold text-brand-green hover:bg-white/70"
+                    className="mt-3 min-h-12 w-full min-w-0 break-words rounded-xl border border-[#C89D54]/60 bg-[#0F3D2E] px-4 py-3 text-left text-sm font-bold text-white transition-colors hover:bg-[#16533F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C89D54]"
                   >
                     + Yangi manzil qoʻshish
                   </button>
@@ -1871,166 +2083,6 @@ export const CartCheckoutPage: React.FC = () => {
                 helperText={t('cart.phoneHelper')}
               />
             </div>
-
-            {/* Custom ZAVEN Region/District Pickers + Touch Map Picker (No GPS Button) */}
-            {showAddressEditor && (
-            <div className="min-w-0 space-y-4 rounded-2xl border border-gray-200 bg-[#F8F9FA] p-4 dark:border-[#28453B] dark:bg-[#162923]">
-              {savedCustomerAddresses.length > 0 && (
-                <div className="border-b border-gray-200 pb-3 dark:border-[#28453B]">
-                  <h2 className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                    {isNewAddressMode
-                      ? 'Yangi manzil'
-                      : 'Manzilni buyurtma uchun tahrirlash'}
-                  </h2>
-                  <p className="mt-1 break-words text-xs text-gray-600 dark:text-gray-300">
-                    O‘zgartirishlar faqat shu buyurtma uchun; saqlangan manzilingiz o‘zgarmaydi.
-                  </p>
-                </div>
-              )}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-200 dark:border-[#28453B] pb-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-brand-green">
-                    {t('cart.region')} & {t('cart.district')}
-                  </p>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                    {t('cart.deliveryService')}{' '}
-                    <strong className="text-brand-green">
-                      {isDeliveryFeeToBeConfirmed
-                        ? feeToBeConfirmedLabel
-                        : deliveryFee === 0
-                        ? t('cart.freeDelivery')
-                        : formatUZS(deliveryFee)}
-                    </strong>
-                  </p>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={<MapIcon className="w-4 h-4 text-brand-green" />}
-                  onClick={() => setIsMapModalOpen(true)}
-                >
-                  {t('cart.openMapBtn')}
-                </Button>
-              </div>
-
-              {mapSelectionFeedback && (
-                <div
-                  className={`p-3 rounded-xl border text-xs flex items-start justify-between gap-2 ${
-                    mapSelectionFeedback.type === 'success'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                      : 'bg-amber-50 border-amber-200 text-amber-800'
-                  }`}
-                >
-                  <div className="flex items-start gap-2 min-w-0">
-                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span className="font-semibold break-words">
-                      {mapSelectionFeedback.text}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setMapSelectionFeedback(null)}
-                    className="text-xs font-extrabold underline shrink-0"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <SearchableSelectSheet
-                  label={t('cart.region')}
-                  sheetTitle={t('cart.regionPickerTitle')}
-                  searchPlaceholder={t('cart.regionSearchPlaceholder')}
-                  noResultsText={t('cart.pickerNoResults')}
-                  required
-                  value={selectedUzRegionId}
-                  onChange={handleRegionChange}
-                  options={UZBEKISTAN_REGIONS.map((reg) => {
-                    const rule = resolveRegionTariffRule(
-                      reg.nameUz,
-                      enabledRegions
-                    );
-                    return {
-                      value: reg.id,
-                      label: getRegionDisplayName(reg),
-                      sublabel: rule?.note,
-                      badgeText: rule
-                        ? formatUZS(rule.fee)
-                        : feeToBeConfirmedLabel,
-                    };
-                  })}
-                  error={errors.region}
-                  helperText={
-                    selectedRegionRule
-                      ? selectedRegionRule.note
-                      : feeToBeConfirmedLabel
-                  }
-                />
-
-                <SearchableSelectSheet
-                  label={t('cart.district')}
-                  sheetTitle={t('cart.districtPickerTitle')}
-                  searchPlaceholder={t('cart.districtSearchPlaceholder')}
-                  noResultsText={t('cart.pickerNoResults')}
-                  required
-                  value={selectedDistrict}
-                  onChange={(dist) => {
-                    markAddressAsCustom();
-                    setSelectedDistrict(dist);
-                    if (errors.district)
-                      setErrors((prev) => ({
-                        ...prev,
-                        district: undefined,
-                      }));
-                  }}
-                  options={currentUzRegionObj.districts.map((dist) => ({
-                    value: dist,
-                    label: dist,
-                  }))}
-                  error={errors.district}
-                />
-              </div>
-
-              <Input
-                label={t('cart.address')}
-                required
-                value={addressLine}
-                onChange={(e) => {
-                  markAddressAsCustom();
-                  setAddressLine(e.target.value);
-                  if (errors.address)
-                    setErrors((prev) => ({ ...prev, address: undefined }));
-                }}
-                placeholder={t('cart.addressPlaceholder')}
-                leftIcon={<MapPin className="w-4 h-4" />}
-                error={errors.address}
-              />
-
-              {savedCustomerAddresses.length > 0 && (
-                <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-3 sm:flex-row sm:justify-end dark:border-[#28453B]">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="md"
-                    onClick={cancelAddressEditing}
-                  >
-                    Bekor qilish
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="md"
-                    onClick={finishAddressEditing}
-                  >
-                    Tayyor
-                  </Button>
-                </div>
-              )}
-            </div>
-            )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-800 mb-1.5">
@@ -2171,7 +2223,7 @@ export const CartCheckoutPage: React.FC = () => {
             )}
             {requiresPaymentReceipt && (
               <div className="space-y-5 rounded-2xl border-2 border-[#C89D54] bg-[#FBF6EC] p-4 sm:p-5 dark:bg-[#17231D]">
-                <div className="flex flex-col gap-3 border-b border-[#E5C992] pb-4 dark:border-[#7B663D] sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-4 border-b border-[#E5C992] pb-4 dark:border-[#7B663D] sm:flex-row sm:items-center sm:justify-between">
                   <label className="flex min-w-0 cursor-pointer items-center gap-3">
                     <input
                       type="radio"
@@ -2188,17 +2240,17 @@ export const CartCheckoutPage: React.FC = () => {
                       {selectedPaymentMethod?.name}
                     </span>
                   </label>
-                  <div className="w-full min-w-0 rounded-xl border border-[#D6B874] bg-white px-3.5 py-3 text-center dark:border-[#7B663D] dark:bg-[#0D1915] sm:w-auto sm:min-w-[220px] sm:px-4">
-                    <p className="text-xs font-bold uppercase leading-snug tracking-wide text-gray-700 dark:text-gray-300">
+                  <div className="checkout-transfer-amount-panel w-full min-w-0 rounded-xl border px-4 py-3.5 text-center sm:w-auto sm:min-w-[220px] sm:px-5 sm:py-4">
+                    <p className="checkout-transfer-amount-label text-xs font-bold uppercase leading-snug tracking-wide">
                       {t('transfer.exactAmountLabel')}
                     </p>
-                    <p className="mt-1 break-words text-xl font-black leading-tight text-[#0F3D2E] dark:text-[#F1D49A] sm:text-2xl">
+                    <p className="checkout-transfer-amount-value mt-1 text-xl font-black leading-tight sm:text-2xl">
                       {formatUZS(finalTotalAmount)}
                     </p>
                   </div>
                 </div>
 
-                <p className="break-words text-sm leading-6 text-gray-700 [overflow-wrap:anywhere] dark:text-gray-200">
+                <p className="break-words border-b border-[#E5C992] pb-4 text-sm leading-6 text-gray-700 [overflow-wrap:anywhere] dark:border-[#7B663D] dark:text-gray-200">
                   {bankTransferConfig.transferInstructions}
                 </p>
 

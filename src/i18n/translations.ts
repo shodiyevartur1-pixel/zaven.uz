@@ -260,6 +260,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.statusPending': 'Toʻlov tekshirilmoqda',
     'transfer.statusVerified': 'Toʻlov tasdiqlangan',
     'transfer.statusRejected': 'Toʻlov cheki rad etilgan',
+    'transfer.rejectionReason': 'Rad etish sababi',
     'transfer.pendingNotice': 'Toʻlov cheki qabul qilindi. Doʻkon egasi toʻlovni tekshirib tasdiqlagandan soʻng buyurtma keyingi bosqichga oʻtkaziladi.',
 
     // Customer Email Verification Account Flow
@@ -591,6 +592,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.statusPending': 'Toʻlov tekshirilmoqda (На проверке)',
     'transfer.statusVerified': 'Оплата подтверждена',
     'transfer.statusRejected': 'Чек отклонен',
+    'transfer.rejectionReason': 'Причина отклонения',
     'transfer.pendingNotice': 'Чек получен. Статус заказа: «Toʻlov tekshirilmoqda» (Оплата на проверке владельцем магазина).',
 
     // Customer Email Verification Account Flow
@@ -922,6 +924,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.statusPending': 'Toʻlov tekshirilmoqda (Pending Verification)',
     'transfer.statusVerified': 'Payment Verified',
     'transfer.statusRejected': 'Receipt Rejected',
+    'transfer.rejectionReason': 'Rejection reason',
     'transfer.pendingNotice': 'Receipt uploaded. Your order is marked "Toʻlov tekshirilmoqda" (Payment Pending Verification) until reviewed by the store owner.',
 
     // Customer Email Verification Account Flow

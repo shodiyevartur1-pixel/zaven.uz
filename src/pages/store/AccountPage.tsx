@@ -295,6 +295,18 @@ export const AccountPage: React.FC = () => {
       );
   }, [currentCustomer, orders]);
 
+  useEffect(() => {
+    if (!selectedOrder) return;
+    const latestOrder = orders.find(
+      (order) =>
+        order.id === selectedOrder.id ||
+        order.orderNumber === selectedOrder.orderNumber
+    );
+    if (latestOrder && latestOrder !== selectedOrder) {
+      setSelectedOrder(latestOrder);
+    }
+  }, [orders, selectedOrder]);
+
   if (isCustomerAuthRestoring && !isPasswordRecovery) {
     return (
       <div className="zaven-page-container flex min-h-56 items-center justify-center py-10">
@@ -1419,6 +1431,16 @@ export const AccountPage: React.FC = () => {
                               {t('transfer.statusPending')}
                             </Badge>
                           )}
+                          {order.paymentVerificationStatus === 'verified' && (
+                            <Badge variant="success" size="sm">
+                              {t('transfer.statusVerified')}
+                            </Badge>
+                          )}
+                          {order.paymentVerificationStatus === 'rejected' && (
+                            <Badge variant="danger" size="sm">
+                              {t('transfer.statusRejected')}
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
@@ -1721,6 +1743,15 @@ export const AccountPage: React.FC = () => {
                     </Badge>
                   )}
                 </div>
+                {selectedOrder.paymentVerificationStatus === 'rejected' &&
+                  selectedOrder.paymentReviewNote?.trim() && (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium leading-relaxed text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
+                      <span className="font-bold">
+                        {t('transfer.rejectionReason')}:
+                      </span>{' '}
+                      {selectedOrder.paymentReviewNote}
+                    </p>
+                  )}
               </div>
             </div>
 

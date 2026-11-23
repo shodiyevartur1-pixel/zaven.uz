@@ -76,6 +76,20 @@
   }
 }
 
+  .zaven-modal-dialog {
+    min-height: 0;
+    max-height: calc(
+      100dvh - max(1rem, env(safe-area-inset-top, 0px)) -
+        max(1rem, env(safe-area-inset-bottom, 0px)) - 1rem
+    );
+  }
+
+  @media (min-width: 640px) {
+    .zaven-modal-dialog {
+      max-height: 86vh;
+    }
+  }
+
 .zaven-route-progress {
   position: fixed;
   inset: 0 0 auto;
@@ -451,4 +465,32 @@ html.dark .hover\:bg-gray-100:hover {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+}
+
+.checkout-transfer-amount-panel {
+  border-color: #D6B874;
+  background-color: #FFFFFF;
+}
+
+.checkout-transfer-amount-label {
+  color: #26332E;
+  overflow-wrap: anywhere;
+}
+
+.checkout-transfer-amount-value {
+  color: #0F3D2E;
+  overflow-wrap: anywhere;
+}
+
+html.dark .checkout-transfer-amount-panel {
+  border-color: #7B663D;
+  background-color: #0D1915;
+}
+
+html.dark .checkout-transfer-amount-label {
+  color: #E5E7EB;
+}
+
+html.dark .checkout-transfer-amount-value {
+  color: #F1D49A;
 }

@@ -136,8 +136,9 @@ interface StoreContextType {
   adjustProductStock: (
     productId: string,
     newStock: number,
-    reason: string
-  ) => Promise<boolean>;
+    reason: string,
+    newThreshold?: number
+  ) => Promise<StoreSaveResult>;
 
   saveCategory: (category: Category) => Promise<boolean>;
   deleteCategory: (categoryId: string, reassignToCategoryId?: string) => Promise<{ ok: boolean; error?: string }>;
@@ -163,6 +164,47 @@ interface StoreSaveResult {
   ok: boolean;
   error?: string;
 }
+
+interface ProductInventoryUpdateRow {
+  stock_log_id: string;
+  product_id: string;
+  product_name: string;
+  sku: string;
+  previous_stock: number;
+  new_stock: number;
+  low_stock_threshold: number;
+  change_amount: number;
+  reason: string;
+  updated_by: string;
+  status: ProductStatus;
+  created_at: string;
+  product_updated_at: string;
+}
+
+const isProductInventoryUpdateRow = (
+  value: unknown
+): value is ProductInventoryUpdateRow => {
+  if (typeof value !== 'object' || value === null) return false;
+  const row = value as Record<string, unknown>;
+  return (
+    typeof row.stock_log_id === 'string' &&
+    typeof row.product_id === 'string' &&
+    typeof row.product_name === 'string' &&
+    typeof row.sku === 'string' &&
+    typeof row.previous_stock === 'number' &&
+    typeof row.new_stock === 'number' &&
+    typeof row.low_stock_threshold === 'number' &&
+    typeof row.change_amount === 'number' &&
+    typeof row.reason === 'string' &&
+    typeof row.updated_by === 'string' &&
+    (row.status === 'active' ||
+      row.status === 'out_of_stock' ||
+      row.status === 'hidden' ||
+      row.status === 'archived') &&
+    typeof row.created_at === 'string' &&
+    typeof row.product_updated_at === 'string'
+  );
+};
 
 const STORAGE_KEY = 'zaven_store_state_v2';
 const FAVORITES_STORAGE_PREFIX = 'zaven_favorites_v1:';
@@ -1339,7 +1381,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
       if (
-        (event === 'SIGNED_IN' || event === 'USER_UPDATED') &&
+        (event === 'INITIAL_SESSION' ||
+          event === 'SIGNED_IN' ||
+          event === 'USER_UPDATED') &&
         session?.user
       ) {
         const user = session.user;
@@ -1384,7 +1428,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         banners,
         coupons,
         storeSettings,
-        ...(!isSupabaseConfigured ? { cart } : {}),
+        ...(!isSupabaseConfigured ? { cart, currentCustomer } : {}),
         favoriteIds,
         recentlyViewedIds,
         currentAdminRole,
@@ -1400,6 +1444,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     coupons,
     storeSettings,
     cart,
+    currentCustomer,
     favoriteIds,
     recentlyViewedIds,
     currentAdminRole,
@@ -2465,18 +2510,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return true;
   };
 
-  const adjustProductStock: StoreContextType['adjustProductStock'] = async (productId, newStock, reason) => {
+  const adjustProductStock: StoreContextType['adjustProductStock'] = async (
+    productId,
+    newStock,
+    reason,
+    newThreshold
+  ) => {
     const target = products.find((item) => item.id === productId);
-    if (!target || !Number.isFinite(newStock) || newStock < 0) {
-      addToast({ type: 'error', title: 'Zaxira miqdorini tekshiring' });
-      return false;
+    let threshold = newThreshold ?? (target ? target.lowStockThreshold : NaN);
+    if (
+      !target ||
+      !Number.isInteger(newStock) ||
+      newStock < 0 ||
+      !Number.isInteger(threshold) ||
+      threshold < 1
+    ) {
+      const error = 'Zaxira miqdori yoki minimal chegara qiymatini tekshiring.';
+      addToast({ type: 'error', title: 'Zaxira saqlanmadi', description: error });
+      return { ok: false, error };
     }
 
     const now = new Date().toISOString();
-    const nextStatus: ProductStatus = newStock === 0 && target.status === 'active'
+    let nextStatus: ProductStatus = newStock === 0 && target.status === 'active'
       ? 'out_of_stock'
       : newStock > 0 && target.status === 'out_of_stock' ? 'active' : target.status;
-    const logEntry: StockLogEntry = {
+    const normalizedReason = reason.trim() || 'Qoʻlda zaxira yangilandi';
+    let productUpdatedAt = now;
+    let logEntry: StockLogEntry = {
       id: `log-${Date.now()}`,
       productId: target.id,
       productName: target.name,
@@ -2484,39 +2544,67 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       previousStock: target.stock,
       newStock,
       changeAmount: newStock - target.stock,
-      reason: reason || 'Qoʻlda zaxira yangilandi',
+      reason: normalizedReason,
       updatedBy: 'Store Owner',
       createdAt: now,
     };
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .update({ stock: newStock, status: nextStatus, updated_at: now })
-          .eq('id', productId)
-          .select('id')
-          .maybeSingle();
-        if (error || !data?.id) {
-          addToast({ type: 'error', title: 'Zaxira saqlanmadi', description: error?.message || 'Mahsulot bazada topilmadi yoki ruxsat yoʻq.' });
-          return false;
+        const { data, error } = await supabase.rpc('update_product_inventory', {
+          p_product_id: productId,
+          p_new_stock: newStock,
+          p_low_stock_threshold: threshold,
+          p_reason: normalizedReason,
+        }).maybeSingle();
+        if (error || !isProductInventoryUpdateRow(data)) {
+          const message = getPersistenceErrorMessage(
+            error || new Error('Mahsulot topilmadi yoki owner ruxsati yoʻq.'),
+            'Zaxira'
+          );
+          addToast({ type: 'error', title: 'Zaxira saqlanmadi', description: message });
+          return { ok: false, error: message };
         }
-        const { error: logError } = await supabase.from('stock_logs').insert(mapStockLogToRow(logEntry));
-        if (logError) {
-          addToast({ type: 'warning', title: 'Zaxira yangilandi, lekin tarix yozilmadi', description: logError.message });
-        }
+
+        logEntry = {
+          id: String(data.stock_log_id),
+          productId: String(data.product_id),
+          productName: String(data.product_name),
+          sku: String(data.sku),
+          previousStock: Number(data.previous_stock),
+          newStock: Number(data.new_stock),
+          changeAmount: Number(data.change_amount),
+          reason: String(data.reason),
+          updatedBy: String(data.updated_by),
+          createdAt: String(data.created_at),
+        };
+        newStock = Number(data.new_stock);
+        threshold = Number(data.low_stock_threshold);
+        nextStatus = data.status;
+        productUpdatedAt = data.product_updated_at;
       } catch (err) {
-        addToast({ type: 'error', title: 'Zaxirani yangilashda xatolik', description: err instanceof Error ? err.message : 'Tarmoq xatoligi' });
-        return false;
+        const message = getPersistenceErrorMessage(err, 'Zaxira');
+        addToast({ type: 'error', title: 'Zaxirani yangilashda xatolik', description: message });
+        return { ok: false, error: message };
       }
     }
 
     setStockLogs((prev) => [logEntry, ...prev]);
     setProducts((prev) => prev.map((item) => item.id === productId
-      ? { ...item, stock: newStock, status: nextStatus, updatedAt: now }
+      ? {
+          ...item,
+          stock: newStock,
+          lowStockThreshold: threshold,
+          status: nextStatus,
+          updatedAt: productUpdatedAt,
+        }
       : item));
-    addToast({ type: 'success', title: 'Ombor qoldigʻi yangilandi', description: `${target.sku}: ${target.stock} → ${newStock} dona` });
-    return true;
+    addToast({
+      type: 'success',
+      title: 'Ombor qoldigʻi yangilandi',
+      description: `${logEntry.sku}: ${logEntry.previousStock} → ${newStock} dona`,
+    });
+    return { ok: true };
   };
 
   const saveCategory: StoreContextType['saveCategory'] = async (category) => {
