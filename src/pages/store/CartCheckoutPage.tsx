@@ -305,6 +305,7 @@ export const CartCheckoutPage: React.FC = () => {
   const [hasRestoredCheckoutDraft, setHasRestoredCheckoutDraft] =
     useState(false);
   const hasSavedCheckoutDraftRef = useRef(false);
+  const hasSavedAddressChoiceInDraftRef = useRef(false);
   const hasInitializedSavedAddressRef = useRef(false);
   const orderAttemptIdRef = useRef<string | null>(null);
   const orderAttemptFingerprintRef = useRef<string | null>(null);
@@ -326,6 +327,7 @@ export const CartCheckoutPage: React.FC = () => {
         if (typeof parsed.addressLine === 'string') setAddressLine(parsed.addressLine);
         if (typeof parsed.selectedSavedAddressId === 'string') {
           setSelectedSavedAddressId(parsed.selectedSavedAddressId);
+          hasSavedAddressChoiceInDraftRef.current = true;
         } else {
           setSelectedSavedAddressId('new');
           setIsAddressEditing(true);
@@ -431,7 +433,11 @@ export const CartCheckoutPage: React.FC = () => {
       const defaultAddr =
         currentCustomer.addresses.find((a) => a.isDefault) ||
         currentCustomer.addresses[0];
-      if (defaultAddr && !hasSavedCheckoutDraftRef.current) {
+      if (
+        defaultAddr &&
+        (!hasSavedCheckoutDraftRef.current ||
+          !hasSavedAddressChoiceInDraftRef.current)
+      ) {
         applySavedAddressToCheckout(defaultAddr);
       }
     }
@@ -1378,6 +1384,7 @@ export const CartCheckoutPage: React.FC = () => {
           icon={<ShoppingBag className="w-7 h-7" />}
           title={t('cart.emptyTitle')}
           description={t('cart.emptyDesc')}
+          compact
         />
         {recommendedForCart.length > 0 && (
           <section
@@ -2531,8 +2538,8 @@ export const CartCheckoutPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
                 <div>
-                  <span className="text-[11px] font-extrabold uppercase text-gray-400 block">
-                    {t('cart.step2Title')}
+                  <span className="text-[11px] font-extrabold uppercase text-gray-500 block">
+                    Yetkazish manzili
                   </span>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-gray-100">
@@ -2541,29 +2548,16 @@ export const CartCheckoutPage: React.FC = () => {
                 <p className="text-brand-green font-semibold">
                   {customerPhone}
                 </p>
-                {customerEmail && (
-                  <p className="text-xs text-gray-500">{customerEmail}</p>
-                )}
-                {normalizedPreviewTelegram && (
-                  <p className="text-xs font-semibold text-brand-green">
-                    Telegram: {normalizedPreviewTelegram}
-                  </p>
-                )}
                 <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5">
                   {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
                   , {addressLine}
                 </p>
-                {sharedCoordinates && (
-                  <p className="text-[11px] font-mono text-brand-green pt-0.5">
-                    Pin: {sharedCoordinates.lat}, {sharedCoordinates.lng}
-                  </p>
-                )}
               </div>
 
               <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
                 <div>
-                  <span className="text-[11px] font-extrabold uppercase text-gray-400 block">
-                    {t('cart.step3Title')}
+                  <span className="text-[11px] font-extrabold uppercase text-gray-500 block">
+                    Toʻlov usuli
                   </span>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-gray-100">
@@ -2571,8 +2565,7 @@ export const CartCheckoutPage: React.FC = () => {
                 </p>
                 {requiresPaymentReceipt && receiptAttachment && (
                   <p className="text-emerald-700 font-semibold truncate">
-                    {t('transfer.uploadSuccessReady')}:{' '}
-                    {receiptAttachment.fileName}
+                    Chek yuklandi
                   </p>
                 )}
               </div>

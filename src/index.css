@@ -469,17 +469,17 @@ html.dark .hover\:bg-gray-100:hover {
 
 .checkout-transfer-amount-panel {
   border-color: #7B663D;
-  background-color: #12211C;
-  color: #F3F4F6;
+  background-color: #0B1512 !important;
+  color: #F3F4F6 !important;
 }
 
 .checkout-transfer-amount-label {
-  color: #E5C992;
+  color: #F1D49A !important;
   overflow-wrap: anywhere;
 }
 
 .checkout-transfer-amount-value {
-  color: #69E0CF;
+  color: #69E0CF !important;
   overflow-wrap: anywhere;
 }
 
