@@ -1761,7 +1761,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (isSupabaseConfigured && supabase) {
         try {
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from('inquiries')
             .insert({
               customer_name: newInquiry.customerName,
@@ -1769,15 +1769,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
               subject: newInquiry.subject,
               message: newInquiry.message,
               status: 'unread',
-            })
-            .select('*')
-            .maybeSingle();
+            });
 
-          if (error || !data) {
-            const reason = getPersistenceErrorMessage(
-              error || new Error('Murojaat bazadan tasdiqlanmadi.'),
-              'Murojaat'
-            );
+          if (error) {
+            const reason = getPersistenceErrorMessage(error, 'Murojaat');
             addToast({
               type: 'error',
               title: 'Murojaat saqlanmadi',
@@ -1785,8 +1780,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             });
             return { ok: false, error: reason };
           }
-          const synced = mapRowToInquiry(data);
-          setInquiries((prev) => [synced, ...prev]);
+          // Public customers may INSERT under RLS but must not SELECT admin-only
+          // inquiry rows. Do not request a returned row from this anonymous write.
         } catch (error) {
           const reason = getPersistenceErrorMessage(error, 'Murojaat');
           addToast({

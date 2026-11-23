@@ -221,6 +221,9 @@ export const OwnerAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const verification = await verifySupabaseOwner(data.user);
       if (!verification.allowed) {
+        // A rejected admin identity must not remain as an authenticated
+        // customer session in the shared storefront Supabase client.
+        await supabase.auth.signOut().catch(() => undefined);
         setIsOwnerAuthenticated(false);
         setOwnerEmail(null);
         setAuthMode('unauthenticated');

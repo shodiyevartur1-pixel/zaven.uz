@@ -468,27 +468,39 @@ html.dark .hover\:bg-gray-100:hover {
 }
 
 .checkout-transfer-amount-panel {
-  border-color: #D6B874;
-  background-color: #FFFFFF;
+  border-color: #7B663D;
+  background-color: #12211C;
+  color: #F3F4F6;
 }
 
 .checkout-transfer-amount-label {
-  color: #26332E;
+  color: #E5C992;
   overflow-wrap: anywhere;
 }
 
 .checkout-transfer-amount-value {
-  color: #0F3D2E;
+  color: #69E0CF;
   overflow-wrap: anywhere;
 }
 
 html.dark .checkout-transfer-amount-panel {
   border-color: #7B663D;
-  background-color: #0D1915;
+  background-color: #12211C;
+  color: #F3F4F6;
 }
 
 html.dark .checkout-transfer-amount-label {
   color: #E5E7EB;
+}
+
+/* Admin inventory cards use a soft green-gray surface in daylight mode to
+   reduce the large pure-white blocks while keeping text contrast intact. */
+.admin-products-page .bg-white {
+  background-color: #F1F5F2;
+}
+
+.admin-products-page .bg-\[\#F8F9FA\] {
+  background-color: #E9F0EC;
 }
 
 html.dark .checkout-transfer-amount-value {

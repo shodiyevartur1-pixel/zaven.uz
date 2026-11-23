@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   CheckCircle2,
   AlertCircle,
@@ -24,7 +25,9 @@ export const ToastContainer: React.FC = () => {
     info: <Info className="w-4 h-4 text-[#C89D54] shrink-0" />,
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal((
     <div
       aria-live="polite"
       aria-atomic="true"
@@ -62,5 +65,5 @@ export const ToastContainer: React.FC = () => {
         </button>
       </div>
     </div>
-  );
+  ), document.body);
 };

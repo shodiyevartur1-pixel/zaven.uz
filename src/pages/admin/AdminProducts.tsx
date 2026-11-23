@@ -523,7 +523,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="admin-products-page space-y-6">
       <div className="bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] p-4 sm:p-6 shadow-card flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900 dark:text-gray-100">

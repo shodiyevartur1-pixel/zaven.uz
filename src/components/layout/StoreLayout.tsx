@@ -28,7 +28,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
   const isAuthenticationPage =
     location.pathname === '/account' &&
     (!currentCustomer?.emailVerified || isRecoveryPage);
-  const showMobileBottomNav = !isCheckoutPage && !isAuthenticationPage;
+  const showMobileBottomNav = !isAuthenticationPage;
   const mobileBottomNavPadding = showMobileBottomNav
     ? 'pb-[calc(5.25rem+env(safe-area-inset-bottom))]'
     : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]';
