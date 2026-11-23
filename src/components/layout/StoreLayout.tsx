@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, Grid, ShoppingBag, User } from 'lucide-react';
 import { StoreHeader } from './StoreHeader';
 import { StoreFooter } from './StoreFooter';
-import { ToastContainer } from '../ui/ToastContainer';
 import { useStore } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 
@@ -40,7 +39,6 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
       <StoreHeader />
 
       <main className={`flex-1 bg-transparent ${isCheckoutPage ? 'min-w-0' : ''}`}>
-        <ToastContainer />
         {children}
       </main>
 

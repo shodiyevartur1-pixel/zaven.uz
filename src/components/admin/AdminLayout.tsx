@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminTopbar } from './AdminTopbar';
-import { ToastContainer } from '../ui/ToastContainer';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
 import { AdminLoginPage } from '../../pages/admin/AdminLoginPage';
 import { AdminRole } from '../../types';
@@ -49,8 +48,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         <AdminTopbar
           onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
         />
-
-        <ToastContainer />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto">
           {children}
