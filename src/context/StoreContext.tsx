@@ -154,9 +154,7 @@ interface StoreContextType {
   ) => Promise<boolean>;
   refreshFromSupabase: () => Promise<void>;
 
-  toasts: ToastMessage[];
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
-  removeToast: (id: string) => void;
   resetAllDemoData: () => void;
 }
 
@@ -755,41 +753,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [cartOwnerKey, cart, isCustomerAuthRestoring, isCartHydrating]);
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(ADMIN_USERS);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
 
-  // Requirement #8: Deduplicate toasts so one user action creates strictly one notification
-  const lastToastRef = useRef<{
-    signature: string;
-    timestamp: number;
-  }>({ signature: '', timestamp: 0 });
-
-  const addToast = useCallback((toast: Omit<ToastMessage, 'id'>) => {
-    const now = Date.now();
-    const signature = `${toast.type}|${toast.title}|${toast.description || ''}`;
-    if (
-      lastToastRef.current.signature === signature &&
-      now - lastToastRef.current.timestamp < 1200
-    ) {
-      return;
-    }
-    lastToastRef.current = { signature, timestamp: now };
-
-    const id = `toast-${now}-${Math.random().toString(36).slice(2, 6)}`;
-    setToasts((prev) => {
-      // Replace any active toast with the exact same title so they never stack duplicates
-      const withoutSameTitle = prev.filter((t) => t.title !== toast.title);
-      return [...withoutSameTitle, { ...toast, id }];
-    });
-
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 2600);
-  }, []);
-
-  const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+  // Toast UI has been removed. Keep this API for existing actions and
+  // validation flows, but intentionally emit no fixed/banner notification.
+  const addToast = useCallback((_toast: Omit<ToastMessage, 'id'>) => {}, []);
 
   const syncStoreSettingsPayloadToSupabase = useCallback(
     async (
@@ -2845,9 +2813,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         resetOrderStatsBaseline,
         updateInquiryStatus,
         refreshFromSupabase,
-        toasts,
         addToast,
-        removeToast,
         resetAllDemoData,
       }}
     >

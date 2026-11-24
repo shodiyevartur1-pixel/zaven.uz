@@ -532,6 +532,7 @@ export const CartCheckoutPage: React.FC = () => {
     setIsSavedAddressPickerOpen(false);
     setIsNewAddressMode(true);
     setIsAddressEditing(true);
+    setIsMapModalOpen(true);
   };
 
   const cancelAddressEditing = () => {
@@ -698,7 +699,12 @@ export const CartCheckoutPage: React.FC = () => {
   const recommendedForCart = useMemo(
     () =>
       products
-        .filter((p) => p.status === 'active' && !cartProductIds.has(p.id))
+        .filter(
+          (p) =>
+            p.status === 'active' &&
+            p.stock > 0 &&
+            !cartProductIds.has(p.id)
+        )
         .slice(0, 4),
     [products, cartProductIds]
   );
@@ -1104,9 +1110,14 @@ export const CartCheckoutPage: React.FC = () => {
           orderAttemptIdRef.current = crypto.randomUUID();
         }
         if (!orderAttemptIdRef.current) {
-          const storedAttempt = sessionStorage.getItem(
-            CHECKOUT_ORDER_ATTEMPT_KEY
-          );
+          let storedAttempt: string | null = null;
+          try {
+            storedAttempt = sessionStorage.getItem(
+              CHECKOUT_ORDER_ATTEMPT_KEY
+            );
+          } catch {
+            // In-memory idempotency still works when session storage is unavailable.
+          }
           let storedId: string | null = null;
           let storedFingerprint: string | null = null;
           if (storedAttempt) {
@@ -1134,17 +1145,22 @@ export const CartCheckoutPage: React.FC = () => {
               : crypto.randomUUID();
         }
         orderAttemptFingerprintRef.current = requestFingerprint;
-        sessionStorage.setItem(
-          CHECKOUT_ORDER_ATTEMPT_KEY,
-          JSON.stringify({
-            id: orderAttemptIdRef.current,
-            fingerprint: requestFingerprint,
-          })
-        );
+        try {
+          sessionStorage.setItem(
+            CHECKOUT_ORDER_ATTEMPT_KEY,
+            JSON.stringify({
+              id: orderAttemptIdRef.current,
+              fingerprint: requestFingerprint,
+            })
+          );
+        } catch {
+          // In-memory idempotency remains active for the current page.
+        }
       } catch {
-        throw new Error(
-          'Buyurtma takrorlanmasligini kafolatlash uchun sessiya xotirasi kerak. Brauzer sozlamalarini tekshirib qayta urinib ko‘ring.'
-        );
+        if (!orderAttemptIdRef.current) {
+          orderAttemptIdRef.current = crypto.randomUUID();
+        }
+        orderAttemptFingerprintRef.current = requestFingerprint;
       }
 
       const createdOrder = await placeOrder({
@@ -1254,28 +1270,36 @@ export const CartCheckoutPage: React.FC = () => {
               </Badge>
             </div>
 
-            <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1.5 text-xs sm:text-sm">
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                {t('cart.step2Title')}
-              </p>
-              <p className="font-bold text-gray-900 dark:text-gray-100">
-                {completedOrder.region}
-                {completedOrder.district ? `, ${completedOrder.district}` : ''}
-              </p>
-              <p className="text-gray-700 dark:text-gray-300 break-words">
-                {completedOrder.address}
-              </p>
-              {completedOrder.customerTelegram && (
-                <p className="text-xs font-semibold text-brand-green">
-                  Telegram: {completedOrder.customerTelegram}
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="min-w-0 rounded-xl border border-gray-200 bg-[#F8F9FA] p-4 text-xs sm:text-sm dark:border-[#28453B] dark:bg-[#162923]">
+                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
+                  {t('cart.step2Title')}
                 </p>
-              )}
-              {completedOrder.locationCoordinates && (
-                <p className="text-xs font-mono text-brand-green pt-0.5">
-                  Pin: {completedOrder.locationCoordinates.lat},{' '}
-                  {completedOrder.locationCoordinates.lng}
+                <p className="break-words font-bold text-gray-900 dark:text-gray-100">
+                  {completedOrder.customerName}
                 </p>
-              )}
+                <p className="mt-0.5 break-words font-semibold text-brand-green">
+                  {completedOrder.customerPhone}
+                </p>
+                <p className="mt-2 break-words leading-relaxed text-gray-700 dark:text-gray-300 [overflow-wrap:anywhere]">
+                  {completedOrder.region}
+                  {completedOrder.district ? `, ${completedOrder.district}` : ''}
+                  {completedOrder.address ? `, ${completedOrder.address}` : ''}
+                </p>
+              </div>
+              <div className="min-w-0 rounded-xl border border-gray-200 bg-[#F8F9FA] p-4 text-xs sm:text-sm dark:border-[#28453B] dark:bg-[#162923]">
+                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
+                  Toʻlov usuli
+                </p>
+                <p className="break-words font-bold leading-relaxed text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere]">
+                  {completedOrder.paymentMethodLabel}
+                </p>
+                {completedOrder.paymentReceipt && (
+                  <p className="mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                    Chek yuklandi
+                  </p>
+                )}
+              </div>
             </div>
 
             {isPendingTransfer && (
@@ -1343,7 +1367,7 @@ export const CartCheckoutPage: React.FC = () => {
                 <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.totalAmount')}
                 </span>
-                <span className="text-lg sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
+                <span className="max-w-full break-words text-lg font-extrabold leading-tight text-brand-green [overflow-wrap:anywhere] sm:text-2xl sm:text-right">
                   {formatUZS(completedOrder.totalAmount)}
                 </span>
               </div>
@@ -1371,21 +1395,23 @@ export const CartCheckoutPage: React.FC = () => {
   if (detailedCartItems.length === 0) {
     return (
       <div className="zaven-page-container space-y-4 py-6 sm:py-12">
-        <Button
-          type="button"
-          variant="outline"
-          size="md"
-          leftIcon={<ArrowLeft className="h-4 w-4" />}
-          onClick={continueShopping}
-        >
-          {t('cart.continueShoppingBtn')}
-        </Button>
         <EmptyState
           icon={<ShoppingBag className="w-7 h-7" />}
           title={t('cart.emptyTitle')}
           description={t('cart.emptyDesc')}
           compact
         />
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            onClick={() => navigate('/catalog')}
+          >
+            {t('cart.continueShoppingBtn')}
+          </Button>
+        </div>
         {recommendedForCart.length > 0 && (
           <section
             aria-labelledby="empty-cart-recommendations-title"
@@ -2251,15 +2277,11 @@ export const CartCheckoutPage: React.FC = () => {
                     <p className="checkout-transfer-amount-label text-xs font-bold uppercase leading-snug tracking-wide">
                       {t('transfer.exactAmountLabel')}
                     </p>
-                    <p className="checkout-transfer-amount-value mt-1 text-xl font-black leading-tight sm:text-2xl">
+                    <p className="checkout-transfer-amount-value mt-1 break-words text-xl font-black leading-tight [overflow-wrap:anywhere] sm:text-2xl">
                       {formatUZS(finalTotalAmount)}
                     </p>
                   </div>
                 </div>
-
-                <p className="break-words border-b border-[#E5C992] pb-4 text-sm leading-6 text-gray-700 [overflow-wrap:anywhere] dark:border-[#7B663D] dark:text-gray-200">
-                  {bankTransferConfig.transferInstructions}
-                </p>
 
                 {hasConfiguredTransferCards ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2525,11 +2547,11 @@ export const CartCheckoutPage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="pt-3 border-t border-gray-200 dark:border-[#28453B] flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+              <div className="mt-1 rounded-xl border border-brand-green/20 bg-brand-green-light/70 px-3 py-3 flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 dark:border-[#28453B] dark:bg-[#1A332A]">
                 <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                   {t('cart.totalAmount')}
                 </span>
-                <span className="text-xl sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
+                <span className="max-w-full break-words text-xl font-extrabold leading-tight text-brand-green [overflow-wrap:anywhere] sm:text-2xl sm:text-right">
                   {formatUZS(finalTotalAmount)}
                 </span>
               </div>
@@ -2548,7 +2570,7 @@ export const CartCheckoutPage: React.FC = () => {
                 <p className="text-brand-green font-semibold">
                   {customerPhone}
                 </p>
-                <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5">
+                <p className="text-gray-700 dark:text-gray-300 break-words pt-0.5 [overflow-wrap:anywhere]">
                   {getRegionDisplayName(currentUzRegionObj)}, {selectedDistrict}
                   , {addressLine}
                 </p>
@@ -2560,7 +2582,7 @@ export const CartCheckoutPage: React.FC = () => {
                     Toʻlov usuli
                   </span>
                 </div>
-                <p className="font-bold text-gray-900 dark:text-gray-100">
+                <p className="break-words font-bold text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere]">
                   {selectedPaymentMethod?.name}
                 </p>
                 {requiresPaymentReceipt && receiptAttachment && (

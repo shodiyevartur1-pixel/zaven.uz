@@ -25,10 +25,10 @@ export default {
           },
         },
         surface: {
-          page: '#F8F9FA',
-          card: '#FFFFFF',
-          subtle: '#F1F3F5',
-          border: '#E5E7EB',
+          page: '#EDF2EE',
+          card: '#F7F9F6',
+          subtle: '#E7EEE9',
+          border: '#D8E2DC',
         },
       },
       fontFamily: {

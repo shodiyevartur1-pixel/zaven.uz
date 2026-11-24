@@ -34,7 +34,7 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col bg-[#F8F9FA] dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${mobileBottomNavPadding} md:pb-8 transition-colors`}
+      className={`min-h-screen flex flex-col bg-surface-page dark:bg-[#0B1512] text-gray-900 dark:text-gray-100 ${mobileBottomNavPadding} md:pb-8 transition-colors`}
     >
       <StoreHeader />
 

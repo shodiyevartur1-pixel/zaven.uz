@@ -58,7 +58,7 @@
   }
 
   body {
-    background-color: #F8F9FA;
+    background-color: #EDF2EE;
     color: #111827;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
@@ -468,29 +468,29 @@ html.dark .hover\:bg-gray-100:hover {
 }
 
 .checkout-transfer-amount-panel {
-  border-color: #7B663D;
-  background-color: #0B1512 !important;
-  color: #F3F4F6 !important;
+  border-color: #C89D54;
+  background: linear-gradient(135deg, #0F3D2E 0%, #16533F 100%) !important;
+  color: #FFFFFF !important;
 }
 
 .checkout-transfer-amount-label {
-  color: #F1D49A !important;
+  color: #F8E3B7 !important;
   overflow-wrap: anywhere;
 }
 
 .checkout-transfer-amount-value {
-  color: #69E0CF !important;
+  color: #FFFFFF !important;
   overflow-wrap: anywhere;
 }
 
 html.dark .checkout-transfer-amount-panel {
-  border-color: #7B663D;
-  background-color: #12211C;
+  border-color: #C89D54;
+  background: linear-gradient(135deg, #12211C 0%, #1A332A 100%) !important;
   color: #F3F4F6;
 }
 
 html.dark .checkout-transfer-amount-label {
-  color: #E5E7EB;
+  color: #F8E3B7;
 }
 
 /* Admin inventory cards use a soft green-gray surface in daylight mode to
@@ -504,5 +504,42 @@ html.dark .checkout-transfer-amount-label {
 }
 
 html.dark .checkout-transfer-amount-value {
-  color: #F1D49A;
+  color: #FFFFFF;
+}
+
+html:not(.dark) .bg-white {
+  background-color: #F7F9F6;
+}
+
+html:not(.dark) .bg-white\/95 {
+  background-color: rgba(247, 249, 246, 0.95);
+}
+
+html:not(.dark) .bg-white\/90 {
+  background-color: rgba(247, 249, 246, 0.9);
+}
+
+html:not(.dark) .bg-gray-50,
+html:not(.dark) .bg-surface-subtle {
+  background-color: #E7EEE9;
+}
+
+html:not(.dark) .bg-gray-100 {
+  background-color: #E1EAE4;
+}
+
+html:not(.dark) .border-gray-100,
+html:not(.dark) .border-gray-200,
+html:not(.dark) .border-gray-300 {
+  border-color: #D1DDD5;
+}
+
+html:not(.dark) .text-gray-500 {
+  color: #58685F;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #66766D;
+  opacity: 1;
 }
