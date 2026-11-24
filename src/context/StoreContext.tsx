@@ -210,7 +210,7 @@ const isProductInventoryUpdateRow = (
   );
 };
 
-const STORAGE_KEY = 'zaven_store_state_v2';
+const STORAGE_KEY = !isSupabaseConfigured && import.meta.env.PROD ? 'zaven_local_preview_v1' : 'zaven_store_state_v2';
 const FAVORITES_STORAGE_PREFIX = 'zaven_favorites_v1:';
 const CART_STORAGE_PREFIX = 'zaven_cart_v1:';
 const PASSWORD_RECOVERY_SESSION_KEY = 'zaven_password_recovery_active';

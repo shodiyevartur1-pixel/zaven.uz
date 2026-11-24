@@ -691,22 +691,9 @@ export const CartCheckoutPage: React.FC = () => {
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   }, [cart, products, getProductText]);
 
-  const cartProductIds = useMemo(
-    () => new Set(cart.map((c) => c.productId)),
-    [cart]
-  );
-
   const recommendedForCart = useMemo(
-    () =>
-      products
-        .filter(
-          (p) =>
-            p.status === 'active' &&
-            p.stock > 0 &&
-            !cartProductIds.has(p.id)
-        )
-        .slice(0, 4),
-    [products, cartProductIds]
+    () => products.filter(product => product.status === 'active' && product.stock > 0).slice(0, 4),
+    [products]
   );
 
   const productsSubtotal = useMemo(

@@ -2,6 +2,8 @@ import { Language, ProductLocalizedFields } from '../types';
 
 export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   uz: {
+    'account.goBack': 'Orqaga',
+    'home.productsUnavailable': 'Hozircha ko‘rsatish uchun mahsulot yo‘q.',
     'transfer.removeReceipt': 'Chekni olib tashlash',
     'common.loading': 'Yuklanmoqda…',
     'common.retry': 'Qayta urinish',
@@ -269,15 +271,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.pendingNotice': 'Toʻlov cheki qabul qilindi. Doʻkon egasi toʻlovni tekshirib tasdiqlagandan soʻng buyurtma keyingi bosqichga oʻtkaziladi.',
 
     // Customer Email Verification Account Flow
-    'account.emailAuthBadge': 'SHAXSIY KABINET (EMAIL TASDIQLASH)',
-    'account.checkoutRedirectNotice': 'Tizimga kirganingizdan soʻng buyurtmani rasmiylashtirishga qaytasiz.',
+    'account.checkoutRedirectNotice': 'Kirgach, buyurtmani davom ettirasiz.',
     'account.signInTab': 'Kirish',
     'account.signUpTab': 'Roʻyxatdan oʻtish',
     'account.resetTab': 'Parolni tiklash',
-    'account.signInTitle': 'Shaxsiy kabinetga email orqali kirish',
-    'account.signInSub': 'Buyurtmalar tarixi va saqlangan manzillarni koʻrish uchun tasdiqlangan email manzilingiz bilan kiring.',
-    'account.signUpTitle': 'Yangi xaridor hisobini yaratish',
-    'account.signUpSub': 'Roʻyxatdan oʻtgach, emailingizga tasdiqlash havolasi yuboriladi. Hisob faqat email tasdiqlangandan soʻng faollashadi.',
+    'account.signInTitle': 'Kirish',
+    'account.signInSub': 'Tasdiqlangan emailingiz bilan kiring.',
+    'account.signUpTitle': 'Roʻyxatdan oʻtish',
+    'account.signUpSub': 'Emailingizga tasdiqlash havolasini yuboramiz.',
     'account.emailLabel': 'Elektron pochta manzili (Majburiy)',
     'account.passwordLabel': 'Parol (kamida 6 ta belgi)',
     'account.showPassword': 'Parolni ko‘rsatish',
@@ -339,6 +340,8 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   },
 
   ru: {
+    'account.goBack': 'Назад',
+    'home.productsUnavailable': 'Пока нет товаров для показа.',
     'transfer.removeReceipt': 'Удалить чек',
     'common.loading': 'Загрузка…',
     'common.retry': 'Повторить',
@@ -606,15 +609,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.pendingNotice': 'Чек получен. Статус заказа: «Toʻlov tekshirilmoqda» (Оплата на проверке владельцем магазина).',
 
     // Customer Email Verification Account Flow
-    'account.emailAuthBadge': 'ЛИЧНЫЙ КАБИНЕТ (ПОДТВЕРЖДЕНИЕ EMAIL)',
-    'account.checkoutRedirectNotice': 'После входа вы вернётесь к оформлению заказа.',
+    'account.checkoutRedirectNotice': 'После входа продолжите оформление.',
     'account.signInTab': 'Вход',
     'account.signUpTab': 'Регистрация',
     'account.resetTab': 'Сброс пароля',
-    'account.signInTitle': 'Вход в личный кабинет по Email',
-    'account.signInSub': 'Войдите с подтвержденным адресом электронной почты для просмотра истории заказов и сохраненных адресов.',
-    'account.signUpTitle': 'Регистрация покупателя',
-    'account.signUpSub': 'После регистрации мы отправим письмо со ссылкой для подтверждения. Аккаунт активируется только после подтверждения Email.',
+    'account.signInTitle': 'Вход',
+    'account.signInSub': 'Войдите с подтверждённой почтой.',
+    'account.signUpTitle': 'Регистрация',
+    'account.signUpSub': 'Пришлём ссылку для подтверждения почты.',
     'account.emailLabel': 'Электронная почта (Обязательно)',
     'account.passwordLabel': 'Пароль (минимум 6 символов)',
     'account.showPassword': 'Показать пароль',
@@ -676,6 +678,8 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   },
 
   en: {
+    'account.goBack': 'Back',
+    'home.productsUnavailable': 'No products are available to display yet.',
     'transfer.removeReceipt': 'Remove receipt',
     'common.loading': 'Loading…',
     'common.retry': 'Try again',
@@ -943,15 +947,14 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.pendingNotice': 'Receipt uploaded. Your order is marked "Toʻlov tekshirilmoqda" (Payment Pending Verification) until reviewed by the store owner.',
 
     // Customer Email Verification Account Flow
-    'account.emailAuthBadge': 'CUSTOMER ACCOUNT (EMAIL VERIFICATION)',
-    'account.checkoutRedirectNotice': 'After signing in, you will return to checkout.',
+    'account.checkoutRedirectNotice': 'Sign in to continue checkout.',
     'account.signInTab': 'Sign In',
     'account.signUpTab': 'Create Account',
     'account.resetTab': 'Reset Password',
-    'account.signInTitle': 'Sign in with your verified email',
-    'account.signInSub': 'Sign in with your verified email address to view your order history and saved delivery addresses.',
-    'account.signUpTitle': 'Create a Customer Account',
-    'account.signUpSub': 'We will send a confirmation link to your email. Your account is treated as verified only after you confirm your email.',
+    'account.signInTitle': 'Sign in',
+    'account.signInSub': 'Use your verified email.',
+    'account.signUpTitle': 'Create an account',
+    'account.signUpSub': 'We’ll email you a confirmation link.',
     'account.emailLabel': 'Email Address (Required)',
     'account.passwordLabel': 'Password (at least 6 characters)',
     'account.showPassword': 'Show password',

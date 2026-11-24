@@ -32,6 +32,7 @@ const SLIDE_DURATION_MS = 4200;
 export const HomePage: React.FC = () => {
   const {
     products,
+    isSyncingSupabase,
     categories,
     storeSettings,
     recentlyViewedIds,
@@ -399,7 +400,14 @@ export const HomePage: React.FC = () => {
         </section>
       )}
 
+      {visibleProducts.length === 0 && (
+        <div className="zaven-page-container py-4" role="status">
+          {isSyncingSupabase ? t('common.loading') : t('home.productsUnavailable')}
+        </div>
+      )}
+
       {/* 2. Popular Products */}
+      {popularProducts.length > 0 && (
       <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -423,6 +431,7 @@ export const HomePage: React.FC = () => {
           ))}
         </div>
       </section>
+      )}
 
       {/* 3. Categories Strip */}
       <section className="zaven-page-container space-y-3">
@@ -471,6 +480,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* 4. New Arrivals Section */}
+      {newArrivals.length > 0 && (
       <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -494,8 +504,10 @@ export const HomePage: React.FC = () => {
           ))}
         </div>
       </section>
+      )}
 
       {/* 5. Discounted Products Section */}
+      {specialOffers.length > 0 && (
       <section className="zaven-page-container space-y-3">
         <div className="flex items-center justify-between gap-2 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
@@ -519,6 +531,7 @@ export const HomePage: React.FC = () => {
           ))}
         </div>
       </section>
+      )}
 
       {/* Recently Viewed Products */}
       {recentlyViewedProducts.length > 0 && (

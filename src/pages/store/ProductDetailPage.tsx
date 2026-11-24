@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Link, useParams, useNavigate, useNavigationType } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -93,8 +93,7 @@ export const ProductDetailPage: React.FC = () => {
   >('description');
 
   const purchaseActionsRef = useRef<HTMLDivElement>(null);
-  const [showStickyMobileBar, setShowStickyMobileBar] =
-    useState<boolean>(false);
+  const [showStickyMobileBar, setShowStickyMobileBar] = useState(false);
 
   useEffect(() => {
     if (navigationType !== 'POP') {
@@ -103,7 +102,6 @@ export const ProductDetailPage: React.FC = () => {
     setSelectedImageIdx(0);
     setPendingQty(1);
     setIsZoomedInLightbox(false);
-    setShowStickyMobileBar(false);
     setOpenSection('description');
 
     if (product) {
@@ -115,24 +113,31 @@ export const ProductDetailPage: React.FC = () => {
     }
   }, [product?.id, slug, navigationType]);
 
-  useEffect(() => {
-    const targetEl = purchaseActionsRef.current;
-    if (!targetEl) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const isPastMainCta =
-          !entry.isIntersecting && entry.boundingClientRect.top < 0;
-        setShowStickyMobileBar(isPastMainCta);
-      },
-      {
-        root: null,
-        threshold: 0,
-      }
-    );
-
-    observer.observe(targetEl);
-    return () => observer.disconnect();
+  useLayoutEffect(() => {
+    const actions = purchaseActionsRef.current;
+    if (!actions) return;
+    const header = document.querySelector('header');
+    const nav = document.querySelector('nav[aria-label="Mobile bottom navigation"]');
+    const syncPurchaseBar = () => {
+      const button = actions.querySelector('button:last-of-type.w-full');
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const top = header?.getBoundingClientRect().bottom ?? 0;
+      const bottom = nav?.getBoundingClientRect().top ?? window.innerHeight;
+      setShowStickyMobileBar(rect.top < top || rect.bottom > bottom);
+    };
+    syncPurchaseBar();
+    window.addEventListener('scroll', syncPurchaseBar, { passive: true });
+    window.addEventListener('resize', syncPurchaseBar);
+    const observer = new ResizeObserver(syncPurchaseBar);
+    observer.observe(actions);
+    if (header) observer.observe(header);
+    if (nav) observer.observe(nav);
+    return () => {
+      window.removeEventListener('scroll', syncPurchaseBar);
+      window.removeEventListener('resize', syncPurchaseBar);
+      observer.disconnect();
+    };
   }, [product?.id]);
 
   if (supabase && slug && !product && resolvedSlug !== slug) {

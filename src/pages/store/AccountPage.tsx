@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Mail,
   ChevronRight,
+  ArrowLeft,
   Clock,
   CreditCard,
   Send,
@@ -781,13 +782,21 @@ export const AccountPage: React.FC = () => {
       <div className="zaven-page-container py-6 sm:py-12">
         <div className="max-w-xl mx-auto bg-white dark:bg-[#12211C] rounded-2xl border border-gray-200 dark:border-[#28453B] overflow-hidden shadow-card">
           {/* Top Header */}
-          <div className={`bg-[#0F3D2E] text-white p-5 sm:p-6 ${authMode === 'verify_pending' ? '' : 'space-y-2'}`}>
-            {authMode !== 'verify_pending' && (
-              <Badge variant="gold" size="sm">
-                {t('account.emailAuthBadge')}
-              </Badge>
-            )}
-            <h1 className="text-lg sm:text-2xl font-extrabold text-white">
+          <div className="space-y-2 bg-[#0F3D2E] px-4 py-3.5 text-white sm:px-6 sm:py-4">
+            <div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.idx > 0) navigate(-1);
+                  else navigate('/', { replace: true });
+                }}
+                className="-ml-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-emerald-100 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                <ArrowLeft size={16} aria-hidden="true" />
+                {t('account.goBack')}
+              </button>
+            </div>
+            <h1 className="text-xl font-bold leading-tight text-white sm:text-2xl">
               {authMode === 'signup'
                 ? t('account.signUpTitle')
                 : authMode === 'reset'
@@ -798,7 +807,7 @@ export const AccountPage: React.FC = () => {
                 ? t('account.updatePasswordTitle')
                 : t('account.signInTitle')}
             </h1>
-            {authMode !== 'verify_pending' && (
+            {(authMode === 'signup' || authMode === 'reset' || (authMode === 'signin' && !safeRedirectPath)) && (
               <p className="text-xs text-emerald-100/90 leading-relaxed">
                 {authMode === 'signup'
                   ? t('account.signUpSub')
@@ -809,9 +818,9 @@ export const AccountPage: React.FC = () => {
             )}
           </div>
 
-          <div className={`p-5 sm:p-6 ${authMode === 'verify_pending' ? 'space-y-4' : 'space-y-5'}`}>
+          <div className={"space-y-4 p-4 sm:p-6"}>
             {safeRedirectPath && authMode !== 'verify_pending' && (
-              <div className="p-3.5 rounded-xl bg-brand-green-light/70 dark:bg-[#162923] border border-brand-green/30 flex items-start gap-2.5 text-xs font-semibold text-brand-green">
+              <div className="flex items-start gap-2 rounded-lg bg-brand-green-light/70 px-3 py-2 text-xs font-medium leading-normal text-brand-green dark:bg-[#162923] dark:text-emerald-200">
                 <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{t('account.checkoutRedirectNotice')}</span>
               </div>
