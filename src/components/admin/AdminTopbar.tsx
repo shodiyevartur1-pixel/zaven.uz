@@ -300,7 +300,7 @@ export const AdminTopbar: React.FC<AdminTopbarProps> = ({
           >
             <Bell className="w-5 h-5" />
             {totalAlertCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-extrabold flex items-center justify-center">
+              <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-extrabold flex items-center justify-center">
                 {totalAlertCount}
               </span>
             )}

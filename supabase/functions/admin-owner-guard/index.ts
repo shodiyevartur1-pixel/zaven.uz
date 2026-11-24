@@ -21,10 +21,6 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const envAllowedOwnerEmail = (
-      Deno.env.get('OWNER_ALLOWED_EMAIL') || ''
-    ).toLowerCase();
-
     if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
       return new Response(
         JSON.stringify({
@@ -75,21 +71,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const callerEmail = user.email.toLowerCase();
-
-    // 2. Check against `public.owner_allowlist` table using service_role client
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const { data: allowlistRow } = await adminClient
-      .from('owner_allowlist')
-      .select('email')
-      .ilike('email', callerEmail)
-      .maybeSingle();
-
-    const isAllowedByTable = Boolean(allowlistRow?.email);
-    const isAllowedByEnv =
-      Boolean(envAllowedOwnerEmail) && callerEmail === envAllowedOwnerEmail;
-
-    if (!isAllowedByTable && !isAllowedByEnv) {
+    const { data: allowed, error: ownerError } = await userClient.rpc('is_store_owner');
+    if (ownerError || allowed !== true) {
       return new Response(
         JSON.stringify({
           authorized: false,
@@ -122,6 +105,7 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
       const { error: banError } = await adminClient.auth.admin.updateUserById(actionPayload.authUserId, {
         ban_duration: actionPayload.isBlocked ? '876000h' : 'none',
       });

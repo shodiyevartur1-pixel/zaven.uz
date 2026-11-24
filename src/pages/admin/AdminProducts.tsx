@@ -535,7 +535,7 @@ export const AdminProducts: React.FC<AdminProductsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-xl bg-surface-page dark:bg-[#162923] p-1 border border-gray-200 dark:border-[#28453B]">
+          <div className="inline-flex max-w-full flex-wrap rounded-xl bg-surface-page dark:bg-[#162923] p-1 border border-gray-200 dark:border-[#28453B]">
             <Link
               to="/admin/products"
               onClick={() => setActiveSection('products')}

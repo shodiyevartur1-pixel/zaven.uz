@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -51,6 +52,9 @@ import {
 } from '../types';
 
 interface StoreContextType {
+  cacheProducts: (items: Product[], preserveCost?: boolean) => void;
+  cacheOrderPage: (items: Order[]) => void;
+
   products: Product[];
   categories: Category[];
   banners: HomepageBanner[];
@@ -155,6 +159,8 @@ interface StoreContextType {
   refreshFromSupabase: () => Promise<void>;
 
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  adminFeedback: ToastMessage[];
+  removeAdminFeedback: (id: string) => void;
   resetAllDemoData: () => void;
 }
 
@@ -332,7 +338,7 @@ function mapCategoryToRow(cat: Category) {
   };
 }
 
-function mapRowToProduct(row: Record<string, unknown>): Product {
+export function mapRowToProduct(row: Record<string, unknown>): Product {
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -399,7 +405,7 @@ function mapProductToRow(product: Product) {
   };
 }
 
-function mapRowToOrder(
+export function mapRowToOrder(
   row: Record<string, unknown>,
   signedReceiptUrl?: string
 ): Order {
@@ -552,21 +558,6 @@ function mapRowToStockLog(row: Record<string, unknown>): StockLogEntry {
   };
 }
 
-function mapStockLogToRow(log: StockLogEntry) {
-  return {
-    id: log.id,
-    product_id: log.productId,
-    product_name: log.productName,
-    sku: log.sku,
-    previous_stock: log.previousStock,
-    new_stock: log.newStock,
-    change_amount: log.changeAmount,
-    reason: log.reason,
-    updated_by: log.updatedBy,
-    created_at: log.createdAt,
-  };
-}
-
 function mapRowToInquiry(row: Record<string, unknown>): CustomerInquiry {
   return {
     id: String(row.id),
@@ -608,14 +599,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     return null;
   };
 
-  const savedState = loadInitialState();
+  const [savedState] = useState(loadInitialState);
 
   const initialFavoriteOwner = isSupabaseConfigured
     ? null
     : savedState?.currentCustomer || null;
   const [products, setProducts] = useState<Product[]>(
-    savedState?.products || INITIAL_PRODUCTS
+    isSupabaseConfigured ? [] : savedState?.products || INITIAL_PRODUCTS
   );
+  const cacheProducts = useCallback((items: Product[], preserveCost = false) => {
+    setProducts(current => {
+      const byId = new Map(current.map(product => [product.id, product]));
+      for (const product of items) {
+        const existing = byId.get(product.id);
+        if (!existing || product.updatedAt >= existing.updatedAt) {
+          byId.set(product.id, existing && preserveCost ? { ...product, costPrice: existing.costPrice } : product);
+        }
+      }
+      return [...byId.values()];
+    });
+  }, []);
   const [categories, setCategories] = useState<Category[]>(
     savedState?.categories || INITIAL_CATEGORIES
   );
@@ -625,6 +628,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [orders, setOrders] = useState<Order[]>(
     isSupabaseConfigured ? [] : savedState?.orders || INITIAL_ORDERS
   );
+  const orderPageCache = useRef(new Map<string, Order>());
+  const cacheOrderPage = useCallback((items: Order[]) => {
+    orderPageCache.current = new Map(items.map(order => [order.id, order]));
+  }, []);
+  const findOrderForAction = (id: string) => {
+    const loaded = orders.find(order => order.id === id);
+    const paged = orderPageCache.current.get(id);
+    return loaded && (!paged || loaded.updatedAt >= paged.updatedAt) ? loaded : paged;
+  };
   const [customers, setCustomers] = useState<Customer[]>(
     isSupabaseConfigured ? [] : savedState?.customers || INITIAL_CUSTOMERS
   );
@@ -678,6 +690,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isCartHydrating, setIsCartHydrating] =
     useState<boolean>(isSupabaseConfigured);
   const authRestoreCompleteRef = useRef(!isSupabaseConfigured);
+  const privateSyncVersion = useRef(0);
+  const sessionIdentity = useRef<string | null>(null);
+  const settingsVersion = useRef<string | null | undefined>(undefined);
   const customersRef = useRef(customers);
   customersRef.current = customers;
   const customerSyncInFlightRef = useRef(new Map<string, Promise<void>>());
@@ -752,12 +767,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [cartOwnerKey, cart, isCustomerAuthRestoring, isCartHydrating]);
   const [currentAdminRole, setCurrentAdminRole] = useState<AdminRole>('owner');
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(ADMIN_USERS);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(isSupabaseConfigured ? [] : savedState?.adminUsers || ADMIN_USERS);
   const [isSyncingSupabase, setIsSyncingSupabase] = useState<boolean>(false);
+  const [adminFeedback, setAdminFeedback] = useState<ToastMessage[]>([]);
 
-  // Toast UI has been removed. Keep this API for existing actions and
-  // validation flows, but intentionally emit no fixed/banner notification.
-  const addToast = useCallback((_toast: Omit<ToastMessage, 'id'>) => {}, []);
+  // Storefront notifications stay disabled. Admin actions keep their feedback
+  // in an in-flow region rendered by AdminLayout, never as a floating toast.
+  const addToast = useCallback((message: Omit<ToastMessage, 'id'>) => {
+    if (!window.location.pathname.startsWith('/admin')) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setAdminFeedback((current) => [...current, { ...message, id }].slice(-3));
+  }, []);
+
+  const removeAdminFeedback = useCallback((id: string) => {
+    setAdminFeedback((current) => current.filter((message) => message.id !== id));
+  }, []);
 
   const syncStoreSettingsPayloadToSupabase = useCallback(
     async (
@@ -776,19 +800,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           },
           updated_at: new Date().toISOString(),
         };
-        const { data: updated, error: updateError } = await supabase
-          .from('store_settings')
-          .update({ payload: row.payload, updated_at: row.updated_at })
-          .eq('id', 1)
-          .select('id')
-          .maybeSingle();
-        if (updateError) {
-          const reason = getPersistenceErrorMessage(updateError, 'Sozlamalar');
-          addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
-          return reason;
+        if (settingsVersion.current === undefined) return 'Sozlamalar hali yuklanmagan.';
+        if (settingsVersion.current !== null) {
+          const { data, error } = await supabase.from('store_settings')
+            .update({ payload: row.payload, updated_at: row.updated_at })
+            .eq('id', 1).eq('updated_at', settingsVersion.current)
+            .select('updated_at').maybeSingle();
+          if (error || !data) {
+            const reason = error?.message || 'Sozlamalar boshqa oynada yangilandi. Sahifani yangilang.';
+            addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
+            return reason;
+          }
+          settingsVersion.current = data.updated_at;
+          return null;
         }
-        if (updated?.id) return null;
-
         const { data: inserted, error: insertError } = await supabase
           .from('store_settings')
           .insert(row)
@@ -802,6 +827,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           addToast({ type: 'error', title: 'Sozlamalar saqlanmadi', description: reason });
           return reason;
         }
+        settingsVersion.current = row.updated_at;
         return null;
       } catch (err) {
         const reason = getPersistenceErrorMessage(err, 'Sozlamalar');
@@ -965,6 +991,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!isSupabaseConfigured || !supabase) return;
     setIsSyncingSupabase(true);
 
+    const syncVersion = ++privateSyncVersion.current;
     let session: SupabaseSession | null = null;
     const isInitialAuthRestore = !authRestoreCompleteRef.current;
     try {
@@ -1003,6 +1030,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
 
+      const activeSession = Boolean(session?.user && !isPasswordRecoveryActive());
+      const owner = activeSession && (await supabase.rpc('is_store_owner')).data === true;
+      if (privateSyncVersion.current !== syncVersion) return;
+
       const [catRes, prodRes, settingsRes, adminRes] = await Promise.all([
         supabase
           .from('categories')
@@ -1011,22 +1042,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         supabase
           .from('products')
           .select('*')
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .order('id')
+          .limit(window.location.pathname === '/catalog' ? 24 : 1000),
         supabase.from('store_settings').select('*').eq('id', 1).maybeSingle(),
-        supabase
+        owner ? supabase
           .from('admin_assignments')
-          .select('*')
-          .order('created_at', { ascending: true }),
+          .select('id,email,name,role,permissions,updated_at')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true }) : { data: [], error: null },
       ]);
 
+      if (privateSyncVersion.current !== syncVersion) return;
       if (!catRes.error && catRes.data && catRes.data.length > 0) {
         setCategories(catRes.data.map(mapRowToCategory));
       }
 
       if (!prodRes.error && prodRes.data && prodRes.data.length > 0) {
-        setProducts(prodRes.data.map(mapRowToProduct));
+        cacheProducts(prodRes.data.map(mapRowToProduct));
       }
 
+      if (!settingsRes.error) settingsVersion.current = settingsRes.data?.updated_at ?? null;
       if (!settingsRes.error && settingsRes.data?.payload) {
         const rawPayload = settingsRes.data.payload as Record<string, unknown>;
         const {
@@ -1078,76 +1114,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           supabase
             .from('orders')
             .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .limit(owner && window.location.pathname === '/admin/orders' ? 25 : 1000),
+          owner ? supabase
             .from('customers')
             .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
+            .order('created_at', { ascending: false }) : {data: [], error: null},
+          owner ? supabase
             .from('stock_logs')
             .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
+            .order('created_at', { ascending: false }) : {data: [], error: null},
+          owner ? supabase
             .from('inquiries')
             .select('*')
-            .order('created_at', { ascending: false }),
+            .order('created_at', { ascending: false }) : {data: [], error: null},
         ]);
 
-        if (!ordersRes.error && ordersRes.data) {
-          const mappedOrders = await Promise.all(
-            ordersRes.data.map(async (row) => {
-              let signedUrl: string | undefined = undefined;
-              if (row.payment_receipt_path && supabase) {
-                const { data: urlData } = await supabase.storage
-                  .from('payment-receipts')
-                  .createSignedUrl(String(row.payment_receipt_path), 3600);
-                signedUrl = urlData?.signedUrl;
-              }
-              return mapRowToOrder(row, signedUrl);
-            })
-          );
-          if (mappedOrders.length > 0) {
-            setOrders((prev) => {
-              const byOrderNum = new Map(
-                prev.map((item) => [item.orderNumber, item])
-              );
-              for (const mo of mappedOrders) {
-                byOrderNum.set(mo.orderNumber, mo);
-              }
-              return Array.from(byOrderNum.values()).sort(
-                (a, b) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime()
-              );
-            });
-          }
-        }
-
-        if (!custRes.error && custRes.data && custRes.data.length > 0) {
-          const fetchedCustomers = custRes.data.map(mapRowToCustomer);
-          setCustomers((prev) => {
-            const byId = new Map(prev.map((c) => [c.id, c]));
-            for (const fc of fetchedCustomers) {
-              byId.set(fc.id, fc);
-            }
-            return Array.from(byId.values());
-          });
-        }
-
-        if (!logsRes.error && logsRes.data && logsRes.data.length > 0) {
-          setStockLogs(logsRes.data.map(mapRowToStockLog));
-        }
-
-        if (!inqRes.error && inqRes.data && inqRes.data.length > 0) {
-          setInquiries(inqRes.data.map(mapRowToInquiry));
-        }
+        if (privateSyncVersion.current !== syncVersion) return;
+        if (!ordersRes.error) setOrders((ordersRes.data || []).map(row => mapRowToOrder(row)));
+        if (owner && !custRes.error) setCustomers((custRes.data || []).map(mapRowToCustomer));
+        if (!logsRes.error) setStockLogs((logsRes.data || []).map(mapRowToStockLog));
+        if (!inqRes.error) setInquiries((inqRes.data || []).map(mapRowToInquiry));
       }
     } catch (err) {
       console.error('Supabase initial sync error:', err);
     } finally {
       setIsSyncingSupabase(false);
     }
-  }, [syncVerifiedCustomerFromAuthUser]);
+  }, [cacheProducts, syncVerifiedCustomerFromAuthUser]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -1182,15 +1177,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             if (!isMounted || !payload.new) return;
             const rawRow = payload.new as Record<string, unknown>;
 
-            let signedUrl: string | undefined = undefined;
-            if (rawRow.payment_receipt_path && supabase) {
-              const { data: urlData } = await supabase.storage
-                .from('payment-receipts')
-                .createSignedUrl(String(rawRow.payment_receipt_path), 3600);
-              signedUrl = urlData?.signedUrl;
-            }
-
-            const incomingOrder = mapRowToOrder(rawRow, signedUrl);
+            const incomingOrder = mapRowToOrder(rawRow);
 
             let isGenuinelyNew = false;
             setOrders((prev) => {
@@ -1244,15 +1231,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
             if (!isMounted || !payload.new) return;
             const rawRow = payload.new as Record<string, unknown>;
 
-            let signedUrl: string | undefined = undefined;
-            if (rawRow.payment_receipt_path && supabase) {
-              const { data: urlData } = await supabase.storage
-                .from('payment-receipts')
-                .createSignedUrl(String(rawRow.payment_receipt_path), 3600);
-              signedUrl = urlData?.signedUrl;
-            }
-
-            const updatedOrder = mapRowToOrder(rawRow, signedUrl);
+            const updatedOrder = mapRowToOrder(rawRow);
 
             setOrders((prev) =>
               prev.map((o) =>
@@ -1340,6 +1319,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      const identity = session?.user.id || null;
+      if (identity !== sessionIdentity.current || event === 'SIGNED_OUT') {
+        sessionIdentity.current = identity;
+        privateSyncVersion.current++;
+        setOrders([]);
+        orderPageCache.current.clear();
+        setCustomers([]);
+        setStockLogs([]);
+        setInquiries([]);
+        setAdminUsers([]);
+      }
       if (event === 'PASSWORD_RECOVERY') {
         try {
           window.sessionStorage.setItem(PASSWORD_RECOVERY_SESSION_KEY, '1');
@@ -1396,7 +1386,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         banners,
         coupons,
         storeSettings,
-        ...(!isSupabaseConfigured ? { cart, currentCustomer } : {}),
+        ...(!isSupabaseConfigured ? { cart, currentCustomer, orders, customers, inquiries, stockLogs, adminUsers } : {}),
         favoriteIds,
         recentlyViewedIds,
         currentAdminRole,
@@ -1415,6 +1405,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     currentCustomer,
     favoriteIds,
     recentlyViewedIds,
+    orders, customers, inquiries, stockLogs, adminUsers,
     currentAdminRole,
   ]);
 
@@ -1428,6 +1419,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [addToast]
   );
+
+  const referencedProducts = useMemo(() => [...new Set([
+    ...cart.map(item => item.productId), ...favoriteIds, ...recentlyViewedIds,
+  ])].filter(id => !products.some(product => product.id === id)).sort().join(','), [cart, favoriteIds, recentlyViewedIds, products]);
+  useEffect(() => {
+    if (!supabase || !referencedProducts) return;
+    let active = true;
+    void supabase.from('products').select('*').in('id', referencedProducts.split(',')).then(({ data, error }) => {
+      if (active && !error && data?.length) cacheProducts(data.map(mapRowToProduct));
+    });
+    return () => { active = false; };
+  }, [referencedProducts, cacheProducts]);
 
   const addToCart = useCallback(
     (productId: string, quantity = 1) => {
@@ -1809,7 +1812,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
                 orderNumber,
                 internalNotes: initialNotes,
               },
-              receiptBase64: orderData.paymentReceipt?.dataUrl || null,
             },
             signal: orderRequestController.signal,
           });
@@ -1883,7 +1885,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       return exists ? prev : [newOrder, ...prev];
     });
 
-    const updatedProductsList: Product[] = [];
+
     setProducts((prev) =>
       prev.map((p) => {
         const orderedItem = orderData.items.find((i) => i.productId === p.id);
@@ -1896,7 +1898,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           status: nextStock === 0 ? 'out_of_stock' : p.status,
           updatedAt: now,
         };
-        updatedProductsList.push(updatedProd);
+
         return updatedProd;
       })
     );
@@ -1925,38 +1927,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
       setStockLogs((prev) => [...newLogs, ...prev]);
     }
 
-    if (isSupabaseConfigured && supabase) {
-      for (const up of updatedProductsList) {
-        supabase
-          .from('products')
-          .update({
-            stock: up.stock,
-            sold_count: up.soldCount,
-            status: up.status,
-            updated_at: now,
-          })
-          .eq('id', up.id)
-          .then(() => {});
-      }
-      if (newLogs.length > 0) {
-        supabase
-          .from('stock_logs')
-          .insert(newLogs.map(mapStockLogToRow))
-          .then(() => {});
-      }
-    }
-
     if (orderData.couponCode) {
       setCoupons((prev) => {
         const nextCoupons = prev.map((c) =>
           c.code.toUpperCase() === orderData.couponCode?.toUpperCase()
             ? { ...c, usedCount: c.usedCount + 1 }
             : c
-        );
-        syncStoreSettingsPayloadToSupabase(
-          storeSettings,
-          nextCoupons,
-          banners
         );
         return nextCoupons;
       });
@@ -1984,12 +1960,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         if (currentCustomer && currentCustomer.id === existing.id) {
           setCurrentCustomer(updatedCustomer);
         }
-        if (isSupabaseConfigured && supabase) {
-          supabase
-            .from('customers')
-            .upsert(mapCustomerToRow(updatedCustomer))
-            .then(() => {});
-        }
         return prev.map((c) => (c.id === existing.id ? updatedCustomer : c));
       }
 
@@ -2014,12 +1984,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         lastOrderDate: now,
         createdAt: now,
       };
-      if (isSupabaseConfigured && supabase) {
-        supabase
-          .from('customers')
-          .upsert(mapCustomerToRow(createdCustomer))
-          .then(() => {});
-      }
       return [createdCustomer, ...prev];
     });
 
@@ -2041,7 +2005,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const reviewOrderReceipt: StoreContextType['reviewOrderReceipt'] = async (
     orderId, decision, reviewerEmail, reviewNote
   ) => {
-    const target = orders.find((order) => order.id === orderId);
+    const target = findOrderForAction(orderId);
     if (!target) return false;
     const now = new Date().toISOString();
     const auditLine = `${decision === 'verified' ? 'Toʻlov cheki TASDIQLANDI' : 'Toʻlov cheki RAD ETILDI'} — Tekshirdi: ${reviewerEmail} (${new Date(now).toLocaleString('uz-UZ')})${reviewNote ? `. Izoh: ${reviewNote}` : ''}`;
@@ -2058,13 +2022,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
           status: nextStatus,
           internal_notes: nextNotes,
           updated_at: now,
-        }).eq('order_number', target.orderNumber).select('order_number').maybeSingle();
+        }).eq('order_number', target.orderNumber).eq('updated_at', target.updatedAt).select('order_number').maybeSingle();
         if (error || !data?.order_number) {
           addToast({
             type: 'error',
             title: 'Chek holati saqlanmadi',
             description: getPersistenceErrorMessage(
-              error || new Error('row-level security denied or no row returned'),
+              error || new Error('Buyurtma oʻzgargan yoki ruxsat yoʻq. Sahifani yangilang.'),
               'Toʻlov cheki'
             ),
           });
@@ -2096,7 +2060,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const retryOrderTelegramNotification: StoreContextType['retryOrderTelegramNotification'] =
     async (orderId) => {
-      const targetOrder = orders.find((o) => o.id === orderId);
+      const targetOrder = findOrderForAction(orderId);
       if (!targetOrder) return;
 
       if (!isSupabaseConfigured || !supabase) {
@@ -2171,7 +2135,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
   const updateOrderStatus: StoreContextType['updateOrderStatus'] = async (orderId, status, note) => {
-    const target = orders.find((order) => order.id === orderId);
+    const target = findOrderForAction(orderId);
     if (!target) return false;
     const targetPaymentMethod = storeSettings.paymentMethods.find(
       (method) => method.id === target.paymentMethodId
@@ -2216,7 +2180,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const addOrderInternalNote: StoreContextType['addOrderInternalNote'] = async (orderId, note) => {
     if (!note.trim()) return false;
-    const target = orders.find((order) => order.id === orderId);
+    const target = findOrderForAction(orderId);
     if (!target) return false;
     const now = new Date().toISOString();
     const nextNotes = [...target.internalNotes, note.trim()];
@@ -2239,7 +2203,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const deleteOrder: StoreContextType['deleteOrder'] = async (orderId) => {
-    const target = orders.find((item) => item.id === orderId);
+    const target = findOrderForAction(orderId);
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
@@ -2276,7 +2240,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const restoreOrder: StoreContextType['restoreOrder'] = async (orderId) => {
-    const target = orders.find((item) => item.id === orderId);
+    const target = findOrderForAction(orderId);
     if (!target) return false;
     const now = new Date().toISOString();
     if (isSupabaseConfigured && supabase) {
@@ -2317,11 +2281,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!target) return false;
     const cleanReason = isBlocked ? reason?.trim() || 'Admin tomonidan bloklangan' : undefined;
     if (isSupabaseConfigured && supabase) {
-      const { data, error } = await supabase.from('customers').update({ is_blocked: isBlocked, blocked_reason: cleanReason || null }).eq('id', customerId).select('id').maybeSingle();
-      if (error || !data?.id) { addToast({ type: 'error', title: 'Mijoz holatini yangilashda xatolik', description: error?.message || 'Mijoz topilmadi yoki ruxsat yoʻq.' }); return false; }
       if (target.authUserId) {
-        const { data, error: fnError } = await supabase.functions.invoke('admin-owner-guard', { body: { action: 'set_customer_block', authUserId: target.authUserId, isBlocked } });
-        if (fnError || data?.ok === false) addToast({ type: 'warning', title: 'Auth sessiyasini bloklash yakunlanmadi', description: fnError?.message || data?.error || 'Edge Function holatini tekshiring.' });
+        const { data, error } = await supabase.functions.invoke('admin-owner-guard', {
+          body: { action: 'set_customer_block', authUserId: target.authUserId, isBlocked },
+        });
+        if (error || data?.ok !== true) {
+          addToast({ type: 'error', title: 'Auth holati tasdiqlanmadi', description: 'Profil saqlanmadi. Amalni qayta bajaring.' });
+          return false;
+        }
+      }
+      const { data, error } = await supabase.from('customers').update({
+        is_blocked: isBlocked, blocked_reason: cleanReason || null,
+      }).eq('id', customerId).select('id').maybeSingle();
+      if (error || !data?.id) {
+        addToast({
+          type: 'error',
+          title: target.authUserId ? 'Auth yangilandi, profil tasdiqlanmadi' : 'Profil tasdiqlanmadi',
+          description: 'Holatni yangilang va zarur boʻlsa amalni qayta bajaring.',
+        });
+        return false;
       }
     }
     setCustomers((prev) => prev.map((item) => item.id === customerId ? { ...item, isBlocked, blockedReason: cleanReason } : item));
@@ -2362,15 +2340,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
     const affected = products.filter((item) => item.categoryId === categoryId);
     if (affected.length && (!reassignToCategoryId || reassignToCategoryId === categoryId || !categories.some((c) => c.id === reassignToCategoryId))) return { ok: false, error: 'Avval mahsulotlarni ko‘chirish uchun boshqa toifani tanlang.' };
     if (isSupabaseConfigured && supabase) {
-      if (affected.length) {
-        const { data, error } = await supabase.from('products').update({ category_id: reassignToCategoryId, updated_at: new Date().toISOString() }).in('id', affected.map((p) => p.id)).select('id');
-        if (error || data?.length !== affected.length) return { ok: false, error: error?.message || 'Mahsulotlarning hammasi boshqa toifaga oʻtkazilmadi.' };
-      }
-      const { data, error } = await supabase.from('categories').delete().eq('id', categoryId).select('id').maybeSingle();
-      if (error || !data?.id) {
-        if (affected.length) await supabase.from('products').update({ category_id: categoryId }).in('id', affected.map((p) => p.id));
-        return { ok: false, error: error?.message || 'Toifa topilmadi yoki oʻchirishga ruxsat yoʻq.' };
-      }
+      const { error } = await supabase.rpc('remove_store_category', {
+        source_id: categoryId, destination_id: reassignToCategoryId || null,
+      });
+      if (error) return { ok: false, error: error.message };
     }
     if (affected.length && reassignToCategoryId) setProducts((prev) => prev.map((p) => p.categoryId === categoryId ? { ...p, categoryId: reassignToCategoryId } : p));
     setCategories((prev) => prev.filter((c) => c.id !== categoryId));
@@ -2636,12 +2609,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const saveAdminAssignment: StoreContextType['saveAdminAssignment'] = async (admin) => {
-    if (!admin.name.trim() || !admin.id) return false;
+    if (!admin.name.trim() || !admin.id.includes('@')) return false;
+    let savedAdmin = admin;
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
         .from('admin_assignments')
         .upsert({
-          email: admin.id.includes('@') ? admin.id : `${admin.name.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@admin.local`,
+          email: admin.id.trim().toLowerCase(),
           name: admin.name,
           role: admin.role,
           permissions: admin.permissions || [],
@@ -2654,8 +2628,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         addToast({ type: 'error', title: 'Admin rolini saqlashda xatolik', description: error?.message || 'Bazaga tasdiq kelmadi.' });
         return false;
       }
+      savedAdmin = { ...admin, id: String(data.id) };
     }
-    setAdminUsers((prev) => prev.some((item) => item.id === admin.id) ? prev.map((item) => item.id === admin.id ? admin : item) : [admin, ...prev]);
+    setAdminUsers(prev => [savedAdmin, ...prev.filter(item => item.id !== savedAdmin.id && item.id !== admin.id)]);
     addToast({ type: 'success', title: 'Admin roli saqlandi' });
     return true;
   };
@@ -2812,8 +2787,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
         updateStoreSettings,
         resetOrderStatsBaseline,
         updateInquiryStatus,
+        cacheProducts,
+        cacheOrderPage,
         refreshFromSupabase,
         addToast,
+        adminFeedback,
+        removeAdminFeedback,
         resetAllDemoData,
       }}
     >

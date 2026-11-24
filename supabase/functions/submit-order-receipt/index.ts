@@ -39,6 +39,7 @@ interface SubmitOrderPayload {
   paymentMethodLabel: string;
   paymentVerificationStatus?: string;
   paymentReceipt?: {
+    dataUrl?: string;
     mimeType?: string;
     fileName?: string;
     fileSize?: number;
@@ -85,7 +86,8 @@ const displayOrderNumber = (orderNumber: string) => {
 
 async function findOrCreateCustomer(
   adminClient: ReturnType<typeof createClient>,
-  order: SubmitOrderPayload
+  order: SubmitOrderPayload,
+  authUserId: string
 ) {
   const email = order.customerEmail?.trim().toLowerCase() || null;
   let existingCustomer: {
@@ -94,24 +96,15 @@ async function findOrCreateCustomer(
     auth_user_id?: string | null;
   } | null = null;
 
-  if (email) {
-    const lookup = await adminClient
-      .from('customers')
-      .select('id,addresses,auth_user_id')
-      .ilike('email', email)
-      .maybeSingle();
-    if (lookup.error) throw new Error(`Mijozni tekshirib boʻlmadi: ${lookup.error.message}`);
-    existingCustomer = lookup.data;
-  }
-
-  if (!existingCustomer) {
-    const lookup = await adminClient
-      .from('customers')
-      .select('id,addresses,auth_user_id')
-      .eq('phone', order.customerPhone)
-      .maybeSingle();
-    if (lookup.error) throw new Error(`Mijozni tekshirib boʻlmadi: ${lookup.error.message}`);
-    existingCustomer = lookup.data;
+  const lookup = await adminClient.from('customers')
+    .select('id,addresses,auth_user_id').eq('auth_user_id', authUserId).maybeSingle();
+  if (lookup.error) throw new Error('Mijoz profili tasdiqlanmadi');
+  existingCustomer = lookup.data;
+  if (!existingCustomer && email) {
+    const legacy = await adminClient.from('customers').select('id,addresses,auth_user_id')
+      .eq('email', email).is('auth_user_id', null).maybeSingle();
+    if (legacy.error) throw new Error('Mijoz profili tasdiqlanmadi');
+    existingCustomer = legacy.data;
   }
 
   const identity = email || normalizePhone(order.customerPhone);
@@ -144,7 +137,7 @@ async function findOrCreateCustomer(
               isDefault: true,
             },
           ],
-        auth_user_id: existingCustomer?.auth_user_id || null,
+        auth_user_id: authUserId,
       },
       { onConflict: 'id' }
     )
@@ -157,29 +150,11 @@ async function findOrCreateCustomer(
     );
   }
 
-  const [byEmail, byPhone] = await Promise.all([
-    email
-      ? adminClient
-          .from('orders')
-          .select('id,total_amount,status,is_deleted,created_at')
-          .ilike('customer_email', email)
-      : Promise.resolve({ data: [], error: null }),
-    adminClient
-      .from('orders')
-      .select('id,total_amount,status,is_deleted,created_at')
-      .eq('customer_phone', order.customerPhone),
-  ]);
-  if (byEmail.error || byPhone.error) {
-    throw new Error(
-      `Mijoz buyurtmalari hisoblanmadi: ${byEmail.error?.message || byPhone.error?.message}`
-    );
-  }
+  const history = await adminClient.from('orders')
+    .select('id,total_amount,status,is_deleted,created_at').eq('customer_email', email);
+  if (history.error) throw new Error('Mijoz buyurtmalari hisoblanmadi');
+  const orders = new Map((history.data || []).filter(item => !item.is_deleted).map(item => [item.id, item]));
 
-  const orders = new Map(
-    [...(byEmail.data || []), ...(byPhone.data || [])]
-      .filter((item) => !item.is_deleted)
-      .map((item) => [item.id, item])
-  );
   const countableOrders = [...orders.values()].filter(
     (item) => item.status !== 'cancelled'
   );
@@ -243,6 +218,23 @@ Deno.serve(async (req: Request) => {
     if (!isSubmitOrderPayload(order)) {
       return jsonResponse(400, { ok: false, error: 'Buyurtma maʼlumotlari notoʻgʻri.' });
     }
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const token = req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1];
+    if (!token) return jsonResponse(401, {ok:false, error:'Hisobga kiring'});
+    const {data: {user}, error: authError} = await adminClient.auth.getUser(token);
+    if (authError || !user?.email_confirmed_at || !user.email ||
+        user.email.toLowerCase() !== order.customerEmail?.trim().toLowerCase()) {
+      return jsonResponse(403, {ok:false, error:'Tasdiqlangan xaridor hisobi talab qilinadi'});
+    }
+    const profile = await adminClient.from('customers').select('is_blocked,is_deleted')
+      .eq('auth_user_id', user.id).maybeSingle();
+    const legacy = !profile.data && !profile.error
+      ? await adminClient.from('customers').select('is_blocked,is_deleted')
+        .eq('email', user.email.trim().toLowerCase()).is('auth_user_id', null).maybeSingle()
+      : profile;
+    if (legacy.error || legacy.data?.is_blocked || legacy.data?.is_deleted) {
+      return jsonResponse(403, {ok:false, error:'Xaridor hisobi tekshiruvdan oʻtmadi'});
+    }
     const fingerprintBytes = await crypto.subtle.digest(
       'SHA-256',
       new TextEncoder().encode(JSON.stringify(order))
@@ -251,9 +243,9 @@ Deno.serve(async (req: Request) => {
       .map((byte) => byte.toString(16).padStart(2, '0'))
       .join('');
     const receiptBase64 =
-      typeof body.receiptBase64 === 'string' ? body.receiptBase64 : null;
+      typeof body.receiptBase64 === 'string' ? body.receiptBase64 :
+      typeof order.paymentReceipt?.dataUrl === 'string' ? order.paymentReceipt.dataUrl : null;
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: existingOrder, error: lookupError } = await adminClient
       .from('orders')
       .select('id,order_number,customer_phone,total_amount,payment_receipt_path,idempotency_payload_hash,telegram_notification_status,telegram_notification_error')
@@ -445,7 +437,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await findOrCreateCustomer(adminClient, order);
+    await findOrCreateCustomer(adminClient, order, user.id);
 
     let telegramStatus = existing?.telegram_notification_status || 'not_configured';
     let telegramError = existing?.telegram_notification_error || null;

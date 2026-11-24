@@ -20,7 +20,9 @@ import {
   Grid,
   ArrowLeft,
 } from 'lucide-react';
-import { useStore } from '../../context/StoreContext';
+import { supabase } from '../../lib/supabase';
+import { Product } from '../../types';
+import { useStore, mapRowToProduct } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { useBodyScrollLock } from '../../utils/scrollLock';
 import { Language } from '../../types';
@@ -141,7 +143,7 @@ const CATEGORY_SUBCATEGORIES: Record<
 };
 
 export const CatalogPage: React.FC = () => {
-  const { products, categories } = useStore();
+  const { products, categories, cacheProducts } = useStore();
   const { t, language, getProductText, getCategoryText } = useThemeLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -253,6 +255,7 @@ export const CatalogPage: React.FC = () => {
     : null;
 
   const filteredProducts = useMemo(() => {
+    if (supabase) return [];
     const min = minPrice.trim() ? Number(minPrice) : null;
     const max = maxPrice.trim() ? Number(maxPrice) : null;
     const query = searchQuery.trim().toLowerCase();
@@ -381,14 +384,40 @@ export const CatalogPage: React.FC = () => {
     viewModeParam !== 'products' &&
     !searchParams.get('sort');
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredProducts.length / ITEMS_PER_PAGE)
-  );
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE * visibleMultiplier;
-  const displayedProducts = filteredProducts.slice(startIndex, endIndex);
-  const hasMoreToLoad = endIndex < filteredProducts.length;
+  const pageSize = ITEMS_PER_PAGE * visibleMultiplier;
+  const endIndex = startIndex + pageSize;
+  const [result, setResult] = useState<{ key: string; rows: Product[]; total: number; error?: boolean }>();
+  const [retry, setRetry] = useState(0);
+  const request = JSON.stringify({
+    category: selectedCategoryObj?.id ?? null,
+    term: searchQuery.trim(), locale: language,
+    min_price: minPrice.trim() ? Number(minPrice) : null,
+    max_price: maxPrice.trim() ? Number(maxPrice) : null,
+    discounted: onlyDiscounted, new_only: onlyNew, in_stock: onlyInStock,
+    sort_key: sortBy, page_start: startIndex, page_size: pageSize,
+  });
+  useEffect(() => {
+    if (!supabase) return;
+    const client = supabase;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await client.rpc('catalog_page', JSON.parse(request)).abortSignal(controller.signal);
+      if (controller.signal.aborted) return;
+      const rows = error ? [] : (data?.rows || []).map(mapRowToProduct);
+      if (rows.length) cacheProducts(rows, true);
+      setResult({ key: request, rows, total: Number(data?.total || 0), error: Boolean(error) });
+    }, 180);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [request, retry, cacheProducts]);
+  const currentResult = result?.key === request ? result : undefined;
+  const total = supabase ? currentResult?.total ?? 0 : filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE));
+  const displayedProducts = supabase ? currentResult?.rows ?? [] : filteredProducts.slice(startIndex, endIndex);
+  const hasMoreToLoad = endIndex < total && (!supabase || pageSize < 96);
+  useEffect(() => {
+    if (currentResult && !currentResult.error && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentResult, currentPage, totalPages]);
 
   const handleSelectCategory = (slug: string) => {
     setSelectedCategorySlug(slug);
@@ -831,7 +860,7 @@ export const CatalogPage: React.FC = () => {
         >
           {/* Mobile Back-to-Directory Button + Compact Title */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center">
               <button
                 type="button"
                 onClick={handleReturnToMobileDirectory}
@@ -841,7 +870,7 @@ export const CatalogPage: React.FC = () => {
                 <span>{t('catalog.backToDirectory')}</span>
               </button>
 
-              <h1 className="text-sm sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 truncate">
+              <h1 className="max-w-full min-w-0 text-base sm:text-xl font-extrabold text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere]">
                 {localizedSelectedCategory
                   ? localizedSelectedCategory.name
                   : searchQuery.trim()
@@ -930,7 +959,13 @@ export const CatalogPage: React.FC = () => {
                 onOpenMobileFilters={() => setIsMobileFilterOpen(true)}
               />
 
-              {displayedProducts.length > 0 ? (
+               {supabase && !currentResult ? (
+                <p role="status">{t('common.loading', 'Yuklanmoqda…')}</p>
+              ) : currentResult?.error ? (
+                <Button onClick={() => { setResult(undefined); setRetry(value => value + 1); }}>
+                  {t('common.retry', 'Qayta urinish')}
+                </Button>
+              ) : displayedProducts.length > 0 ? (
                 <>
                   <div className="zaven-product-grid">
                     {displayedProducts.map((product) => (
@@ -952,7 +987,7 @@ export const CatalogPage: React.FC = () => {
                       )}
 
                       {totalPages > 1 && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap justify-center items-center gap-1.5">
                           <button
                             type="button"
                             disabled={currentPage <= 1}
@@ -964,8 +999,8 @@ export const CatalogPage: React.FC = () => {
                           </button>
 
                           {Array.from(
-                            { length: totalPages },
-                            (_, idx) => idx + 1
+                            { length: Math.min(5, totalPages) },
+                            (_, idx) => Math.max(1, Math.min(currentPage - 2, totalPages - 4)) + idx
                           ).map((page) => (
                             <button
                               key={page}

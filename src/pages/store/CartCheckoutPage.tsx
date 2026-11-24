@@ -1289,14 +1289,14 @@ export const CartCheckoutPage: React.FC = () => {
               </div>
               <div className="min-w-0 rounded-xl border border-gray-200 bg-[#F8F9FA] p-4 text-xs sm:text-sm dark:border-[#28453B] dark:bg-[#162923]">
                 <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wider text-gray-500">
-                  Toʻlov usuli
+                  {t('cart.paymentHeading')}
                 </p>
                 <p className="break-words font-bold leading-relaxed text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere]">
                   {completedOrder.paymentMethodLabel}
                 </p>
                 {completedOrder.paymentReceipt && (
                   <p className="mt-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
-                    Chek yuklandi
+                    {t('transfer.uploadSuccessReady')}
                   </p>
                 )}
               </div>
@@ -1315,34 +1315,6 @@ export const CartCheckoutPage: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <div className="border border-gray-200 dark:border-[#28453B] rounded-xl divide-y divide-gray-200 dark:divide-[#28453B] overflow-hidden">
-              {completedOrder.items.map((item) => (
-                <div
-                  key={item.productId}
-                  className="p-3.5 sm:p-4 flex items-center justify-between gap-3 bg-white dark:bg-[#12211C]"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={item.image}
-                      alt={item.productName}
-                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg object-cover border border-gray-200 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-bold text-gray-900 dark:text-gray-100 truncate">
-                        {item.productName}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {item.quantity} × {formatUZS(item.unitPrice)}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs sm:text-sm font-extrabold text-brand-green whitespace-nowrap shrink-0">
-                    {formatUZS(item.totalPrice)}
-                  </span>
-                </div>
-              ))}
-            </div>
 
             <div className="bg-[#F8F9FA] dark:bg-[#162923] rounded-xl p-4 sm:p-5 border border-gray-200 dark:border-[#28453B] space-y-2.5 text-xs sm:text-sm">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
@@ -1516,7 +1488,7 @@ export const CartCheckoutPage: React.FC = () => {
                     {step.num}.
                   </span>
                 )}
-                <span className="sm:hidden whitespace-nowrap text-[11px] leading-tight">
+                <span className="sm:hidden min-w-0 [overflow-wrap:anywhere] text-[11px] leading-tight">
                   {step.shortLabel}
                 </span>
                 <span className="hidden sm:inline text-xs">
@@ -1547,7 +1519,7 @@ export const CartCheckoutPage: React.FC = () => {
               <div className="px-4 py-3.5 sm:px-5 sm:py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <ShoppingBag className="w-4 h-4 text-brand-green shrink-0" />
-                  <h1 className="text-sm sm:text-base font-extrabold text-gray-900 truncate">
+                  <h1 className="min-w-0 text-sm sm:text-base font-extrabold text-gray-900 [overflow-wrap:anywhere]">
                     {t('cart.step1Title')} ({totalItemsCount}{' '}
                     {t('product.units')})
                   </h1>
@@ -1694,7 +1666,7 @@ export const CartCheckoutPage: React.FC = () => {
                   <span className="text-sm sm:text-base font-extrabold text-gray-900 dark:text-gray-100">
                     {t('cart.totalAmount')}
                   </span>
-                  <span className="text-xl sm:text-2xl font-extrabold text-brand-green whitespace-nowrap">
+                  <span className="text-xl sm:text-2xl font-extrabold text-brand-green [overflow-wrap:anywhere]">
                     {formatUZS(cartPageTotalAmount)}
                   </span>
                 </div>
@@ -1709,7 +1681,7 @@ export const CartCheckoutPage: React.FC = () => {
                 rightIcon={<ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />}
                 onClick={() => goToStep('address')}
               >
-                <span className="whitespace-nowrap text-sm leading-tight sm:text-base">
+                <span className="whitespace-normal text-sm leading-tight sm:text-base">
                   {t('cart.proceedToPurchaseBtn')}
                 </span>
               </Button>
@@ -2395,7 +2367,7 @@ export const CartCheckoutPage: React.FC = () => {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-gray-900 truncate">
+                          <p className="text-xs font-bold text-gray-900 [overflow-wrap:anywhere]">
                             {receiptAttachment.fileName}
                           </p>
                           <p className="text-[11px] text-emerald-700 font-semibold">
@@ -2406,14 +2378,15 @@ export const CartCheckoutPage: React.FC = () => {
                       </div>
                       <button
                         type="button"
+                        aria-label={t('transfer.removeReceipt')}
                         onClick={() => setReceiptAttachment(null)}
-                        className="p-1.5 rounded-lg text-red-600 hover:bg-red-50"
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-brand-green/50 bg-white px-4 py-4 text-center transition-colors hover:bg-brand-green-light/30 dark:bg-[#0D1915] dark:hover:bg-[#12211C]">
+                    <label className="relative flex w-full cursor-pointer focus-within:ring-2 focus-within:ring-brand-green flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-brand-green/50 bg-white px-4 py-4 text-center transition-colors hover:bg-brand-green-light/30 dark:bg-[#0D1915] dark:hover:bg-[#12211C]">
                       <Upload className="h-5 w-5 text-brand-green dark:text-[#E5C992]" />
                       <span className="text-sm font-bold text-brand-green dark:text-[#E5C992]">
                         {t('transfer.selectFileBtn')}
@@ -2425,7 +2398,7 @@ export const CartCheckoutPage: React.FC = () => {
                         type="file"
                         accept="image/jpeg,image/png,image/webp,application/pdf"
                         onChange={handleReceiptFileChange}
-                        className="hidden"
+                        className="sr-only"
                       />
                     </label>
                   )}
@@ -2483,36 +2456,6 @@ export const CartCheckoutPage: React.FC = () => {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5 text-xs sm:text-sm">
-            <div className="border border-gray-200 dark:border-[#28453B] rounded-xl divide-y divide-gray-200 dark:divide-[#28453B] overflow-hidden">
-              {detailedCartItems.map(
-                ({ product, localized, quantity, unitPrice, lineTotal }) => (
-                  <div
-                    key={product.id}
-                    className="p-3 flex items-center justify-between gap-3 bg-white dark:bg-[#12211C]"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <ProductImage
-                        src={product.images[0]}
-                        alt={localized.name}
-                        className="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="font-bold text-gray-900 dark:text-gray-100 truncate">
-                          {localized.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {quantity} × {formatUZS(unitPrice)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="font-extrabold text-brand-green whitespace-nowrap shrink-0">
-                      {formatUZS(lineTotal)}
-                    </span>
-                  </div>
-                )
-              )}
-            </div>
-
             <div className="p-4 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-2.5">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-gray-700 dark:text-gray-300">
                 <span>
@@ -2561,7 +2504,7 @@ export const CartCheckoutPage: React.FC = () => {
               <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
                 <div>
                   <span className="text-[11px] font-extrabold uppercase text-gray-500 block">
-                    Yetkazish manzili
+                    {t('cart.addressHeading')}
                   </span>
                 </div>
                 <p className="font-bold text-gray-900 dark:text-gray-100">
@@ -2579,15 +2522,15 @@ export const CartCheckoutPage: React.FC = () => {
               <div className="p-3.5 rounded-xl bg-[#F8F9FA] dark:bg-[#162923] border border-gray-200 dark:border-[#28453B] space-y-1">
                 <div>
                   <span className="text-[11px] font-extrabold uppercase text-gray-500 block">
-                    Toʻlov usuli
+                    {t('cart.paymentHeading')}
                   </span>
                 </div>
                 <p className="break-words font-bold text-gray-900 dark:text-gray-100 [overflow-wrap:anywhere]">
                   {selectedPaymentMethod?.name}
                 </p>
                 {requiresPaymentReceipt && receiptAttachment && (
-                  <p className="text-emerald-700 font-semibold truncate">
-                    Chek yuklandi
+                  <p className="text-emerald-700 dark:text-emerald-300 font-semibold [overflow-wrap:anywhere]">
+                    {t('transfer.uploadSuccessReady')}
                   </p>
                 )}
               </div>

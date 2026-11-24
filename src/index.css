@@ -508,15 +508,15 @@ html.dark .checkout-transfer-amount-value {
 }
 
 html:not(.dark) .bg-white {
-  background-color: #F7F9F6;
+  background-color: #F2F5F0;
 }
 
 html:not(.dark) .bg-white\/95 {
-  background-color: rgba(247, 249, 246, 0.95);
+  background-color: rgba(242, 245, 240, 0.95);
 }
 
 html:not(.dark) .bg-white\/90 {
-  background-color: rgba(247, 249, 246, 0.9);
+  background-color: rgba(242, 245, 240, 0.9);
 }
 
 html:not(.dark) .bg-gray-50,
@@ -540,6 +540,19 @@ html:not(.dark) .text-gray-500 {
 
 html:not(.dark) input::placeholder,
 html:not(.dark) textarea::placeholder {
-  color: #66766D;
+  color: #526259;
   opacity: 1;
+}
+
+html:not(.dark) .checkout-transfer-amount-panel {
+  background: #e2eee5 !important;
+  border-color: #849d8b;
+}
+
+html:not(.dark) .checkout-transfer-amount-label {
+  color: #324e3b !important;
+}
+
+html:not(.dark) .checkout-transfer-amount-value {
+  color: #123523 !important;
 }

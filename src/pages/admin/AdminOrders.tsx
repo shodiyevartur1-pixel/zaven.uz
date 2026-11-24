@@ -1,3 +1,4 @@
+import { supabase } from '../../lib/supabase';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
@@ -25,7 +26,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import { useStore } from '../../context/StoreContext';
+import { useStore, mapRowToOrder } from '../../context/StoreContext';
 import { useOwnerAuth } from '../../context/OwnerAuthContext';
 import { Customer, CustomerInquiry, Order, OrderStatus } from '../../types';
 import {
@@ -70,6 +71,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
   const [searchParams] = useSearchParams();
   const {
     orders,
+    cacheOrderPage,
     customers,
     inquiries,
     storeSettings,
@@ -86,7 +88,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     updateInquiryStatus,
     addToast,
   } = useStore();
-  const { ownerEmail } = useOwnerAuth();
+  const { ownerEmail, authMode } = useOwnerAuth();
 
   const savedFilters = useMemo(() => {
     try {
@@ -180,10 +182,58 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     }
   }, [searchParams]);
 
-  const selectedOrder = useMemo(
-    () => orders.find((o) => o.id === selectedOrderId) || null,
-    [orders, selectedOrderId]
-  );
+  const useServerOrders = authMode === 'supabase';
+  const [orderPage, setOrderPage] = useState(0);
+  const [serverOrders, setServerOrders] = useState<{key: string; rows: Order[]; more: boolean; error: boolean}>();
+  const [retryOrders, setRetryOrders] = useState(0);
+  const filterKey = JSON.stringify([showDeletedOrders, statusFilter, verificationFilter, searchQuery.trim()]);
+  const [pageFilterKey, setPageFilterKey] = useState(filterKey);
+  const page = pageFilterKey === filterKey ? orderPage : 0;
+  const orderKey = JSON.stringify([filterKey, page]);
+  useEffect(() => {
+    if (!supabase || !useServerOrders || activeSection !== 'orders') return;
+    const client = supabase;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      const { data, error } = await client.rpc('admin_order_page', {
+        archived: showDeletedOrders, wanted_status: statusFilter, wanted_payment: verificationFilter,
+        term: searchQuery.trim(), page_start: page * 25,
+      }).abortSignal(controller.signal);
+      if (controller.signal.aborted) return;
+      const rows = (data || []).slice(0, 25).map((row: Record<string, unknown>) => mapRowToOrder(row));
+      if (!error && !rows.length && page > 0) {
+        setOrderPage(previous => Math.max(0, previous - 1));
+        return;
+      }
+      cacheOrderPage(rows);
+      setServerOrders({key: orderKey, rows, more: (data?.length ?? 0) > 25, error: Boolean(error)});
+    }, 180);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [useServerOrders, activeSection, showDeletedOrders, statusFilter, verificationFilter, searchQuery, page, orderKey, cacheOrderPage, orders, retryOrders]);
+  const currentServerOrders = serverOrders?.key === orderKey ? serverOrders : undefined;
+  const selectedOrder = selectedOrderId
+    ? (useServerOrders ? currentServerOrders?.rows : orders)?.find(order => order.id === selectedOrderId) || null
+    : null;
+  const receiptPath = selectedOrder?.paymentReceipt?.storagePath;
+  const [receiptLink, setReceiptLink] = useState<{path: string; url: string} | null>(null);
+  const [receiptAttempt, setReceiptAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setReceiptLink(null);
+    if (receiptPath && supabase) {
+      supabase.storage.from('payment-receipts').createSignedUrl(receiptPath, 3600)
+        .then(({data}) => {
+          if (active) setReceiptLink({path: receiptPath, url: data?.signedUrl || ''});
+        }, () => {
+          if (active) setReceiptLink({path: receiptPath, url: ''});
+        });
+    }
+    return () => { active = false; };
+  }, [receiptPath, receiptAttempt]);
+  const receiptUrl = receiptPath && supabase
+    ? (receiptLink?.path === receiptPath ? receiptLink.url : '')
+    : selectedOrder?.paymentReceipt?.dataUrl;
+
   const paymentReceiptNeedsApproval = (order: Order) => {
     const method = storeSettings.paymentMethods.find(
       (option) => option.id === order.paymentMethodId
@@ -250,6 +300,10 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
     statusFilter,
     verificationFilter,
   ]);
+
+  const [orderLimit, setOrderLimit] = useState(25);
+  useEffect(() => setOrderLimit(25), [showDeletedOrders, searchQuery, statusFilter, verificationFilter]);
+  const visibleOrders = useServerOrders ? currentServerOrders?.rows ?? [] : filteredOrders.slice(0, orderLimit);
 
   const activeCustomersList = useMemo(
     () => customers.filter((c) => !c.isDeleted),
@@ -441,8 +495,8 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
             }`}
           >
             <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
-            <span>Buyurtmalar ({activeOrdersList.length})</span>
-            {pendingReceiptsCount > 0 && (
+            <span>Buyurtmalar{!useServerOrders && ` (${activeOrdersList.length})`}</span>
+            {!useServerOrders && pendingReceiptsCount > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-[#C89D54] text-[#09261C] text-[10px] font-extrabold">
                 {pendingReceiptsCount}
               </span>
@@ -521,7 +575,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   { value: 'all', label: 'Toʻlov cheki: Barchasi' },
                   {
                     value: 'pending_verification',
-                    label: `Toʻlov tekshirilmoqda (${pendingReceiptsCount})`,
+                    label: useServerOrders ? 'Toʻlov tekshirilmoqda' : `Toʻlov tekshirilmoqda (${pendingReceiptsCount})`,
                   },
                   { value: 'verified', label: 'Toʻlov tasdiqlangan' },
                   { value: 'rejected', label: 'Toʻlov cheki rad etilgan' },
@@ -541,7 +595,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                       : 'bg-gray-100 dark:bg-[#162923] text-gray-700 dark:text-gray-200'
                   }`}
                 >
-                  Faol buyurtmalar ({activeOrdersList.length})
+                  Faol buyurtmalar{!useServerOrders && ` (${activeOrdersList.length})`}
                 </button>
                 <button
                   type="button"
@@ -553,17 +607,23 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   }`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Arxiv / Savat ({deletedOrdersList.length})</span>
+                  <span>Arxiv / Savat{!useServerOrders && ` (${deletedOrdersList.length})`}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {filteredOrders.length > 0 ? (
+           {useServerOrders && !currentServerOrders ? (
+            <p role="status">Buyurtmalar yuklanmoqda…</p>
+          ) : currentServerOrders?.error ? (
+            <Button onClick={() => { setServerOrders(undefined); setRetryOrders(value => value + 1); }}>
+              Buyurtmalarni qayta yuklash
+            </Button>
+          ) : visibleOrders.length > 0 ? (
             <>
               {/* Mobile Order Cards (< md) */}
               <div className="md:hidden space-y-3">
-                {filteredOrders.map((order) => {
+                {visibleOrders.map((order) => {
                   const statusMeta = ORDER_STATUS_META[order.status];
                   return (
                     <article
@@ -693,7 +753,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-[#28453B] text-xs sm:text-sm">
-                      {filteredOrders.map((order) => {
+                      {visibleOrders.map((order) => {
                         const statusMeta = ORDER_STATUS_META[order.status];
                         return (
                           <tr
@@ -820,6 +880,18 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   </table>
                 </div>
               </div>
+               {useServerOrders && (page > 0 || currentServerOrders?.more) && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="secondary" disabled={page === 0} onClick={() => { setPageFilterKey(filterKey); setOrderPage(page - 1); }}>Oldingi</Button>
+                  <span>{page + 1}</span>
+                  <Button variant="secondary" disabled={!currentServerOrders?.more} onClick={() => { setPageFilterKey(filterKey); setOrderPage(page + 1); }}>Keyingi</Button>
+                </div>
+              )}
+              {!useServerOrders && visibleOrders.length < filteredOrders.length && (
+                <Button variant="secondary" onClick={() => setOrderLimit(limit => limit + 25)}>
+                  Yana buyurtmalarni koʻrsatish
+                </Button>
+              )}
             </>
           ) : (
             <EmptyState
@@ -1396,7 +1468,7 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
               selectedOrder.paymentVerificationStatus !== 'not_required') && (
               <div className="p-4 rounded-2xl border-2 border-[#C89D54] bg-brand-gold-light/30 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 max-w-full items-start gap-2 [overflow-wrap:anywhere]">
                     <CreditCard className="w-4 h-4 text-brand-green" />
                     <span className="font-extrabold text-gray-900 dark:text-gray-100">
                       Toʻlov cheki tekshiruvi
@@ -1423,19 +1495,24 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                   </Badge>
                 </div>
 
-                {selectedOrder.paymentReceipt?.dataUrl && (
+                 {receiptPath && receiptLink?.path === receiptPath && !receiptLink.url && (
+                  <button type="button" onClick={() => setReceiptAttempt(value => value + 1)}>
+                    Chek ochilmadi. Qayta yuklash
+                  </button>
+                )}
+                {selectedOrder.paymentReceipt && receiptUrl && (
                   <div className="rounded-xl overflow-hidden border border-gray-200 bg-white max-h-64 flex items-center justify-center p-2">
                     {selectedOrder.paymentReceipt.mimeType.startsWith(
                       'image/'
                     ) ? (
                       <img
-                        src={selectedOrder.paymentReceipt.dataUrl}
+                        src={receiptUrl}
                         alt="Receipt"
                         className="max-h-56 w-auto object-contain"
                       />
                     ) : (
                       <a
-                        href={selectedOrder.paymentReceipt.dataUrl}
+                        href={receiptUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-2 text-brand-green font-bold hover:underline py-4"
@@ -1858,13 +1935,15 @@ export const AdminOrders: React.FC<AdminOrdersProps> = ({
                 if (!customerToConfirmBlock) return;
                 setIsUpdatingCustomerAction(true);
                 try {
-                  await toggleBlockCustomer(
+                  const saved = await toggleBlockCustomer(
                     customerToConfirmBlock.id,
                     true,
                     customerBlockDraftReason
                   );
-                  setCustomerBlockDraftReason('');
-                  setCustomerToConfirmBlock(null);
+                  if (saved) {
+                    setCustomerBlockDraftReason('');
+                    setCustomerToConfirmBlock(null);
+                  }
                 } finally {
                   setIsUpdatingCustomerAction(false);
                 }

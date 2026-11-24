@@ -51,31 +51,31 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
       >
         <Link
           to="/"
-          className={`flex flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
+          className={`flex min-h-[44px] flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
             location.pathname === '/'
               ? 'text-brand-green font-bold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Home className="w-5 h-5 mb-0.5 shrink-0" />
-          <span className="truncate max-w-full px-0.5">{t('nav.home')}</span>
+          <span className="max-w-full px-0.5 text-center leading-tight [overflow-wrap:anywhere]">{t('nav.home')}</span>
         </Link>
 
         <Link
           to="/catalog"
-          className={`flex flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
+          className={`flex min-h-[44px] flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
             location.pathname.startsWith('/catalog')
               ? 'text-brand-green font-bold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Grid className="w-5 h-5 mb-0.5 shrink-0" />
-          <span className="truncate max-w-full px-0.5">{t('nav.catalog')}</span>
+          <span className="max-w-full px-0.5 text-center leading-tight [overflow-wrap:anywhere]">{t('nav.catalog')}</span>
         </Link>
 
         <Link
           to="/cart"
-          className={`relative flex flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
+          className={`relative flex min-h-[44px] flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
             location.pathname === '/cart' ||
             location.pathname.startsWith('/checkout')
               ? 'text-brand-green font-bold'
@@ -90,19 +90,19 @@ export const StoreLayout: React.FC<StoreLayoutProps> = ({ children }) => {
               </span>
             )}
           </div>
-          <span className="truncate max-w-full px-0.5">{t('header.cart')}</span>
+          <span className="max-w-full px-0.5 text-center leading-tight [overflow-wrap:anywhere]">{t('header.cart')}</span>
         </Link>
 
         <Link
           to="/account"
-          className={`flex flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
+          className={`flex min-h-[44px] flex-col items-center justify-center py-1 rounded-lg text-[10px] font-semibold min-w-0 ${
             location.pathname === '/account'
               ? 'text-brand-green font-bold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <User className="w-5 h-5 mb-0.5 shrink-0" />
-          <span className="truncate max-w-full px-0.5">
+          <span className="max-w-full px-0.5 text-center leading-tight [overflow-wrap:anywhere]">
             {t('header.account')}
           </span>
         </Link>

@@ -21,7 +21,8 @@ import {
   Sliders,
   Heart,
 } from 'lucide-react';
-import { useStore } from '../../context/StoreContext';
+import { supabase } from '../../lib/supabase';
+import { useStore, mapRowToProduct } from '../../context/StoreContext';
 import { useThemeLanguage } from '../../context/ThemeLanguageContext';
 import { ProductCard } from '../../components/product/ProductCard';
 import { Button } from '../../components/ui/Button';
@@ -38,6 +39,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const {
     products,
+    cacheProducts,
     categories,
     cart,
     favoriteIds,
@@ -62,6 +64,24 @@ export const ProductDetailPage: React.FC = () => {
       ),
     [products, slug]
   );
+
+  const [resolvedSlug, setResolvedSlug] = useState<string>();
+  useEffect(() => {
+    if (!supabase || !slug || product) return;
+    const client = supabase;
+    const controller = new AbortController();
+    void (async () => {
+      const visible = () => client.from('products').select('*').in('status', ['active', 'out_of_stock']);
+      let response = await visible().eq('slug', slug).abortSignal(controller.signal).maybeSingle();
+      if (!response.error && !response.data && !controller.signal.aborted) {
+        response = await visible().eq('id', slug).abortSignal(controller.signal).maybeSingle();
+      }
+      if (controller.signal.aborted) return;
+      if (response.data) cacheProducts([mapRowToProduct(response.data)]);
+      setResolvedSlug(slug);
+    })();
+    return () => controller.abort();
+  }, [slug, product, cacheProducts]);
 
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
@@ -115,6 +135,9 @@ export const ProductDetailPage: React.FC = () => {
     return () => observer.disconnect();
   }, [product?.id]);
 
+  if (supabase && slug && !product && resolvedSlug !== slug) {
+    return <p className="zaven-page-container py-10" role="status">{t('common.loading', 'Yuklanmoqda…')}</p>;
+  }
   if (!product) {
     return (
       <div className="zaven-page-container py-12">

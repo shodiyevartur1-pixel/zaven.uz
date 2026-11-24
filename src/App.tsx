@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useLayoutEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useLayoutEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -83,7 +83,13 @@ const AdminSettings = lazy(() =>
 const RouteEffectsManager: React.FC = () => {
   const location = useLocation();
   const navigationType = useNavigationType();
-  const { storeSettings } = useStore();
+  const { storeSettings, refreshFromSupabase } = useStore();
+  const limitedRoute = location.pathname === '/catalog' || location.pathname === '/admin/orders';
+  const previousLimitedRoute = useRef(limitedRoute);
+  useEffect(() => {
+    if (previousLimitedRoute.current && !limitedRoute) void refreshFromSupabase();
+    previousLimitedRoute.current = limitedRoute;
+  }, [limitedRoute, refreshFromSupabase]);
   const { t, language } = useThemeLanguage();
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [routeProgress, setRouteProgress] = useState(0);

@@ -2,6 +2,9 @@ import { Language, ProductLocalizedFields } from '../types';
 
 export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   uz: {
+    'transfer.removeReceipt': 'Chekni olib tashlash',
+    'common.loading': 'Yuklanmoqda…',
+    'common.retry': 'Qayta urinish',
     // Header & Navigation
     'top.tagline': 'ZAVEN — Xitoydan saralangan zamonaviy va hamyonbop mahsulotlar doʻkoni',
     'header.onlineStore': 'Onlayn Doʻkon',
@@ -208,6 +211,8 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.districtSearchPlaceholder': 'Tuman yoki shahar nomini qidiring...',
     'cart.districtSelectPlaceholder': 'Tumanni yoki shaharni tanlang',
     'cart.pickerNoResults': 'Mos hudud topilmadi',
+    'cart.addressHeading': 'Yetkazish manzili',
+    'cart.paymentHeading': 'Toʻlov usuli',
     'cart.address': 'Koʻcha, uy, xonadon va moʻljal (Majburiy)',
     'cart.addressPlaceholder': 'Masalan: Yunusobod-11, 24-uy, 18-xonadon (Mega Planet yonida)',
     'cart.openMapBtn': 'Xaritadan belgilash',
@@ -334,6 +339,9 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   },
 
   ru: {
+    'transfer.removeReceipt': 'Удалить чек',
+    'common.loading': 'Загрузка…',
+    'common.retry': 'Повторить',
     // Header & Navigation
     'top.tagline': 'ZAVEN — интернет-магазин современных, полезных и доступных товаров из Китая',
     'header.onlineStore': 'Интернет-магазин',
@@ -540,6 +548,8 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.districtSearchPlaceholder': 'Поиск района или города...',
     'cart.districtSelectPlaceholder': 'Выберите район или город',
     'cart.pickerNoResults': 'Ничего не найдено',
+    'cart.addressHeading': 'Адрес доставки',
+    'cart.paymentHeading': 'Способ оплаты',
     'cart.address': 'Улица, дом, квартира и ориентир (Обязательно)',
     'cart.addressPlaceholder': 'Например: Юнусабад-11, дом 24, кв. 18 (ориентир Mega Planet)',
     'cart.openMapBtn': 'Выбрать на карте',
@@ -589,7 +599,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.errMissingReceipt': 'Для этого способа оплаты необходимо загрузить чек (фото или PDF).',
     'transfer.errFileType': 'Разрешены только файлы изображений (JPG, PNG, WEBP) или PDF.',
     'transfer.errFileSize': 'Размер файла не должен превышать 5 МБ.',
-    'transfer.statusPending': 'Toʻlov tekshirilmoqda (На проверке)',
+    'transfer.statusPending': 'Оплата на проверке',
     'transfer.statusVerified': 'Оплата подтверждена',
     'transfer.statusRejected': 'Чек отклонен',
     'transfer.rejectionReason': 'Причина отклонения',
@@ -666,6 +676,9 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
   },
 
   en: {
+    'transfer.removeReceipt': 'Remove receipt',
+    'common.loading': 'Loading…',
+    'common.retry': 'Try again',
     // Header & Navigation
     'top.tagline': 'ZAVEN — Modern, practical & affordable everyday products imported from China',
     'header.onlineStore': 'Online Store',
@@ -872,6 +885,8 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'cart.districtSearchPlaceholder': 'Search district or city...',
     'cart.districtSelectPlaceholder': 'Select district or city',
     'cart.pickerNoResults': 'No matching location found',
+    'cart.addressHeading': 'Delivery address',
+    'cart.paymentHeading': 'Payment method',
     'cart.address': 'Street, building, apartment, and landmark (Required)',
     'cart.addressPlaceholder': 'e.g., Yunusabad-11, Bldg 24, Apt 18 (near Mega Planet)',
     'cart.openMapBtn': 'Choose on Map',
@@ -921,7 +936,7 @@ export const UI_DICTIONARY: Record<Language, Record<string, string>> = {
     'transfer.errMissingReceipt': 'Please upload your payment receipt (image or PDF) for this payment method.',
     'transfer.errFileType': 'Only JPG, PNG, WEBP images or PDF files are allowed.',
     'transfer.errFileSize': 'Receipt file size must not exceed 5 MB.',
-    'transfer.statusPending': 'Toʻlov tekshirilmoqda (Pending Verification)',
+    'transfer.statusPending': 'Payment under review',
     'transfer.statusVerified': 'Payment Verified',
     'transfer.statusRejected': 'Receipt Rejected',
     'transfer.rejectionReason': 'Rejection reason',
