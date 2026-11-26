@@ -469,28 +469,28 @@ html.dark .hover\:bg-gray-100:hover {
 
 .checkout-transfer-amount-panel {
   border-color: #C89D54;
-  background: linear-gradient(135deg, #0F3D2E 0%, #16533F 100%) !important;
+  background: #0B1512 !important;
   color: #FFFFFF !important;
 }
 
 .checkout-transfer-amount-label {
-  color: #F8E3B7 !important;
+  color: #F3F7F5 !important;
   overflow-wrap: anywhere;
 }
 
 .checkout-transfer-amount-value {
-  color: #FFFFFF !important;
+  color: #54E1CE !important;
   overflow-wrap: anywhere;
 }
 
 html.dark .checkout-transfer-amount-panel {
   border-color: #C89D54;
-  background: linear-gradient(135deg, #12211C 0%, #1A332A 100%) !important;
+  background: #0B1512 !important;
   color: #F3F4F6;
 }
 
 html.dark .checkout-transfer-amount-label {
-  color: #F8E3B7;
+  color: #F3F7F5;
 }
 
 /* Admin inventory cards use a soft green-gray surface in daylight mode to
@@ -545,16 +545,18 @@ html:not(.dark) textarea::placeholder {
 }
 
 html:not(.dark) .checkout-transfer-amount-panel {
-  background: #e2eee5 !important;
-  border-color: #849d8b;
+  /* Keep the transfer amount card dark in daylight mode too. A pale surface
+     made the mint amount and its label difficult to read on mobile. */
+  background: #0B1512 !important;
+  border-color: #C89D54;
 }
 
 html:not(.dark) .checkout-transfer-amount-label {
-  color: #324e3b !important;
+  color: #F3F7F5 !important;
 }
 
 html:not(.dark) .checkout-transfer-amount-value {
-  color: #123523 !important;
+  color: #54E1CE !important;
 }
 
 /* Keep Cyrillic text consistent with the reader's local UI font. */

@@ -1371,27 +1371,39 @@ export const CartCheckoutPage: React.FC = () => {
             {t('cart.continueShoppingBtn')}
           </Button>
         </div>
-        {recommendedForCart.length > 0 && (
-          <section
-            aria-labelledby="empty-cart-recommendations-title"
-            className="space-y-3.5 border-t border-gray-200 pt-6 dark:border-[#28453B]"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-[#C89D54]" />
-              <h2
-                id="empty-cart-recommendations-title"
-                className="text-sm font-extrabold text-gray-900 dark:text-gray-100 sm:text-lg"
-              >
-                {t('home.recommendedTitle')}
-              </h2>
-            </div>
+        <section
+          aria-labelledby="empty-cart-recommendations-title"
+          className="space-y-3.5 border-t border-gray-200 pt-6 dark:border-[#28453B]"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#C89D54]" />
+            <h2
+              id="empty-cart-recommendations-title"
+              className="text-sm font-extrabold text-gray-900 dark:text-gray-100 sm:text-lg"
+            >
+              {t('home.recommendedTitle')}
+            </h2>
+          </div>
+          {recommendedForCart.length > 0 ? (
             <div className="zaven-product-grid zaven-product-grid-4">
               {recommendedForCart.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-white/60 px-4 py-5 text-center dark:border-[#28453B] dark:bg-[#12211C]">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Hozircha tavsiya uchun mavjud mahsulot yoʻq.
+              </p>
+              <Link
+                to="/catalog"
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border border-[#0F6B50] px-4 py-2 text-sm font-bold text-[#0F6B50] dark:border-[#54E1CE] dark:text-[#54E1CE]"
+              >
+                Katalogni koʻrish
+              </Link>
+            </div>
+          )}
+        </section>
       </div>
     );
   }
@@ -1929,7 +1941,7 @@ export const CartCheckoutPage: React.FC = () => {
                       onClick={startNewAddress}
                       className="min-h-12 w-full min-w-0 break-words rounded-xl border border-[#C89D54]/60 bg-[#0F3D2E] px-4 py-3 text-left text-sm font-bold text-white transition-colors hover:bg-[#16533F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C89D54]"
                     >
-                      + Yangi manzil qoʻshish
+                      + Xaritadan yangi manzil qoʻshish
                     </button>
                   </div>
                 ) : (
@@ -1974,7 +1986,7 @@ export const CartCheckoutPage: React.FC = () => {
                         }}
                         className="min-h-10 rounded-xl border border-gray-300 px-3 text-xs font-bold text-gray-700 dark:border-[#365B4D] dark:text-gray-200"
                       >
-                        Manzilni almashtirish
+                        Saqlangan manzillardan tanlash
                       </button>
                       <button
                         type="button"
@@ -1992,7 +2004,7 @@ export const CartCheckoutPage: React.FC = () => {
                     onClick={startNewAddress}
                     className="mt-3 min-h-12 w-full min-w-0 break-words rounded-xl border border-[#C89D54]/60 bg-[#0F3D2E] px-4 py-3 text-left text-sm font-bold text-white transition-colors hover:bg-[#16533F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C89D54]"
                   >
-                    + Yangi manzil qoʻshish
+                    + Xaritadan yangi manzil qoʻshish
                   </button>
                 )}
               </section>

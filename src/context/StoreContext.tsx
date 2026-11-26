@@ -2387,21 +2387,63 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({
   const saveProduct: StoreContextType['saveProduct'] = async (product, isNewProduct = false) => {
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .upsert(mapProductToRow(product))
-          .select('id')
-          .maybeSingle();
+        const row = mapProductToRow(product);
+        let data: { id: string } | null = null;
+        let error: {
+          message: string;
+          details?: string;
+          hint?: string;
+          code?: string;
+        } | null = null;
+        if (isNewProduct) {
+          const result = await supabase
+            .from('products')
+            .insert(row)
+            .select('id')
+            .maybeSingle();
+          data = result.data;
+          error = result.error;
+        } else {
+          const { created_at: _createdAt, ...updateRow } = row;
+          const result = await supabase
+            .from('products')
+            .update(updateRow)
+            .eq('id', product.id)
+            .select('id')
+            .maybeSingle();
+          data = result.data;
+          error = result.error;
+        }
         if (error || !data?.id) {
-          const reason = getPersistenceErrorMessage(
-            error || new Error('row-level security denied or no row returned'),
-            'Mahsulot'
+          const failure = error || new Error(
+            'No product row was returned. Check that the owner account is authorized and apply the product write-permissions migration.'
           );
+          const friendlyReason = getPersistenceErrorMessage(failure, 'Mahsulot');
+          const raw = failure as Error & {
+            code?: string;
+            details?: string;
+            hint?: string;
+          };
+          const diagnostics = [raw.message, raw.details, raw.hint, raw.code]
+            .filter((part): part is string => Boolean(part))
+            .join(' · ')
+            .slice(0, 500);
+          const reason = `${friendlyReason} Sabab: ${diagnostics}`;
           addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: reason });
           return { ok: false, error: reason };
         }
       } catch (err) {
-        const reason = getPersistenceErrorMessage(err, 'Mahsulot');
+        const friendlyReason = getPersistenceErrorMessage(err, 'Mahsulot');
+        const raw = err as Error & {
+          code?: string;
+          details?: string;
+          hint?: string;
+        };
+        const diagnostics = [raw?.message, raw?.details, raw?.hint, raw?.code]
+          .filter((part): part is string => Boolean(part))
+          .join(' · ')
+          .slice(0, 500);
+        const reason = `${friendlyReason} Sabab: ${diagnostics}`;
         addToast({ type: 'error', title: 'Mahsulot saqlanmadi', description: reason });
         return { ok: false, error: reason };
       }
